@@ -1,0 +1,37 @@
+.sidebar {
+    width: 300px;
+    background: #233142;
+    height: 100%;
+    overflow-y: scroll;
+    color: #ffe;
+}
+
+body, #root {
+    margin: 0;
+    padding: 0;
+    height: 100vh
+}
+
+.link-input{
+    gap: 4px;
+    display: flex;
+    width: 500px;
+    padding: 10px;
+    border: none;
+    border-radius: 5px;
+    margin-bottom: 10px;
+}
+
+.link-input >input{
+    width: 700px;
+}
+
+.query-param-list{
+    display: flex;
+    flex-direction: row;
+    gap: 50px;
+    padding: 10px;
+    border: none;
+    border-radius: 5px;
+    margin-bottom: 10px;
+}
