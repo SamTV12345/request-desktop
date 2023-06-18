@@ -366,3 +366,34 @@ body, #root {
 ::-webkit-scrollbar-thumb {
     background-color: var(--scrollbar-thumb-background-color);
 }
+
+
+.sidebar-import-buttons{
+    display: flex;
+
+    margin-top: 2%;
+    flex-direction: row-reverse;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.sidebar-import-buttons > button{
+    color: var(--content-color-primary);
+    background: var(--highlight-background-color-secondary);
+    border: transparent;
+    cursor: pointer;
+}
+
+.dialog-centered{
+    background-color: #333333;
+    border-radius: 2%;
+    padding: 20px;
+    z-index: 50;
+    height: 50%;
+    position: fixed;
+    overflow-y: auto;
+    overflow-x: hidden;
+    top: 25%;
+    right: 25%;
+    left: 25%;
+}

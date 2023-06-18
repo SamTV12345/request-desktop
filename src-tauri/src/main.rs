@@ -10,6 +10,7 @@ use std::time::Instant;
 use postman_collection::v2_1_0::{HeaderUnion, Items, RequestUnion, Spec};
 use reqwest::{ClientBuilder, Method};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+use rusty_leveldb::{DB, LdbIterator};
 use crate::models::postman_collection::PostmanCollection;
 use crate::models::response_from_call::ResponseFromCall;
 
@@ -24,22 +25,28 @@ async fn greet(name: Spec) -> String {
 
 #[tauri::command]
 async fn get_collections() -> Vec<Spec> {
-    let paths = fs::read_dir("./migrations").unwrap();
     let mut collections = vec![];
 
-
-    for path in paths{
-        let actual_path = path.unwrap().path();
-        let cloned_path = actual_path.clone();
-        let extension = cloned_path.extension();
-        if extension.is_none() || extension.unwrap() != "json"{
-            continue;
-        }
-            let file = fs::File::open(actual_path).unwrap();
-            let collection: Spec = serde_json::from_reader(file).unwrap();
-            collections.push(collection);
+    let mut db = get_database();
+    let mut iterator = db.new_iter().unwrap();
+    while iterator.valid() {
+        let (mut k, mut v) = (vec![], vec![]);
+        iterator.current(&mut k, &mut v);
+        iterator.advance();
+        let value = std::str::from_utf8(&*v);
+        let spec:Spec = serde_json::from_str(value.unwrap()).unwrap();
+        collections.push(spec);
     }
+
     return collections
+}
+
+#[tauri::command]
+async fn insert_collection(collection: Spec) {
+    let mut db = get_database();
+    let key = collection.info.postman_id.clone().unwrap();
+    let value = serde_json::to_string(&collection).unwrap();
+    db.put(key.as_bytes(), value.as_bytes()).unwrap();
 }
 
 #[tauri::command]
@@ -139,8 +146,16 @@ async fn do_request(item: Items) -> ResponseFromCall {
 }
 
 fn main() {
+    get_database();
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![greet, get_collections, do_request])
+        .invoke_handler(tauri::generate_handler![greet, get_collections, do_request,insert_collection])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+
+pub fn get_database() -> DB {
+    let opt = rusty_leveldb::Options::default();
+    let mut db = DB::open("../database", opt).unwrap();
+    db
 }
