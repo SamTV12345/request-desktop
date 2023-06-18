@@ -33,8 +33,8 @@ const AccordionTrigger = React.forwardRef<
             )}
             {...props}
         >
+            <ChevronDown className="chevron-animation duration-200" />
             {children}
-            <ChevronDown className="h-4 w-4 transition-transform duration-200" />
         </AccordionPrimitive.Trigger>
     </AccordionPrimitive.Header>
 ))
@@ -52,7 +52,7 @@ const AccordionContent = React.forwardRef<
         )}
         {...props}
     >
-        <div className="pb-4 pt-0">{children}</div>
+        <div className="pb-4 pt-0 accordeon-content">{children}</div>
     </AccordionPrimitive.Content>
 ))
 AccordionContent.displayName = AccordionPrimitive.Content.displayName

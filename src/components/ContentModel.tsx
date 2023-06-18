@@ -5,6 +5,7 @@ import {QueryParamDefinition, UrlDefinition} from "postman-collection";
 import {useMemo} from "react";
 import { invoke } from "@tauri-apps/api/tauri";
 import {ResponseFromCall} from "../models/ResponseFromCall";
+import SyntaxHighlighter from 'react-syntax-highlighter';
 
 type ContentModelProps = {
 
@@ -14,6 +15,12 @@ export const ContentModel = ()=>{
     const item = useAPIStore(state=>state.currentItem)
     const currentRequest = useAPIStore(state=>state.currentRequest)
     const setCurrentRequest = useAPIStore(state=>state.setCurrentRequest)
+    const language = useMemo(()=>{
+        if (currentRequest == undefined){
+            return ""
+        }
+        return currentRequest.headers&&currentRequest.headers["content-type"]
+    } ,[currentRequest])
     const url = useMemo(()=>{
         if (!item?.request){
             return ""
@@ -46,13 +53,16 @@ export const ContentModel = ()=>{
             <input value={url} className="" onChange={(v)=>{}}/>
             <button onClick={()=>{
                 invoke("do_request", {item: item})
-                    .then((c:ResponseFromCall)=>setCurrentRequest(c))
+                    .then((c)=>{
+                        setCurrentRequest(c as ResponseFromCall)
+                    })
                     .catch(e=>console.log(e))
             }}>Senden</button>
         </div>
             {item&&(item.request.url as UrlDefinition).query&&<QueryParam/>}
-            <div style={{marginBottom: 'auto'}}>test</div>
-            {currentRequest&&<div style={{ display: 'block', marginTop: 'auto'}}>{currentRequest.body}</div>}
+            {currentRequest &&<SyntaxHighlighter language={language}
+                                                 customStyle={{width: '900px', height: '500px', overflow: "scroll"}}>
+                {currentRequest.body}</SyntaxHighlighter>}
         </div>}
     </div>
 }

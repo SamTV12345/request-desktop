@@ -13,7 +13,6 @@ export const SidebarComponent = ()=>{
                         return (
                             <Box sx={{padding: '20px'}}>
                                 <Stack key={i} direction="row" spacing={2}>
-                                    <Folder/>
                                     <SidebarAccordeon key={c.id} collection={c}/>
                                 </Stack>
                             </Box>

@@ -27,6 +27,7 @@ async fn get_collections() -> Vec<Spec> {
     let paths = fs::read_dir("./migrations").unwrap();
     let mut collections = vec![];
 
+
     for path in paths{
         let actual_path = path.unwrap().path();
         let cloned_path = actual_path.clone();
@@ -50,7 +51,12 @@ async fn do_request(item: Items) -> ResponseFromCall {
     if let RequestUnion::RequestClass(request) = url {
         if let HeaderUnion::HeaderArray(request) = request.header.unwrap() {
             for header in request {
-                map.insert(HeaderName::from_str(&*header.key).unwrap(), header.value.parse().unwrap());
+                if header.disabled.is_some() && !header.disabled.unwrap() {
+                    map.insert(HeaderName::from_str(&*header.key).unwrap(), header.value.parse().unwrap());
+                }
+                else if header.disabled.is_none(){
+                    map.insert(HeaderName::from_str(&*header.key).unwrap(), header.value.parse().unwrap());
+                }
             }
         }
         match request.method{

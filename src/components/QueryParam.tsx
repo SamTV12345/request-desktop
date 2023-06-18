@@ -1,6 +1,7 @@
 import {Tabs} from './Tabs'
 import {TabsContent, TabsList, TabsTrigger} from "./Tabs";
-import DataTable from "./QueryParamTable";
+import ParamDataTable from "./QueryParamTable";
+import {HeaderDataTable} from "./HeaderDataTable";
 export const QueryParam = () => {
     return <Tabs defaultValue="params" className="w-[400px]">
         <TabsList className="query-param-list">
@@ -12,9 +13,9 @@ export const QueryParam = () => {
             <TabsTrigger value="tests">Tests</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
         </TabsList>
-        <TabsContent value="params"><DataTable/></TabsContent>
+        <TabsContent value="params"><ParamDataTable/></TabsContent>
         <TabsContent value="authorization">Change your password here.</TabsContent>
-        <TabsContent value="headers">Change your password here.</TabsContent>
+        <TabsContent value="headers"><HeaderDataTable/></TabsContent>
         <TabsContent value="body">Change your password here.</TabsContent>
         <TabsContent value="prerequest">Pre-request Script</TabsContent>
         <TabsContent value="tests">Change your password here.</TabsContent>

@@ -1,14 +1,13 @@
 import {FC} from "react";
 import {CollectionDefinition, ItemDefinition, ItemGroupDefinition} from "postman-collection";
-import {types} from "util";
-import {PagesRounded, PagesTwoTone} from "@mui/icons-material";
 import {
     Accordion,
     AccordionContent,
     AccordionItem,
     AccordionTrigger,
-} from "../components/Accordeon"
+} from "./Accordeon"
 import {useAPIStore} from "../store/store";
+import {APIRequestSidebarIcon} from "./APIRequest";
 
 
 type SidebarAccordeonProps = {
@@ -20,11 +19,16 @@ export const isItemGroupDefinition = (item: any): item is ItemGroupDefinition =>
 }
 
 export const SidebarAccordeon:FC<SidebarAccordeonProps> = ({collection}) => {
-    const initialNumber = 0
-    return <div>
-        {collection.info?.name}
-        <RecursiveItemGroup item={collection.item} indent={initialNumber}/>
-    </div>
+    const initialNumber = 1
+
+        return  <Accordion type="single" collapsible  key={collection.name+"name"}>
+            <AccordionItem value="item-1" key={collection.name+"item"}>
+                <AccordionTrigger>{collection.info?.name}</AccordionTrigger>
+                        <AccordionContent className="">
+                            <RecursiveItemGroup item={collection.item} indent={initialNumber}/>
+                        </AccordionContent>
+            </AccordionItem>
+    </Accordion>
 }
 
 type RecursiveItemGroupProps = {
@@ -36,21 +40,23 @@ export const RecursiveItemGroup:FC<RecursiveItemGroupProps> = ({item,indent})=>{
 
     return <div>{item?.map((item, i)=>{
             if(isItemGroupDefinition(item)){
-                return <Accordion type="single" collapsible style={{margin: `${indent*10}%`}} key={item.name}>
+                return <Accordion type="single" collapsible style={{margin: `${indent*6}%`}} key={item.name}>
                     <AccordionItem value="item-1">
                         <AccordionTrigger  onClick={()=>{setCurrentItem(item)}}>{item.name}</AccordionTrigger>
-                        <AccordionContent>
-                            <RecursiveItemGroup item={item.item} indent={indent+1}/>
+                        <AccordionContent className="recursive-item">
+                            <RecursiveItemGroup key={item.id} item={item.item} indent={indent+1}/>
                         </AccordionContent>
                     </AccordionItem>
                 </Accordion>
             }
             else{
-                return <div key={i} onClick={()=>{setCurrentItem(item)}}>
-                    <PagesTwoTone/>
+                return <div key={i} style={{margin: `${indent*3}%`}} onClick={()=>{setCurrentItem(item)}} className="sidebar-request">
+                    <APIRequestSidebarIcon type={item.request?.method as string}/>
                     {item.name}
                 </div>
             }
         })}</div>
 
 }
+
+
