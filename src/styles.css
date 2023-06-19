@@ -7,6 +7,203 @@ html {
     /* 2 */
 }
 
+:root {
+    /* Greys */
+    --grey-00: #FFFFFF;
+    --grey-05: #F9F9F9;
+    --grey-10: #F2F2F2;
+    --grey-20: #EDEDED;
+    --grey-30: #E6E6E6;
+    --grey-40: #A6A6A6;
+    --grey-50: #6B6B6B;
+    --grey-60: #3B3B3B;
+    --grey-70: #303030;
+    --grey-80: #2B2B2B;
+    --grey-85: #262626;
+    --grey-90: #212121;
+    /* Oranges */
+    --orange-10: #FFF1EB;
+    --orange-20: #FFD1BE;
+    --orange-30: #FFB091;
+    --orange-40: #FF8E64;
+    --orange-50: #FF6C37;
+    --orange-60: #E05320;
+    --orange-70: #D23F0E;
+    --orange-80: #A12700;
+    --orange-90: #553326;
+    /* Blues */
+    --blue-10: #E7F0FF;
+    --blue-20: #ADCDFB;
+    --blue-30: #74AEF6;
+    --blue-40: #3E92F2;
+    --blue-50: #097BED;
+    --blue-60: #0265D2;
+    --blue-70: #0053B8;
+    --blue-80: #00439D;
+    --blue-90: #002D70;
+    /* Reds */
+    --red-10: #FFEBE7;
+    --red-20: #FBC3BA;
+    --red-30: #F79A8E;
+    --red-40: #F37264;
+    --red-50: #EB2013;
+    --red-60: #B02016;
+    --red-70: #8E1A10;
+    --red-80: #75140C;
+    --red-90: #591B08;
+    /* Greens */
+    --green-10: #E5FFF1;
+    --green-20: #A4EEC4;
+    --green-30: #6BDD9A;
+    --green-40: #38CC74;
+    --green-50: #0CBB52;
+    --green-60: #049D40;
+    --green-70: #007F31;
+    --green-80: #006024;
+    --green-90: #013614;
+    /* Yellows */
+    --yellow-10: #FFF9E0;
+    --yellow-20: #FFF4BE;
+    --yellow-30: #FFE47E;
+    --yellow-40: #FFCF3F;
+    --yellow-50: #FFB400;
+    --yellow-60: #DE9C00;
+    --yellow-70: #AD7A03;
+    --yellow-80: #886000;
+    --yellow-90: #523A03;
+    /* Pinks */
+    --pink-10: #FFF2F9;
+    --pink-20: #FFD8ED;
+    --pink-30: #FDA4D4;
+    --pink-40: #F15EB0;
+    --pink-50: #CA2583;
+    --pink-60: #A61468;
+    --pink-70: #7B0A4B;
+    --pink-80: #63073B;
+    --pink-90: #47042A;
+    /* Purples */
+    --purple-10: #F7F2FF;
+    --purple-20: #E4D8F6;
+    --purple-30: #C0A8E1;
+    --purple-40: #926CC2;
+    --purple-50: #784FA9;
+    --purple-60: #623497;
+    --purple-70: #4C207D;
+    --purple-80: #35115C;
+    --purple-90: #250447;
+    /* Teals */
+    --teal-10: #F2FEFF;
+    --teal-20: #D0F9FD;
+    --teal-30: #8EEEF7;
+    --teal-40: #3FD6E6;
+    --teal-50: #0CA4B6;
+    --teal-60: #048192;
+    --teal-70: #015965;
+    --teal-80: #02444D;
+    --teal-90: #032F36;
+}
+
+/* stylelint-disable color-no-hex */
+:root {
+    /*Brand*/
+    --base-color-brand: var(--orange-50);
+    --base-color-info: var(--blue-50);
+    --base-color-warning: var(--yellow-50);
+    --base-color-error: var(--red-50);
+    --base-color-success: var(--green-50);
+    /*Content*/
+    --content-color-primary: var(--grey-90);
+    --content-color-secondary: var(--grey-50);
+    --content-color-tertiary: var(--grey-40);
+    --content-color-brand: var(--orange-70);
+    --content-color-info: var(--blue-70);
+    --content-color-error: var(--red-70);
+    --content-color-warning: var(--yellow-70);
+    --content-color-success: var(--green-70);
+    --content-color-constant: var(--grey-00);
+    --content-color-link: var(--blue-60);
+    /*Highlight*/
+    --highlight-background-color-primary: var(--grey-20);
+    --highlight-background-color-secondary: var(--grey-20);
+    --highlight-background-color-tertiary: var(--grey-30);
+    --highlight-background-color-brand: var(--orange-60);
+    --highlight-background-color-info: var(--blue-60);
+    --highlight-background-color-warning: var(--yellow-60);
+    --highlight-background-color-error: var(--red-60);
+    --highlight-background-color-success: var(--green-60);
+    --highlight-background-color-transparent: rgba(26, 26, 26, 0.1);
+    /*Background*/
+    --background-color-primary: var(--grey-00);
+    --background-color-secondary: var(--grey-05);
+    --background-color-tertiary: var(--grey-10);
+    --background-color-brand: var(--orange-10);
+    --background-color-info: var(--blue-10);
+    --background-color-warning: var(--yellow-10);
+    --background-color-error: var(--red-10);
+    --background-color-success: var(--green-10);
+    --background-modal-backdrop: rgba(26, 26, 26, 0.5);
+    /*Border colors*/
+    --border-color-default: var(--grey-20);
+    --border-color-strong: var(--grey-30);
+    --border-color-active: rgba(26, 26, 26, 0.3);
+    /*Header*/
+    --header-background-color-primary: var(--grey-90);
+    --header-background-color-secondary: var(--grey-85);
+    --header-color-content: var(--grey-40);
+    --header-background-highlight-color-primary: var(--grey-70);
+    --header-background-highlight-color-secondary: var(--grey-70);
+    /* DEPRECATED: The design tokens mentioned below are deprecated and will be removed in the upcoming releases.
+       It is recommended to use the tokens defined above. */
+    /* Brand */
+    --color-brand-primary: #FF6C37;
+    --color-brand-secondary: #097BED;
+    /* Accent */
+    --color-accent-error: #EB2013 ;
+    --color-accent-warning: #FFB400;
+    --color-accent-success: #249C47;
+    /* Content */
+    --color-content-primary: #1A1A1A;
+    --color-content-secondary: #666666;
+    --color-content-tertiary: #999999;
+    --color-content-brand-primary: #C73500;
+    --color-content-brand-secondary: #145EA9;
+    --color-content-accent-error: #B32E14;
+    --color-content-accent-warning: #7D6517;
+    --color-content-accent-success: #127347;
+    --color-content-constant: #FFFFFF;
+    /* Highlight */
+    --color-highlight-background-primary: #F2F2F2;
+    --color-highlight-background-secondary: #EBEBEB;
+    --color-highlight-background-tertiary: #E3E3E3;
+    --color-highlight-brand-primary: #FF4F0F;
+    --color-highlight-brand-secondary: #0763C0;
+    --color-highlight-accent-warning: #E5A200;
+    --color-highlight-accent-error: #D51D11;
+    --color-highlight-accent-success: #20893E;
+    --color-highlight-transparent: rgba(0, 0, 0, 0.05);
+    /* Background */
+    --color-background-primary: #FFFFFF;
+    --color-background-secondary: #F7F7F7;
+    --color-background-tertiary: #EBEBEB;
+    --color-background-brand-primary: rgba(255, 108, 55, 0.15);
+    --color-background-brand-secondary: rgba(9, 123, 237, 0.2);
+    --color-background-accent-warning: rgba(255, 180, 0, 0.2);
+    --color-background-accent-error: rgba(235, 32, 19, 0.2);
+    --color-background-accent-success: rgba(36, 156, 71, 0.2);
+    /* Border */
+    --color-border-regular: #E3E3E3;
+    --color-border-strong: #D9D9D9;
+    --color-border-active: rgba(0, 0, 0, 0.2);
+    --color-border-focus: rgba(56, 140, 225, 0.5);
+    /* Overlay */
+    --color-overlay-modal: rgba(0, 0, 0, 0.5);
+    /* Header */
+    --color-header-background-primary: #262626;
+    --color-header-background-secondary: #363636;
+    --color-header-content: #B3B3B3;
+    --color-header-background-primary-highlight: #333333;
+    --color-header-background-secondary-highlight: #424242;
+}
 :root{
     --bg-primary: #282828;
     --bg-primary--shade--one: #323232;
@@ -370,14 +567,13 @@ body, #root {
 
 .sidebar-import-buttons{
     display: flex;
-
     margin-top: 2%;
     flex-direction: row-reverse;
     gap: 10px;
     margin-bottom: 10px;
 }
 
-.sidebar-import-buttons > button{
+.sidebar-import-buttons > button, .sidebar-button {
     color: var(--content-color-primary);
     background: var(--highlight-background-color-secondary);
     border: transparent;
@@ -396,4 +592,91 @@ body, #root {
     top: 25%;
     right: 25%;
     left: 25%;
+}
+
+.import-heading{
+    color: white;
+}
+
+.dropzone {
+    min-width: 100px;
+    min-height: 280px;
+    align-items: center;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    flex-grow: 1;
+    color: white;
+    border: 2px dashed var(--border-color-strong);
+}
+
+.dropzone > input {
+
+}
+
+.import-table, .import-table th, .import-table td {
+    border: 1px solid white;
+    border-collapse: collapse;
+    padding: 5px;
+    color: white;
+    table-layout: fixed;
+}
+
+ .import-table td{
+    padding-left: 10px;
+}
+
+.import-table{
+    width: 100%;
+}
+
+.import-table th{
+    text-transform: uppercase;
+}
+
+.upload-preview-button:hover{
+    background-color: var(--highlight-background-color-brand);
+}
+
+.upload-preview-button{
+    background-color: var(--brand-primary);
+    color: var(--content-color-primary);
+    border: transparent;
+    cursor: pointer;
+    padding: 10px;
+    border-radius: 5px;
+    right: 2%;
+    font-size: var(--text-size-xl);
+}
+
+.upload-cancel-button {
+    background-color: var(--background-color-tertiary);
+    color: var(--content-color-primary);
+    border: transparent;
+    cursor: pointer;
+    padding: 10px;
+    border-radius: 5px;
+    right: 2%;
+    font-size: var(--text-size-xl);
+}
+
+.import-tabs > div >button[aria-selected=true] {
+    text-decoration: underline;
+    text-decoration-color: var(--brand-primary);
+    text-underline-offset: 10px;
+}
+
+.import-tabs > div >button {
+    color: white;
+    background: transparent;
+    border: transparent;
+}
+
+.button-bar{
+    bottom: 4%;
+    right: 4%;
+    display: grid;
+    gap: 10px;
+    grid-template-columns: 1fr 1fr;
+    position: absolute;
 }

@@ -19,6 +19,7 @@ export const ContentModel = ()=>{
         if (currentRequest == undefined){
             return ""
         }
+        // @ts-ignore
         return currentRequest.headers&&currentRequest.headers["content-type"]
     } ,[currentRequest])
     const url = useMemo(()=>{
@@ -26,6 +27,7 @@ export const ContentModel = ()=>{
             return ""
         }
         let urls = (item?.request.url as UrlDefinition).query as QueryParamDefinition[]
+        // @ts-ignore
         const host = (item?.request?.url as UrlDefinition).host[0]
         let searchParams = ""
         if (urls){
@@ -39,8 +41,6 @@ export const ContentModel = ()=>{
                 }
             })
         }
-
-
         return host+searchParams
     },[item?.request])
 

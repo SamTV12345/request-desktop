@@ -6,21 +6,15 @@ import * as Dialog from '@radix-ui/react-dialog';
 import {Input} from "../components/Input";
 import {useState} from "react";
 import {Collection, CollectionDefinition} from "postman-collection";
+import {Tabs, TabsContent, TabsList, TabsTrigger} from "../components/Tabs";
+import ParamDataTable from "../components/QueryParamTable";
+import {HeaderDataTable} from "../components/HeaderDataTable";
+import {FileToUpload} from "../components/FileToUpload";
+import {UploadFilePreview} from "../components/UploadFilePreview";
 
 export const SidebarComponent = ()=>{
     const collections = useAPIStore(state=>state.collections)
-    const [isFilePicked, setIsFilePicked] = useState(false);
-    const [collectionToUpload, setCollectionToUpload] = useState<CollectionDefinition|undefined>()
-    const changeHandler = (event:any) => {
-        const file = event.target.files[0];
-        const reader = new FileReader();
-        reader.onload = function(event) {
-            // The file's text will be printed here
-            const result: CollectionDefinition = JSON.parse(event.target!.result as string)
-            setCollectionToUpload(result)
-        };
-        reader.readAsText(file);
-    };
+    const collectionToUpload = useAPIStore(state=>state.fileToUpload)
 
 
     return (
@@ -30,36 +24,49 @@ export const SidebarComponent = ()=>{
                     <button>New</button>
                     <Dialog.Root>
                         <Dialog.Trigger>
-                            <button onClick={()=>{}}>Import</button>
+                            <button className="sidebar-button"  onClick={()=>{}}>Import</button>
                         </Dialog.Trigger>
                         <Dialog.Portal className="">
                             <Dialog.Content className="dialog-centered">
-                                {!collectionToUpload&&<Input type="file" onChange={(e)=>changeHandler(e)}/>}
-                                {collectionToUpload&&<div>
-                                    {
-                                        collectionToUpload&& <div>CollectionToUpload:
-                                            <div>{collectionToUpload.info?.name}</div>
-                                            <div>{collectionToUpload.info?.schema}</div>
-                                            </div>
+                                <h2 className="import-heading">Import collection</h2>
+                                <Tabs defaultValue="file" className="import-tabs">
+                                    <TabsList className="query-param-list">
+                                        <TabsTrigger value="file">File</TabsTrigger>
+                                        <TabsTrigger value="folder">Folder</TabsTrigger>
+                                        <TabsTrigger value="link">Link</TabsTrigger>
+                                        <TabsTrigger value="raw-text">Raw text</TabsTrigger>
+                                        <TabsTrigger value="code-repository">Code repository</TabsTrigger>
+                                    </TabsList>
+                                    <TabsContent value="file">
+                                        {
+                                            !collectionToUpload&&
+                                                <FileToUpload/>
+                                        }
+                                        {collectionToUpload&&<div>
+                                            {
+                                                collectionToUpload&& <UploadFilePreview/>
 
-                                    }
-                                </div>}
+                                            }
+                                        </div>}</TabsContent>
+                                    <TabsContent value="folder">Folder</TabsContent>
+                                    <TabsContent value="link">Link</TabsContent>
+                                    <TabsContent value="raw-text">Raw text</TabsContent>
+                                    <TabsContent value="code-repository">Code repository </TabsContent>
+                                </Tabs>
+
                             </Dialog.Content>
                         </Dialog.Portal>
                     </Dialog.Root>
                 </div>
+                <div className="sidebar-collection-list">
                 {
                     collections.map((c, i)=>{
                         return (
-                            <Box sx={{padding: '20px'}}>
-                                <Stack key={i} direction="row" spacing={2}>
                                     <SidebarAccordeon key={c.id} collection={c}/>
-                                </Stack>
-                            </Box>
                         )
                     })
                 }
-
+                </div>
             </div>
     )
 }

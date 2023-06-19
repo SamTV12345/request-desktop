@@ -1,6 +1,7 @@
 import {create} from 'zustand'
 import {CollectionDefinition, ItemDefinition} from 'postman-collection'
 import {ResponseFromCall} from "../models/ResponseFromCall";
+import {FileUpload} from "../models/FileUpload";
 interface APIState {
     collections:CollectionDefinition[]
     addCollection: (by: CollectionDefinition) => void,
@@ -10,6 +11,8 @@ interface APIState {
     setCurrentItem: (by: ItemDefinition) => void,
     currentRequest: ResponseFromCall | undefined,
     setCurrentRequest: (by: ResponseFromCall) => void,
+    fileToUpload: FileUpload|undefined,
+    setFileToUpload: (by: FileUpload|undefined) => void
 }
 
 export const useAPIStore = create<APIState>()((set) => ({
@@ -21,5 +24,6 @@ export const useAPIStore = create<APIState>()((set) => ({
     setCollections: (collections: CollectionDefinition[]) => set({collections}),
     addCollection: (collection: CollectionDefinition) => set((state) => ({collections: [...state.collections, collection]})),
     addCollections: (collection: CollectionDefinition[]) => set((state) => ({collections: [...state.collections, ...collection]})),
-    changeItem: (item: ItemDefinition) => set((state) => ({currentItem: item})),
+    fileToUpload: undefined,
+    setFileToUpload: (fileToUpload: FileUpload|undefined) => set({fileToUpload})
 }))

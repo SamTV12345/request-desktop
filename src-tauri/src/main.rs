@@ -5,12 +5,14 @@ use std::collections::HashMap;
 use std::fs;
 use std::fs::FileType;
 use std::iter::Map;
+use std::path::Path;
 use std::str::FromStr;
-use std::time::Instant;
+use std::time::{Duration, Instant};
+use pickledb::{PickleDb, PickleDbDumpPolicy, SerializationMethod};
 use postman_collection::v2_1_0::{HeaderUnion, Items, RequestUnion, Spec};
 use reqwest::{ClientBuilder, Method};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
-use rusty_leveldb::{DB, LdbIterator};
+use serde_json::Value;
 use crate::models::postman_collection::PostmanCollection;
 use crate::models::response_from_call::ResponseFromCall;
 
@@ -26,27 +28,27 @@ async fn greet(name: Spec) -> String {
 #[tauri::command]
 async fn get_collections() -> Vec<Spec> {
     let mut collections = vec![];
+    let db = get_database();
 
-    let mut db = get_database();
-    let mut iterator = db.new_iter().unwrap();
-    while iterator.valid() {
-        let (mut k, mut v) = (vec![], vec![]);
-        iterator.current(&mut k, &mut v);
-        iterator.advance();
-        let value = std::str::from_utf8(&*v);
-        let spec:Spec = serde_json::from_str(value.unwrap()).unwrap();
-        collections.push(spec);
+
+    for kv in db.iter() {
+        let collection = kv.get_value::<String>();
+        if collection.is_some() {
+            //collections.push(collection.unwrap()) // Doesnt work
+            collections.push(serde_json::from_str::<Spec>(&collection.unwrap()).unwrap());
+        }
     }
-
     return collections
 }
 
 #[tauri::command]
 async fn insert_collection(collection: Spec) {
+    println!("Inserting");
     let mut db = get_database();
-    let key = collection.info.postman_id.clone().unwrap();
+    let key = collection.info.name.clone();
     let value = serde_json::to_string(&collection).unwrap();
-    db.put(key.as_bytes(), value.as_bytes()).unwrap();
+    db.set(&key, &value).unwrap();
+    println!("Value {}",db.get::<String>(&key).unwrap());
 }
 
 #[tauri::command]
@@ -146,16 +148,22 @@ async fn do_request(item: Items) -> ResponseFromCall {
 }
 
 fn main() {
-    get_database();
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![greet, get_collections, do_request,insert_collection])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
 
+pub fn get_database() -> PickleDb {
+    match Path::new("../example.db").exists() {
+        true=>{
+                PickleDb::load("../example.db", PickleDbDumpPolicy::AutoDump,
+                               SerializationMethod::Json).unwrap()
+        },
+        false=>{
+            PickleDb::new("../example.db", PickleDbDumpPolicy::AutoDump,
+                          SerializationMethod::Json)
+        }
+    }
 
-pub fn get_database() -> DB {
-    let opt = rusty_leveldb::Options::default();
-    let mut db = DB::open("../database", opt).unwrap();
-    db
 }

@@ -17,6 +17,7 @@ const App = ()=> {
     useEffect(()=>{
         get_collections()
             .then(c=>{
+                console.log(c)
                 setCollections(c)
             })
             .catch(e=>console.log(e))
