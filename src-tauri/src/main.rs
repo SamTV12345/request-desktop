@@ -17,7 +17,6 @@ use crate::models::postman_collection::{PostmanCollection, Variable};
 use crate::models::response_from_call::ResponseFromCall;
 
 mod models;
-use rusty_leveldb::DB;
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
 #[tauri::command]
 async fn greet(name: Spec) -> String {
@@ -162,8 +161,6 @@ async fn do_request(item: Items, collection: Spec) -> ResponseFromCall {
 }
 
 fn main() {
-    let opt = rusty_leveldb::Options::default();
-
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![greet, get_collections, do_request,insert_collection])
         .run(tauri::generate_context!())
