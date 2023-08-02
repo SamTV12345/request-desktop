@@ -15,6 +15,8 @@ export const ContentModel = ()=>{
     const item = useAPIStore(state=>state.currentItem)
     const currentRequest = useAPIStore(state=>state.currentRequest)
     const setCurrentRequest = useAPIStore(state=>state.setCurrentRequest)
+    const currentCollection = useAPIStore(state=>state.currentCollection)
+
     const language = useMemo(()=>{
         if (currentRequest == undefined){
             return ""
@@ -22,6 +24,7 @@ export const ContentModel = ()=>{
         // @ts-ignore
         return currentRequest.headers&&currentRequest.headers["content-type"]
     } ,[currentRequest])
+
     const url = useMemo(()=>{
         if (!item?.request){
             return ""
@@ -45,14 +48,15 @@ export const ContentModel = ()=>{
     },[item?.request])
 
 
-    return <div className="">
+    return <div className="" style={{}}>
         {item?.name}
         {item && item.request &&<div>
             <div className="link-input">
             <RequestMethod value={item}/>
             <input value={url} className="" onChange={(v)=>{}}/>
             <button onClick={()=>{
-                invoke("do_request", {item: item})
+                console.log(currentCollection)
+                invoke("do_request", {item: item, collection:currentCollection})
                     .then((c)=>{
                         setCurrentRequest(c as ResponseFromCall)
                     })

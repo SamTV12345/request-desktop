@@ -10,6 +10,16 @@ pub struct PostmanCollection {
     pub info: Info,
     pub item: Vec<FolderOrItem>,
     pub auth: Option<Auth>,
+    pub variable: Vec<Variable>
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Variable {
+    description: Option<String>,
+    pub(crate) key: String,
+    pub(crate) value: String,
+    disabled: Option<bool>,
+    r#type: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]

@@ -25,8 +25,8 @@ const App = ()=> {
 
     return (
 
-        <div style={{display: 'flex'}}>
-            <div style={{display: "block", overflow: 'hidden'}}><SidebarComponent/></div>
+        <div>
+            <div style={{display: "block", float: 'left'}}><SidebarComponent/></div>
             {currentCollection&&currentCollection.name?
             <ContentModel/>:<div>Loading...</div>}
         </div>

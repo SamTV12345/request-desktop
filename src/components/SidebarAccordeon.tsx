@@ -20,12 +20,11 @@ export const isItemGroupDefinition = (item: any): item is ItemGroupDefinition =>
 
 export const SidebarAccordeon:FC<SidebarAccordeonProps> = ({collection}) => {
     const initialNumber = 1
-
         return  <Accordion type="single" collapsible  key={collection.name+"name"}>
             <AccordionItem value="item-1" key={collection.name+"item"}>
                 <AccordionTrigger>{collection.info?.name}</AccordionTrigger>
                         <AccordionContent className="">
-                            <RecursiveItemGroup item={collection.item} indent={initialNumber}/>
+                            <RecursiveItemGroup item={collection.item} indent={initialNumber} collection={collection}/>
                         </AccordionContent>
             </AccordionItem>
     </Accordion>
@@ -33,24 +32,29 @@ export const SidebarAccordeon:FC<SidebarAccordeonProps> = ({collection}) => {
 
 type RecursiveItemGroupProps = {
     item: (ItemGroupDefinition | ItemDefinition)[] | undefined,
-    indent: number
+    indent: number,
+    collection: CollectionDefinition
 }
-export const RecursiveItemGroup:FC<RecursiveItemGroupProps> = ({item,indent})=>{
+export const RecursiveItemGroup:FC<RecursiveItemGroupProps> = ({item,indent, collection})=>{
     const setCurrentItem = useAPIStore(state=>state.setCurrentItem)
+    const setCurrentCollection = useAPIStore(state=>state.setCurrentCollection)
 
     return <div>{item?.map((item, i)=>{
             if(isItemGroupDefinition(item)){
-                return <Accordion type="single" collapsible style={{margin: `${indent*6}%`}} key={item.name}>
+                return <Accordion type="single" collapsible style={{marginLeft: `${indent*6}%`}} key={item.name}>
                     <AccordionItem value="item-1">
-                        <AccordionTrigger  onClick={()=>{setCurrentItem(item)}}>{item.name}</AccordionTrigger>
+                        <AccordionTrigger  onClick={()=>{
+                            setCurrentItem(item)
+                            setCurrentCollection(collection)
+                        }}>{item.name}</AccordionTrigger>
                         <AccordionContent className="recursive-item">
-                            <RecursiveItemGroup key={item.id} item={item.item} indent={indent+1}/>
+                            <RecursiveItemGroup key={item.id} item={item.item} indent={indent+1} collection={collection}/>
                         </AccordionContent>
                     </AccordionItem>
                 </Accordion>
             }
             else{
-                return <div key={i} style={{margin: `${indent*3}%`}} onClick={()=>{setCurrentItem(item)}} className="sidebar-request">
+                return <div key={i} style={{marginLeft: `${indent*3}%`}} onClick={()=>{setCurrentItem(item)}} className="sidebar-request">
                     <APIRequestSidebarIcon type={item.request?.method as string}/>
                     {item.name}
                 </div>

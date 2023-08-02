@@ -7,6 +7,7 @@ html {
     /* 2 */
 }
 
+
 :root {
     /* Greys */
     --grey-00: #FFFFFF;
@@ -679,4 +680,18 @@ body, #root {
     gap: 10px;
     grid-template-columns: 1fr 1fr;
     position: absolute;
+}
+
+.CheckboxRoot {
+    background-color: white;
+    width: 12px;
+    height: 14px;
+    border-radius: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.checkbox-indicator{
+    color:violet;
 }

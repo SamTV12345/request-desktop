@@ -13,11 +13,11 @@ use postman_collection::v2_1_0::{HeaderUnion, Items, RequestUnion, Spec};
 use reqwest::{ClientBuilder, Method};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use serde_json::Value;
-use crate::models::postman_collection::PostmanCollection;
+use crate::models::postman_collection::{PostmanCollection, Variable};
 use crate::models::response_from_call::ResponseFromCall;
 
 mod models;
-
+use rusty_leveldb::DB;
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
 #[tauri::command]
 async fn greet(name: Spec) -> String {
@@ -52,7 +52,17 @@ async fn insert_collection(collection: Spec) {
 }
 
 #[tauri::command]
-async fn do_request(item: Items) -> ResponseFromCall {
+async fn insert_collection_from_openapi(collection: String) {
+    let mut db = get_database();
+    let value = serde_json::to_string(&collection).unwrap();
+    db.set(&"test", &value).unwrap();
+    println!("Value {}",db.get::<String>(&"test").unwrap());
+}
+
+
+
+#[tauri::command]
+async fn do_request(item: Items, collection: Spec) -> ResponseFromCall {
     let mut map = HeaderMap::new();
     let client = ClientBuilder::new();
     let mut built_client;
@@ -68,22 +78,25 @@ async fn do_request(item: Items) -> ResponseFromCall {
                 }
             }
         }
+
         match request.method{
             Some(method) => {
                 let url = request.url.unwrap();
-                let method = reqwest::Method::from_str(&method).unwrap();
+                let method = Method::from_str(&method).unwrap();
                 if let postman_collection::v2_1_0::Url::UrlClass(url) = url {
                     let url = url.raw.unwrap();
+                    let replaced_url  = replace_vars_in_url(url, collection.variable);
                     built_client = client
                         .build()
                         .unwrap()
-                        .request(method, url)
+                        .request(method, replaced_url)
                 }
                 else if let postman_collection::v2_1_0::Url::String(url) = url{
+                    let replaced_url  = replace_vars_in_url(url, collection.variable);
                     built_client = client
                         .build()
                         .unwrap()
-                        .request(method, url)
+                        .request(method, replaced_url)
                 }
                 else{
                     built_client = client
@@ -144,10 +157,13 @@ async fn do_request(item: Items) -> ResponseFromCall {
         headers: map,
         cookies: cookie_map,
         duration: time_measures,
+
     }
 }
 
 fn main() {
+    let opt = rusty_leveldb::Options::default();
+
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![greet, get_collections, do_request,insert_collection])
         .run(tauri::generate_context!())
@@ -165,5 +181,24 @@ pub fn get_database() -> PickleDb {
                           SerializationMethod::Json)
         }
     }
+}
 
+
+pub fn replace_vars_in_url(url:String, variables: Option<Vec<postman_collection::v2_1_0::Variable>>) -> String{
+    let mut url_to_return = url.clone();
+    if let Some(variables) = variables{
+        variables.iter().for_each(|v|{
+            let mut key_string = "{{".to_string();
+            key_string.push_str(&*v.key.clone().unwrap());
+            key_string.push_str("}}");
+            let val = v.value.clone().unwrap();
+            match  val{
+                Value::String(request) => {
+                    url_to_return = url_to_return.replace(&key_string, &request);
+                },
+                _ =>{}
+            }
+        });
+    }
+    url_to_return
 }

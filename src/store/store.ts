@@ -13,6 +13,8 @@ interface APIState {
     setCurrentRequest: (by: ResponseFromCall) => void,
     fileToUpload: FileUpload|undefined,
     setFileToUpload: (by: FileUpload|undefined) => void
+    setCurrentCollection: (by: CollectionDefinition) => void,
+    currentCollection: CollectionDefinition|undefined
 }
 
 export const useAPIStore = create<APIState>()((set) => ({
@@ -25,5 +27,7 @@ export const useAPIStore = create<APIState>()((set) => ({
     addCollection: (collection: CollectionDefinition) => set((state) => ({collections: [...state.collections, collection]})),
     addCollections: (collection: CollectionDefinition[]) => set((state) => ({collections: [...state.collections, ...collection]})),
     fileToUpload: undefined,
-    setFileToUpload: (fileToUpload: FileUpload|undefined) => set({fileToUpload})
+    setFileToUpload: (fileToUpload: FileUpload|undefined) => set({fileToUpload}),
+    currentCollection: undefined,
+    setCurrentCollection: (currenCollection: CollectionDefinition) => set(() => ({currentCollection: currenCollection})),
 }))

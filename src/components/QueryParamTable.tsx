@@ -1,7 +1,8 @@
 import * as React from 'react';
 import {DataGrid, GridColDef, GridValueGetterParams} from '@mui/x-data-grid';
 import {useAPIStore} from "../store/store";
-import {QueryParamDefinition, UrlDefinition} from "postman-collection";
+import {ItemDefinition, QueryParamDefinition, UrlDefinition} from "postman-collection";
+import {useMemo} from "react";
 
 const columns: GridColDef[] = [
     { field: 'id', headerName: 'Key',editable: true,width:200 },
@@ -12,58 +13,49 @@ const columns: GridColDef[] = [
 
 export default function DataTable() {
     const currentItem = useAPIStore(state=>state.currentItem)
-    const setCurrentItem = useAPIStore(state=>state.setCurrentItem)
-    const getRowInformation = ()=>{
-        if (currentItem?.request&& currentItem.request.url){
+
+    const getRowInformation = (currentItem: ItemDefinition)=>{
+        if (currentItem.request&& currentItem.request.url){
             const urls = (currentItem?.request.url as UrlDefinition).query as QueryParamDefinition[]
             return urls.map(v=>{
-                return {id: v.key, value: v.value, description: v.description}
+                return {id: v.key, value: v.value, description: v.description, disabled: v.disabled}
             })
         }
     }
 
-
-    const getCheckedRows = ()=>{
-        if (currentItem?.request&& currentItem.request.url){
-            const urls = (currentItem?.request.url as UrlDefinition).query as QueryParamDefinition[]
-            return urls.filter(c=>!c.disabled).map(v=>{
-                return v.key
-            })
+    const mapped_items = useMemo(()=>{
+        if(currentItem){
+            return getRowInformation(currentItem)
         }
-    }
+        return []
+    }, [currentItem])
+
+
+
     return (
         <div style={{ height: 400, width: '100%' }}>
-            <DataGrid
-                rows={getRowInformation()}
-                columns={columns}
-                initialState={{
-                    pagination: {
-                        paginationModel: { page: 0, pageSize: 5 },
-                    },
-                }}
-                rowSelectionModel={getCheckedRows()}
-                onRowEditCommit={(params, event,p)=>{
-                    return console.log(params);
-                }
-                }
-                onRowSelectionModelChange={(rowSelectionModel, details)=>{
-                    ((currentItem?.request!.url as UrlDefinition).query as QueryParamDefinition[]).forEach(v=>{
-
-                            let resultingQuery = ((currentItem?.request.url as UrlDefinition).query as QueryParamDefinition[]).map(v=>{
-                                if (!rowSelectionModel.includes(v.key!)){
-                                    v.disabled=true
-                                    return v
-                            }
-                                else{
-                                    v.disabled=false
-                                    return v
-                                }
-                            })
-                            setCurrentItem({...currentItem, request: {...currentItem.request, url: {...currentItem.request.url, query: resultingQuery}}})
-                        })}}
-                pageSizeOptions={[5, 10]}
-                checkboxSelection
-            />
+            <table className="query-param-table">
+                <thead>
+                <tr>
+                    <th></th>
+                    <th>Key</th>
+                    <th>Value</th>
+                    <th>Description</th>
+                </tr>
+                </thead>
+                <tbody>
+                {mapped_items&&mapped_items.map((v,i)=>{
+                    return <tr key={i}>
+                        <td>
+                            <input type="checkbox" checked={!v.disabled}/>
+                        </td>
+                        <td>{v.id}</td>
+                        <td>{v.value}</td>
+                        <td className="description-table-cell">{v.description as string}</td>
+                    </tr>
+                })}
+                </tbody>
+            </table>
         </div>
     );
 }
