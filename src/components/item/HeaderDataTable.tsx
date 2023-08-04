@@ -1,5 +1,5 @@
 import * as React from 'react';
-import {useAPIStore} from "../store/store";
+import {useAPIStore} from "../../store/store";
 
 
 
@@ -25,7 +25,6 @@ export const HeaderDataTable = ()=> {
         }
     }
     return (
-        <div style={{ height: 400, width: '100%' }}>
         <table>
             <thead>
             <tr>
@@ -47,6 +46,5 @@ export const HeaderDataTable = ()=> {
             })}
             </tbody>
         </table>
-        </div>
     )
 }

@@ -1,10 +1,10 @@
-import {useAPIStore} from "../store/store";
+import {useAPIStore} from "../../store/store";
 import {RequestMethod} from "./RequestMethod";
 import {QueryParam} from "./QueryParam";
 import {QueryParamDefinition, UrlDefinition} from "postman-collection";
 import {useMemo} from "react";
 import { invoke } from "@tauri-apps/api/tauri";
-import {ResponseFromCall} from "../models/ResponseFromCall";
+import {ResponseFromCall} from "../../models/ResponseFromCall";
 import SyntaxHighlighter from 'react-syntax-highlighter';
 
 type ContentModelProps = {

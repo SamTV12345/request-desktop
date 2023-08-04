@@ -1,16 +1,10 @@
-import {Box, Button, Stack} from "@mui/material";
 import "../App.css";
 import {useAPIStore} from "../store/store";
-import {SidebarAccordeon} from "../components/SidebarAccordeon";
+import {SidebarAccordeon} from "../components/bareComponents/SidebarAccordeon";
 import * as Dialog from '@radix-ui/react-dialog';
-import {Input} from "../components/Input";
-import {useState} from "react";
-import {Collection, CollectionDefinition} from "postman-collection";
-import {Tabs, TabsContent, TabsList, TabsTrigger} from "../components/Tabs";
-import ParamDataTable from "../components/QueryParamTable";
-import {HeaderDataTable} from "../components/HeaderDataTable";
-import {FileToUpload} from "../components/FileToUpload";
-import {UploadFilePreview} from "../components/UploadFilePreview";
+import {Tabs, TabsContent, TabsList, TabsTrigger} from "../components/bareComponents/Tabs";
+import {FileToUpload} from "../components/upload/FileToUpload";
+import {UploadFilePreview} from "../components/upload/UploadFilePreview";
 
 export const SidebarComponent = ()=>{
     const collections = useAPIStore(state=>state.collections)

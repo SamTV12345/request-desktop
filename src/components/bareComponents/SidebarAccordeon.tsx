@@ -1,13 +1,8 @@
 import {FC} from "react";
 import {CollectionDefinition, ItemDefinition, ItemGroupDefinition} from "postman-collection";
-import {
-    Accordion,
-    AccordionContent,
-    AccordionItem,
-    AccordionTrigger,
-} from "./Accordeon"
-import {useAPIStore} from "../store/store";
-import {APIRequestSidebarIcon} from "./APIRequest";
+import {Accordion, AccordionContent, AccordionItem, AccordionTrigger,} from "./Accordeon"
+import {DisplayType, useAPIStore} from "../../store/store";
+import {APIRequestSidebarIcon} from "../item/APIRequest";
 
 
 type SidebarAccordeonProps = {
@@ -20,9 +15,16 @@ export const isItemGroupDefinition = (item: any): item is ItemGroupDefinition =>
 
 export const SidebarAccordeon:FC<SidebarAccordeonProps> = ({collection}) => {
     const initialNumber = 1
+
+    const setCurrentCollection = useAPIStore(state=>state.setCurrentCollection)
+    const setCurrentItem = useAPIStore(state=>state.setCurrentItem)
+
         return  <Accordion type="single" collapsible  key={collection.name+"name"}>
             <AccordionItem value="item-1" key={collection.name+"item"}>
-                <AccordionTrigger>{collection.info?.name}</AccordionTrigger>
+                    <AccordionTrigger><span onClick={()=>{
+                        setCurrentCollection({...collection, type: DisplayType.COLLECTION_TYPE})
+                        setCurrentItem(undefined)
+                    }}>{collection.info?.name}</span></AccordionTrigger>
                         <AccordionContent className="">
                             <RecursiveItemGroup item={collection.item} indent={initialNumber} collection={collection}/>
                         </AccordionContent>
@@ -44,8 +46,8 @@ export const RecursiveItemGroup:FC<RecursiveItemGroupProps> = ({item,indent, col
                 return <Accordion type="single" collapsible style={{marginLeft: `${indent*6}%`}} key={item.name}>
                     <AccordionItem value="item-1">
                         <AccordionTrigger  onClick={()=>{
-                            setCurrentItem(item)
-                            setCurrentCollection(collection)
+                            setCurrentItem({...item,type: DisplayType.SINGLE_TYPE})
+                            setCurrentCollection({...collection, type: DisplayType.SINGLE_TYPE})
                         }}>{item.name}</AccordionTrigger>
                         <AccordionContent className="recursive-item">
                             <RecursiveItemGroup key={item.id} item={item.item} indent={indent+1} collection={collection}/>
@@ -54,7 +56,7 @@ export const RecursiveItemGroup:FC<RecursiveItemGroupProps> = ({item,indent, col
                 </Accordion>
             }
             else{
-                return <div key={i} style={{marginLeft: `${indent*3}%`}} onClick={()=>{setCurrentItem(item)}} className="sidebar-request">
+                return <div key={i} style={{marginLeft: `${indent*3}%`}} onClick={()=>setCurrentItem({...item,type: DisplayType.SINGLE_TYPE})} className="sidebar-request">
                     <APIRequestSidebarIcon type={item.request?.method as string}/>
                     {item.name}
                 </div>

@@ -695,3 +695,7 @@ body, #root {
 .checkbox-indicator{
     color:violet;
 }
+
+.main-panel{
+    background-color: var(--grey-80);
+}

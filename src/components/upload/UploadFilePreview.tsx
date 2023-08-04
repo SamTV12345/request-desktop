@@ -1,5 +1,5 @@
-import {useAPIStore} from "../store/store";
-import {VERSIONS} from "../constants";
+import {useAPIStore} from "../../store/store";
+import {VERSIONS} from "../../constants";
 import {invoke} from "@tauri-apps/api/tauri";
 
 
@@ -29,6 +29,7 @@ export const UploadFilePreview = ()=>{
             <tbody>
             <tr>
                 <td>{collectionToUpload.spec.info?.name}</td>
+                {/* @ts-ignore */}
                 <td>{VERSIONS.get(collectionToUpload.spec.info?.schema)}</td>
                 <td>Collection</td>
             </tr>

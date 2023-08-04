@@ -1,5 +1,5 @@
 import * as React from 'react';
-import {useAPIStore} from "../store/store";
+import {useAPIStore} from "../../store/store";
 import {ItemDefinition, QueryParamDefinition, UrlDefinition} from "postman-collection";
 import {useMemo} from "react";
 
@@ -26,7 +26,6 @@ export default function DataTable() {
 
 
     return (
-        <div style={{ height: 400, width: '100%' }}>
             <table className="query-param-table">
                 <thead>
                 <tr>
@@ -49,6 +48,5 @@ export default function DataTable() {
                 })}
                 </tbody>
             </table>
-        </div>
     );
 }

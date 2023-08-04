@@ -1,10 +1,25 @@
 import {useEffect} from "react";
-import { invoke } from "@tauri-apps/api/tauri";
+import {invoke} from "@tauri-apps/api/tauri";
 import "./App.css";
 import {SidebarComponent} from "./sidebar/SidebarComponent";
-import {useAPIStore} from "./store/store";
+import {DisplayType, useAPIStore} from "./store/store";
 import {Collection} from "postman-collection";
-import {ContentModel} from "./components/ContentModel";
+import {ContentModel} from "./components/item/ContentModel";
+import {CollectionViewer} from "./components/collections/CollectionViewer";
+
+
+const ContentModelDecider = ()=>{
+    const currentCollection = useAPIStore(state=>state.currentCollection)
+    const currentItem = useAPIStore(state=>state.currentItem)
+    console.log(currentCollection)
+    if(currentCollection?.type === DisplayType.COLLECTION_TYPE){
+        return <CollectionViewer/>
+    }
+    else  {
+        return <ContentModel/>
+    }
+}
+
 
 const App = ()=> {
     const setCollections = useAPIStore(state=>state.setCollections)
@@ -17,7 +32,6 @@ const App = ()=> {
     useEffect(()=>{
         get_collections()
             .then(c=>{
-                console.log(c)
                 setCollections(c)
             })
             .catch(e=>console.log(e))
@@ -27,8 +41,7 @@ const App = ()=> {
 
         <div>
             <div style={{display: "block", float: 'left'}}><SidebarComponent/></div>
-            {currentCollection&&currentCollection.name?
-            <ContentModel/>:<div>Loading...</div>}
+            <div className="main-panel"><ContentModelDecider/></div>
         </div>
     )
 }

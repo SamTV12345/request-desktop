@@ -1,11 +1,12 @@
 import React from 'react'
 import {useDropzone} from 'react-dropzone'
-import {useAPIStore} from "../store/store";
+import {useAPIStore} from "../../store/store";
 
 export const FileToUpload = ()=>{
     const setFileUploadString = useAPIStore(state=>state.setFileToUpload)
 
 
+    // @ts-ignore
     const onDrop = ([file])=>{
         const reader = new FileReader();
         reader.onload = function(e) {
@@ -18,6 +19,7 @@ export const FileToUpload = ()=>{
         reader.readAsText(file);
     }
 
+    // @ts-ignore
     const {getRootProps, getInputProps, isDragActive} = useDropzone({onDrop})
 
 

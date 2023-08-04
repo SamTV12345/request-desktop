@@ -4,7 +4,7 @@ import * as React from "react"
 import * as AccordionPrimitive from "@radix-ui/react-accordion"
 import { ChevronDown } from "lucide-react"
 
-import { cn } from "../utils/utils"
+import { cn } from "../../utils/utils"
 
 const Accordion = AccordionPrimitive.Root
 
@@ -34,8 +34,8 @@ const AccordionTrigger = React.forwardRef<
             {...props}
         >
             <ChevronDown className="chevron-animation duration-200" />
-            {children}
         </AccordionPrimitive.Trigger>
+        {children}
     </AccordionPrimitive.Header>
 ))
 AccordionTrigger.displayName = AccordionPrimitive.Trigger.displayName

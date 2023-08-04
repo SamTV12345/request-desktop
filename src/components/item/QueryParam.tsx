@@ -1,5 +1,5 @@
-import {Tabs} from './Tabs'
-import {TabsContent, TabsList, TabsTrigger} from "./Tabs";
+import {Tabs} from '../bareComponents/Tabs'
+import {TabsContent, TabsList, TabsTrigger} from "../bareComponents/Tabs";
 import ParamDataTable from "./QueryParamTable";
 import {HeaderDataTable} from "./HeaderDataTable";
 export const QueryParam = () => {
