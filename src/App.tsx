@@ -10,7 +10,7 @@ import {CollectionViewer} from "./components/collections/CollectionViewer";
 
 const ContentModelDecider = ()=>{
     const currentCollection = useAPIStore(state=>state.currentCollection)
-    const currentItem = useAPIStore(state=>state.currentItem)
+
     console.log(currentCollection)
     if(currentCollection?.type === DisplayType.COLLECTION_TYPE){
         return <CollectionViewer/>

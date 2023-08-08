@@ -56,7 +56,11 @@ export const RecursiveItemGroup:FC<RecursiveItemGroupProps> = ({item,indent, col
                 </Accordion>
             }
             else{
-                return <div key={i} style={{marginLeft: `${indent*3}%`}} onClick={()=>setCurrentItem({...item,type: DisplayType.SINGLE_TYPE})} className="sidebar-request">
+                return <div key={i} style={{marginLeft: `${indent*3}%`}}
+                            onClick={()=>{
+                                setCurrentItem({...item,type: DisplayType.SINGLE_TYPE})
+                                setCurrentCollection({...collection, type: DisplayType.SINGLE_TYPE})
+                            }} className="sidebar-request">
                     <APIRequestSidebarIcon type={item.request?.method as string}/>
                     {item.name}
                 </div>

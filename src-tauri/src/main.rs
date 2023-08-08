@@ -81,10 +81,13 @@ async fn do_request(item: Items, collection: Spec) -> ResponseFromCall {
         match request.method{
             Some(method) => {
                 let url = request.url.unwrap();
+
                 let method = Method::from_str(&method).unwrap();
                 if let postman_collection::v2_1_0::Url::UrlClass(url) = url {
                     let url = url.raw.unwrap();
                     let replaced_url  = replace_vars_in_url(url, collection.variable);
+                    println!("Replaced url {}", replaced_url);
+
                     built_client = client
                         .build()
                         .unwrap()
@@ -92,6 +95,7 @@ async fn do_request(item: Items, collection: Spec) -> ResponseFromCall {
                 }
                 else if let postman_collection::v2_1_0::Url::String(url) = url{
                     let replaced_url  = replace_vars_in_url(url, collection.variable);
+                    println!("Replaced url {}", replaced_url);
                     built_client = client
                         .build()
                         .unwrap()
@@ -183,6 +187,7 @@ pub fn get_database() -> PickleDb {
 
 pub fn replace_vars_in_url(url:String, variables: Option<Vec<postman_collection::v2_1_0::Variable>>) -> String{
     let mut url_to_return = url.clone();
+    println!("Url to replace {:?}", variables);
     if let Some(variables) = variables{
         variables.iter().for_each(|v|{
             let mut key_string = "{{".to_string();
