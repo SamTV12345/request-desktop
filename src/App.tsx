@@ -7,42 +7,69 @@ import {Collection} from "postman-collection";
 import {ContentModel} from "./components/item/ContentModel";
 import {CollectionViewer} from "./components/collections/CollectionViewer";
 
-
-const ContentModelDecider = ()=>{
-    const currentCollection = useAPIStore(state=>state.currentCollection)
+const ContentModelDecider = () => {
+    const currentCollection = useAPIStore(state => state.currentCollection)
 
     console.log(currentCollection)
-    if(currentCollection?.type === DisplayType.COLLECTION_TYPE){
+    if (currentCollection?.type === DisplayType.COLLECTION_TYPE) {
         return <CollectionViewer/>
-    }
-    else  {
+    } else {
         return <ContentModel/>
     }
 }
 
 
-const App = ()=> {
-    const setCollections = useAPIStore(state=>state.setCollections)
-    const currentCollection = useAPIStore(state=>state.currentItem)
-    async function get_collections():Promise<Collection[]> {
+const App = () => {
+    const setCollections = useAPIStore(state => state.setCollections)
+    const currentCollection = useAPIStore(state => state.currentItem)
+
+    async function get_collections(): Promise<Collection[]> {
         // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
         return await invoke("get_collections")
     }
 
-    useEffect(()=>{
+    useEffect(() => {
         get_collections()
-            .then(c=>{
+            .then(c => {
                 setCollections(c)
             })
-            .catch(e=>console.log(e))
+            .catch(e => console.log(e))
     }, [])
 
     return (
+        <>
 
-        <div>
-            <div style={{display: "block", float: 'left'}}><SidebarComponent/></div>
-            <div className="main-panel"><ContentModelDecider/></div>
-        </div>
+            {/*<ResizableContext<HTMLDivElement> direction={"right"} initialSize={200} render={(size, targetRef) => (
+                <div style={{background: "#AFA", width: size, height: "100px", position: "relative"}} ref={targetRef}>
+                    <Resizer />
+                </div>
+            )} />
+
+            <ResizableContext<HTMLDivElement> direction={"bottom"} initialSize={200} render={(size, targetRef) => (
+                <div style={{background: "#AFA", width: "100px", height: size, position: "relative"}} ref={targetRef}>
+                    <Resizer />
+                </div>
+            )} />
+
+            <ResizableContext<HTMLDivElement> direction={"left"} initialSize={200} render={(size, targetRef) => (
+                <div style={{background: "#AFA", width: size, height: "100px", position: "relative", float: "right"}} ref={targetRef}>
+                    <Resizer />
+                </div>
+            )} />
+
+            <ResizableContext<HTMLDivElement> direction={"top"} initialSize={200} render={(size, targetRef) => (
+                <div style={{background: "#AFA", width: "100px", height: size, position: "fixed", bottom: "0"}} ref={targetRef}>
+                    <Resizer />
+                </div>
+            )} />*/}
+
+            {/*<ResizableBox direction={"top"} initialSize={100} style={{height: "100px", background: "#AFA", minWidth: "100px"}}/>*/}
+
+            <SidebarComponent/>
+            <div className="main-panel">
+                <ContentModelDecider/>
+            </div>
+        </>
     )
 }
 
