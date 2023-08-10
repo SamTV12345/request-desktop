@@ -3,7 +3,7 @@ import {ResizableReactContext} from "./ResizableContext";
 
 const resizerStyle: CSSProperties = {
     position: "absolute",
-    background: "#0003"
+    background: "none"
 }
 
 const resizerTopBottomStyle: CSSProperties = {
