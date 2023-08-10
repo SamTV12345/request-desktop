@@ -1,9 +1,9 @@
-import {Tabs} from '../bareComponents/Tabs'
-import {TabsContent, TabsList, TabsTrigger} from "../bareComponents/Tabs";
+import {TabsContent, TabsList, TabsTrigger, Tabs} from "../bareComponents/Tabs";
 import ParamDataTable from "./QueryParamTable";
 import {HeaderDataTable} from "./HeaderDataTable";
+
 export const QueryParam = () => {
-    return <Tabs defaultValue="params" className="w-[400px]">
+    return <Tabs defaultValue="params" className="request-details-section">
         <TabsList className="query-param-list">
             <TabsTrigger value="params">Params</TabsTrigger>
             <TabsTrigger value="authorization">Authorization</TabsTrigger>
