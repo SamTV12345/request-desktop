@@ -102,10 +102,7 @@ html {
     --teal-70: #015965;
     --teal-80: #02444D;
     --teal-90: #032F36;
-}
 
-/* stylelint-disable color-no-hex */
-:root {
     /*Brand*/
     --base-color-brand: var(--orange-50);
     --base-color-info: var(--blue-50);
@@ -204,8 +201,7 @@ html {
     --color-header-content: #B3B3B3;
     --color-header-background-primary-highlight: #333333;
     --color-header-background-secondary-highlight: #424242;
-}
-:root{
+
     --bg-primary: #282828;
     --bg-primary--shade--one: #323232;
     --bg-primary--shade--two: #3c3c3c;
@@ -384,9 +380,7 @@ html {
     --content-color-options-method: #F15EB0;
     --http-icon-color: #3FD6E6;
     --graphql-icon-color: #F15EB0;
-}
 
-:root{
     --text-family-default: "Inter", "OpenSans", Helvetica, Arial, sans-serif;
     --text-family-code: "IBMPlexMono", "Cousine", monospace;
     --text-size-xs: 10px;
@@ -426,15 +420,46 @@ html {
     --text-font-weight-medium: 600;
     --text-font-weight-bold: 600;
 }
-.sidebar {
-    width: 500px;
-    height: 100vh;
-    background: var(--background-color-secondary);
-    overflow-y: scroll;
-    color: #ffe;
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
 }
 
-.sidebar >  button, .sidebar > div{
+.sidebar {
+    height: 100%;
+    background: var(--background-color-secondary);
+    color: #ffe;
+    padding: .5em;
+    min-width: 250px;
+
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar-import-buttons {
+    display: flex;
+    flex-direction: row-reverse;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.sidebar-collection-list {
+    flex-grow: 1;
+    overflow: auto;
+}
+
+.sidebar-import-buttons > button,
+.sidebar-button {
+    color: var(--content-color-primary);
+    background: var(--highlight-background-color-secondary);
+    border: transparent;
+    cursor: pointer;
+}
+
+.sidebar > button,
+.sidebar > div {
     background-color: var(--background-color-secondary);
     color: var(--content-color-primary);
 }
@@ -464,10 +489,16 @@ html {
 body, #root {
     margin: 0;
     padding: 0;
-    height: 100vh
+    height: 100vh;
+    width: 100%;
+
+    display: flex;
+    flex-direction: row;
+
+    overflow: hidden;
 }
 
-.link-input{
+.link-input {
     gap: 4px;
     display: flex;
     width: 500px;
@@ -565,22 +596,6 @@ body, #root {
     background-color: var(--scrollbar-thumb-background-color);
 }
 
-
-.sidebar-import-buttons{
-    display: flex;
-    margin-top: 2%;
-    flex-direction: row-reverse;
-    gap: 10px;
-    margin-bottom: 10px;
-}
-
-.sidebar-import-buttons > button, .sidebar-button {
-    color: var(--content-color-primary);
-    background: var(--highlight-background-color-secondary);
-    border: transparent;
-    cursor: pointer;
-}
-
 .dialog-centered{
     background-color: #333333;
     border-radius: 2%;
@@ -609,10 +624,6 @@ body, #root {
     flex-grow: 1;
     color: white;
     border: 2px dashed var(--border-color-strong);
-}
-
-.dropzone > input {
-
 }
 
 .import-table, .import-table th, .import-table td {
@@ -698,4 +709,8 @@ body, #root {
 
 .main-panel{
     background-color: var(--grey-80);
+    flex-shrink: 1;
+    flex-grow: 1;
+    min-width: 500px;
+    flex-basis: 0;
 }

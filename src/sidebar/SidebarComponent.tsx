@@ -5,6 +5,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import {Tabs, TabsContent, TabsList, TabsTrigger} from "../components/bareComponents/Tabs";
 import {FileToUpload} from "../components/upload/FileToUpload";
 import {UploadFilePreview} from "../components/upload/UploadFilePreview";
+import ResizableBox from "../components/resizable/ResizableBox";
 
 export const SidebarComponent = ()=>{
     const collections = useAPIStore(state=>state.collections)
@@ -12,7 +13,7 @@ export const SidebarComponent = ()=>{
 
 
     return (
-            <div className="sidebar">
+            <ResizableBox direction={"right"} initialSize={400} className={"sidebar"}>
 
                 <div className="sidebar-import-buttons">
                     <button>New</button>
@@ -54,13 +55,13 @@ export const SidebarComponent = ()=>{
                 </div>
                 <div className="sidebar-collection-list">
                 {
-                    collections.map((c, i)=>{
+                    collections.map(c => {
                         return (
                                     <SidebarAccordeon key={c.id} collection={c}/>
                         )
                     })
                 }
                 </div>
-            </div>
+            </ResizableBox>
     )
 }
