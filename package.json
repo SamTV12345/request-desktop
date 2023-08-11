@@ -25,7 +25,8 @@
     "react-dropzone": "^14.2.3",
     "react-syntax-highlighter": "^15.5.0",
     "react-ace": "^10.1.0",
-    "ace-builds": "^1.24.0"
+    "ace-builds": "^1.24.0",
+    "material-symbols": "^0.10.4"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^1.4.0",

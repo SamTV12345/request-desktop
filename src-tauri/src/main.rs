@@ -185,7 +185,7 @@ async fn do_request(item: Items, collection: Spec) -> ResponseFromCall {
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![greet, get_collections, do_request,insert_collection, update_collection])
+        .invoke_handler(tauri::generate_handler![greet, get_collections, do_request, insert_collection, update_collection])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

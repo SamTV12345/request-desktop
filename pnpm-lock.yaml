@@ -32,6 +32,9 @@ dependencies:
   lucide-react:
     specifier: ^0.263.1
     version: 0.263.1(react@18.2.0)
+  material-symbols:
+    specifier: ^0.10.4
+    version: 0.10.4
   postman-collection:
     specifier: ^4.1.7
     version: 4.1.7
@@ -1808,6 +1811,10 @@ packages:
       react: ^16.5.1 || ^17.0.0 || ^18.0.0
     dependencies:
       react: 18.2.0
+    dev: false
+
+  /material-symbols@0.10.4:
+    resolution: {integrity: sha512-vOX5eh4BuNhhSYaG+pQW6K1DecfKBZVJ8SZBDMDXfx0U676GjrCEfHpZDwZn5w0mVTMQ4tf8iR1XlFgWDi9xjw==}
     dev: false
 
   /merge2@1.4.1:

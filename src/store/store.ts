@@ -55,9 +55,8 @@ export const useAPIStore = create<APIState>()((set,getState) => ({
                 return
             }
             if(!newVar){
-                console.log("Löschen...")
                 const newArray = getState().currentCollection?.variable!
-                delete newArray[indexOfValue]
+                newArray.splice(indexOfValue, 1)
                 const newState = Object.assign({...getState().currentCollection!}, {variable: newArray})
                 set({currentCollection: newState})
                 return

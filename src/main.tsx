@@ -4,7 +4,7 @@ import App from "./App";
 import "./styles.css";
 import "./App.css"
 import './font-faces.css'
-
+import "material-symbols/outlined.css"
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <App />
