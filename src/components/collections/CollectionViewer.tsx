@@ -3,7 +3,7 @@ import {VariableViewer} from "./VariableViewer";
 
 export const CollectionViewer = ()=>{
     return (
-    <Tabs defaultValue="authorization" className="w-[400px] import-tabs">
+    <Tabs defaultValue="authorization" className="selector text-white p-2">
         <TabsList className="query-param-list">
             <TabsTrigger value="authorization">Authorisierung</TabsTrigger>
             <TabsTrigger value="pre-request-script">Pre-request Script</TabsTrigger>

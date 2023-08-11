@@ -15,6 +15,7 @@ use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use serde_json::Value;
 use crate::models::postman_collection::{PostmanCollection, Variable};
 use crate::models::response_from_call::ResponseFromCall;
+use uuid::Uuid;
 
 mod models;
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
@@ -41,13 +42,24 @@ async fn get_collections() -> Vec<Spec> {
 }
 
 #[tauri::command]
-async fn insert_collection(collection: Spec) {
+async fn insert_collection(mut collection: Spec) {
     println!("Inserting");
     let mut db = get_database();
-    let key = collection.info.name.clone();
+    let mut key = collection.info.postman_id.clone();
+    if key.is_none(){
+        key = Option::from(Uuid::new_v4().to_string());
+        collection.info.postman_id = key.clone();
+    }
     let value = serde_json::to_string(&collection).unwrap();
-    db.set(&key, &value).unwrap();
-    println!("Value {}",db.get::<String>(&key).unwrap());
+    db.set(&key.unwrap(), &value).unwrap();
+}
+
+#[tauri::command]
+async fn update_collection(collection: Spec){
+    let mut db = get_database();
+    let key = collection.info.postman_id.clone();
+    let value = serde_json::to_string(&collection).unwrap();
+    db.set(&key.unwrap(), &value).unwrap();
 }
 
 #[tauri::command]
@@ -58,6 +70,13 @@ async fn insert_collection_from_openapi(collection: String) {
     println!("Value {}",db.get::<String>(&"test").unwrap());
 }
 
+#[tauri::command]
+async fn update_collection_in_backend(collection: Spec){
+    let mut db = get_database();
+    let key = collection.info.name.clone();
+    let value = serde_json::to_string(&collection).unwrap();
+    db.set(&key, &value).unwrap();
+}
 
 
 #[tauri::command]
@@ -166,7 +185,7 @@ async fn do_request(item: Items, collection: Spec) -> ResponseFromCall {
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![greet, get_collections, do_request,insert_collection])
+        .invoke_handler(tauri::generate_handler![greet, get_collections, do_request,insert_collection, update_collection])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

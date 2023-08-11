@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 html {
     font-family: sans-serif;
     /* 1 */
@@ -552,7 +556,7 @@ body, #root {
 
 }
 
-.request-method-delete,.request-method-option,.request-method-patch,.request-method-put,.request-method-head,.request-method-get,.request-method-post{
+.font-icons{
     font-weight: var(--text-weight-medium);
     font-size: var(--text-font-size-s);
     align-self: center;
@@ -672,11 +676,12 @@ body, #root {
     font-size: var(--text-size-xl);
 }
 
-.import-tabs > div >button[aria-selected=true] {
+.selector > div >button[aria-selected=true],.import-tabs > div >button[aria-selected=true] {
     text-decoration: underline;
     text-decoration-color: var(--brand-primary);
     text-underline-offset: 10px;
 }
+
 
 .import-tabs > div >button {
     color: white;
@@ -727,6 +732,22 @@ body, #root {
 .request-url-section {
     flex-grow: 0;
     flex-shrink: 0;
+}
+
+.request-url-section {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 2%
+}
+
+.request-url-section div:first-child {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 2%
+}
+
+.request-url-border {
+
 }
 
 .request-details-section {

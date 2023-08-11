@@ -5,7 +5,7 @@ import {HeaderDataTable} from "./HeaderDataTable";
 export const QueryParam = () => {
     return <Tabs defaultValue="params" className="request-details-section">
         <TabsList className="query-param-list">
-            <TabsTrigger value="params">Params</TabsTrigger>
+            <TabsTrigger value="params" className="">Params</TabsTrigger>
             <TabsTrigger value="authorization">Authorization</TabsTrigger>
             <TabsTrigger value="headers">Headers</TabsTrigger>
             <TabsTrigger value="body">Body</TabsTrigger>

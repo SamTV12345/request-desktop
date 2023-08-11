@@ -7,6 +7,7 @@ import {invoke} from "@tauri-apps/api/tauri";
 import {ResponseFromCall} from "../../models/ResponseFromCall";
 import SyntaxHighlighter from 'react-syntax-highlighter';
 import ResizableBox from "../resizable/ResizableBox";
+import {Editor} from "./Editor";
 
 type ContentModelProps = {}
 
@@ -20,8 +21,7 @@ export const ContentModel = () => {
         if (currentRequest == undefined) {
             return ""
         }
-        // @ts-ignore
-        return currentRequest.headers && currentRequest.headers["content-type"]
+        return currentRequest.headers["content-type"]
     }, [currentRequest])
 
     const url = useMemo(() => {
@@ -29,8 +29,7 @@ export const ContentModel = () => {
             return ""
         }
         let urls = (item?.request.url as UrlDefinition).query as QueryParamDefinition[]
-        // @ts-ignore
-        const host = (item?.request?.url as UrlDefinition).host[0]
+        const host = (item?.request?.url as UrlDefinition).host
         let searchParams = ""
         if (urls) {
             urls = urls.filter(v => !v.disabled)
@@ -54,26 +53,27 @@ export const ContentModel = () => {
 
             {item && item.request && <>
                 <div className="request-url-section">
-                    <RequestMethod value={item}/>
-                    <input value={url} className="" onChange={(v) => {
-                    }}/>
+                    <div className="border-2 border-mustard-600 p-3 rounded">
+                        <div className="outline-2 outline-gray-600 bg-transparent">
+                            <RequestMethod value={item}/>
+                        </div>
+                        <input value={url} className="" onChange={(v) => {
+                        }}/>
+                    </div>
                     <button onClick={() => {
-                        console.log(currentCollection)
                         invoke("do_request", {item: item, collection: currentCollection})
                             .then((c) => {
                                 setCurrentRequest(c as ResponseFromCall)
                             })
                             .catch(e => console.log(e))
-                    }}>
+                    }} className="bg-mustard-600 p-2 rounded w-28">
                         Senden
                     </button>
                 </div>
                 {item && (item.request.url as UrlDefinition).query && <QueryParam/>}
                 {currentRequest &&
                     <ResizableBox direction={"top"} initialSize={300} className="response-section">
-                        <SyntaxHighlighter language={language}>
-                            {currentRequest.body}
-                        </SyntaxHighlighter>
+                        <Editor/>
                     </ResizableBox>}
             </>}
         </div>
