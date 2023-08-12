@@ -21,8 +21,8 @@ mod models;
 
 
 #[tauri::command]
-async fn check_parser(val: serde_json::Value){
-    let serialized_Val = serde_json::to_string(&val).unwrap();
+async fn check_parser(collection: serde_json::Value){
+    let serialized_Val = serde_json::to_string(&collection).unwrap();
     // Some Deserializer.
     let jd = &mut serde_json::Deserializer::from_str(&serialized_Val);
 

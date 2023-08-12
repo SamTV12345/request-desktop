@@ -795,7 +795,8 @@ impl Default for AuthType {
 pub enum VariableType {
     #[serde(rename = "any")]
     Any,
-
+    #[serde(rename = "default")]
+    Default,
     #[serde(rename = "boolean")]
     Boolean,
 
