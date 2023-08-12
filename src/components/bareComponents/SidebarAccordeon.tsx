@@ -43,7 +43,7 @@ export const RecursiveItemGroup:FC<RecursiveItemGroupProps> = ({item,indent, col
 
     return <div>{item?.map((item, i)=>{
             if(isItemGroupDefinition(item)){
-                return <Accordion type="single" collapsible style={{marginLeft: `${indent*6}%`}} key={item.name}>
+                return <Accordion type="single" collapsible style={{marginLeft: `2em`}} key={item.name}>
                     <AccordionItem value="item-1">
                         <AccordionTrigger  onClick={()=>{
                             setCurrentItem({...item,type: DisplayType.SINGLE_TYPE})
@@ -57,7 +57,7 @@ export const RecursiveItemGroup:FC<RecursiveItemGroupProps> = ({item,indent, col
                 </Accordion>
             }
             else{
-                return <div key={i} style={{marginLeft: `${indent*3}%`}}
+                return <div key={i} style={{marginLeft: `2em`}}
                             onClick={()=>{
                                 setCurrentItem({...item,type: DisplayType.SINGLE_TYPE})
                                 console.log("setted",collection)
