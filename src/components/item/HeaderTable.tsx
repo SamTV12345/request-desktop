@@ -13,36 +13,28 @@ import {useMemo} from "react";
 import {replaceItem} from "../../utils/CollectionReplaceUtils";
 
 
-export const ParamTable = ()=> {
+export const HeaderTable = ()=> {
     const currentItem = useAPIStore(state => state.currentItem)
     const currentCollection = useAPIStore(state => state.currentCollection)
     const saveCollection = useAPIStore(state => state.saveCollection)
     const updateCurrentCollection = useAPIStore(state => state.setCurrentCollection)
 
-    const value = useMemo(()=>{
-        if(!currentItem?.request){
+    const headers = useMemo(()=>{
+        if(!currentItem?.request||!currentItem.request.header){
             return []
         }
 
-        if(typeof !currentItem?.request?.url === 'string'){
-            return []
-        }else {
-            return (currentItem.request.url as UrlDefinition).query as QueryParamDefinition[]
-        }
+        return currentItem.request.header
     },[currentItem?.request])
-    console.log("Current colleciton123,", currentCollection)
 
     const disableQueryParam = (collectionId: string, disabled: boolean, index: number)=>{
 
-        value[index].disabled = disabled
+        headers[index].disabled = disabled
         const item  = {
             ...currentItem,
             request: {
                 ...currentItem?.request,
-                url: {
-                    ...currentItem?.request?.url as UrlDefinition,
-                    query: value
-                }
+                headers: headers
             }
         }
         const newCollection = replaceItem(currentCollection as CollectionDefinition, item)
@@ -52,15 +44,12 @@ export const ParamTable = ()=> {
 
 
     const onKeyChange = (collectionId: string, newKey: string, index: number)=>{
-        value[index].key = newKey
+        headers[index].key = newKey
         const item  = {
             ...currentItem,
             request: {
                 ...currentItem?.request,
-                url: {
-                    ...currentItem?.request?.url as UrlDefinition,
-                    query: value
-                }
+                headers: headers
             }
         }
         const newCollection = replaceItem(currentCollection as CollectionDefinition, item)
@@ -70,15 +59,12 @@ export const ParamTable = ()=> {
 
 
     const onValueChange = (collectionId: string, newVal: string, index: number)=>{
-        value[index].value = newVal
+        headers[index].value = newVal
         const item  = {
             ...currentItem,
             request: {
                 ...currentItem?.request,
-                url: {
-                    ...currentItem?.request?.url as UrlDefinition,
-                    query: value
-                }
+                headers: headers
             }
         }
         const newCollection = replaceItem(currentCollection as CollectionDefinition, item)
@@ -87,7 +73,7 @@ export const ParamTable = ()=> {
     }
 
     const onAdd = (collectionId: string)=>{
-        value.push({
+        headers.push({
             value: 'Neuer Wert',
             key: 'Neuer Key',
             disabled: false
@@ -96,10 +82,7 @@ export const ParamTable = ()=> {
             ...currentItem,
             request: {
                 ...currentItem?.request,
-                url: {
-                    ...currentItem?.request?.url as UrlDefinition,
-                    query: value
-                }
+                headers: headers
             }
         }
         const newCollection = replaceItem(currentCollection as CollectionDefinition, item)
@@ -108,15 +91,12 @@ export const ParamTable = ()=> {
     }
 
     const onDelete = (collectionId: string, index:number)=>{
-        const resultingValue = value.splice(index,1)
+        const resultingValue = headers.splice(index,1)
         const item  = {
             ...currentItem,
             request: {
                 ...currentItem?.request,
-                url: {
-                    ...currentItem?.request?.url as UrlDefinition,
-                    query: resultingValue
-                }
+                headers: headers
             }
         }
         const newCollection = replaceItem(currentCollection as CollectionDefinition, item)
@@ -125,15 +105,12 @@ export const ParamTable = ()=> {
     }
 
     const onDescriptionChange = (collectionId: string, newVal: string, index: number)=>{
-        value[index].description = newVal
+        headers[index].description = newVal
         const item  = {
             ...currentItem,
             request: {
                 ...currentItem?.request,
-                url: {
-                    ...currentItem?.request?.url as UrlDefinition,
-                    query: value
-                }
+                headers: headers
             }
         }
         const newCollection = replaceItem(currentCollection as CollectionDefinition, item)
@@ -141,6 +118,6 @@ export const ParamTable = ()=> {
         updateCurrentCollection(newCollectionExtended)
     }
 
-    return value&&<EditableTable value={value} onDisabled={disableQueryParam} onKeyChange={onKeyChange}
-                          onValueChange={onValueChange} onDescriptionChange={onDescriptionChange} onAdd={onAdd} onSave={saveCollection} onDelete={onDelete}/>
+    return headers&&<EditableTable value={headers} onDisabled={disableQueryParam} onKeyChange={onKeyChange}
+                                 onValueChange={onValueChange} onDescriptionChange={onDescriptionChange} onAdd={onAdd} onSave={saveCollection} onDelete={onDelete}/>
 }
