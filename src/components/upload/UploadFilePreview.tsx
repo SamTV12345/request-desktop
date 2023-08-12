@@ -10,6 +10,7 @@ export const UploadFilePreview = ()=>{
     if (collectionToUpload === undefined) return <div></div>
 
     const importCollection = ()=>{
+        console.log(collectionToUpload.spec)
         invoke("insert_collection", {collection: collectionToUpload.spec})
             .then((c)=>{
                 console.log(c)

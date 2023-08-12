@@ -33,7 +33,9 @@ pub struct Auth {
     /// Authentication](https://en.wikipedia.org/wiki/Basic_access_authentication).
     #[serde(rename = "basic")]
     pub basic: Option<Vec<AuthAttribute>>,
-
+    /// The attributes for [API key Auth](https://en.wikipedia.org/wiki/API_key).
+    #[serde(rename = "apikey")]
+    pub api_key: Option<Vec<AuthAttribute>>,
     /// The helper attributes for [Bearer Token
     /// Authentication](https://tools.ietf.org/html/rfc6750)
     #[serde(rename = "bearer")]
@@ -767,7 +769,8 @@ pub enum ResponseTime {
 pub enum AuthType {
     #[serde(rename = "awsv4")]
     Awsv4,
-
+    #[serde(rename = "apikey")]
+    Apikey,
     #[serde(rename = "basic")]
     Basic,
 

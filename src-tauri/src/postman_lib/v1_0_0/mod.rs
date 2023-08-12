@@ -890,7 +890,8 @@ pub enum Time {
 pub enum AuthType {
     #[serde(rename = "awsv4")]
     Awsv4,
-
+    #[serde(rename = "apikey")]
+    Apikey,
     #[serde(rename = "basic")]
     Basic,
 

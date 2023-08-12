@@ -31,7 +31,10 @@ pub struct Auth {
     /// accessKey, secretKey, region, service.
     #[serde(rename = "awsv4")]
     pub awsv4: Option<HashMap<String, Option<serde_json::Value>>>,
-
+    /// The attributes for [API key Auth](https://en.wikipedia.org/wiki/API_key).
+    /// The attributes for [API key Auth](https://en.wikipedia.org/wiki/API_key).
+    #[serde(rename = "apikey")]
+    pub api_key: Option<HashMap<String, Option<serde_json::Value>>>,
     /// The attributes for [Basic
     /// Authentication](https://en.wikipedia.org/wiki/Basic_access_authentication). e.g.
     /// username, password.
@@ -753,7 +756,8 @@ pub enum ResponseTime {
 pub enum AuthType {
     #[serde(rename = "awsv4")]
     Awsv4,
-
+    #[serde(rename = "apikey")]
+    Apikey,
     #[serde(rename = "basic")]
     Basic,
 

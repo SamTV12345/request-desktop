@@ -2,19 +2,15 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::collections::HashMap;
-use std::fs;
-use std::fs::FileType;
-use std::iter::Map;
 use std::path::Path;
 use std::str::FromStr;
-use std::time::{Duration, Instant};
+use std::time::{Instant};
 use pickledb::{PickleDb, PickleDbDumpPolicy, SerializationMethod};
 use reqwest::{ClientBuilder, Method};
-use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+use reqwest::header::{HeaderMap, HeaderName,};
 use serde_json::Value;
 use crate::models::response_from_call::ResponseFromCall;
 use uuid::Uuid;
-use crate::models::postman_collection;
 use crate::models::postman_collection::PostmanCollection;
 use crate::postman_lib::v2_1_0::{HeaderUnion, Items, RequestUnion, Spec};
 
@@ -22,6 +18,26 @@ mod postman_lib;
 
 
 mod models;
+
+
+#[tauri::command]
+async fn check_parser(val: serde_json::Value){
+    let serialized_Val = serde_json::to_string(&val).unwrap();
+    // Some Deserializer.
+    let jd = &mut serde_json::Deserializer::from_str(&serialized_Val);
+
+    let result: Result<Spec, _> = serde_path_to_error::deserialize(jd);
+    match result {
+        Ok(_) => println!("Everything worked as expected"),
+        Err(err) => {
+            let path = err.path().to_string();
+            assert_eq!(path, "dependencies.serde.version");
+        }
+    }
+
+}
+
+
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
 #[tauri::command]
 async fn greet(name: Spec) -> String {
@@ -214,7 +230,7 @@ async fn do_request(item: Items, collection: Spec) -> ResponseFromCall {
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![greet, get_collections, do_request, insert_collection, update_collection])
+        .invoke_handler(tauri::generate_handler![greet, get_collections, do_request, insert_collection, update_collection, check_parser])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
