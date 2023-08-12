@@ -35,7 +35,6 @@ export const ParamTable = ()=> {
     const disableQueryParam = (collectionId: string, disabled: boolean, index: number)=>{
 
         value[index].disabled = disabled
-        console.log(value[index].disabled)
         const item  = {
             ...currentItem,
             request: {
@@ -51,44 +50,97 @@ export const ParamTable = ()=> {
         updateCurrentCollection(newCollectionExtended)
     }
 
-    /*
+
     const onKeyChange = (collectionId: string, newKey: string, index: number)=>{
-        const newVariable:VariableDefinition = {
-            ...collection?.variable![index],
-            key: newKey
+        value[index].key = newKey
+        const item  = {
+            ...currentItem,
+            request: {
+                ...currentItem?.request,
+                url: {
+                    ...currentItem?.request?.url as UrlDefinition,
+                    query: value
+                }
+            }
         }
-        setVariable(collection!.id!,newVariable, index)
+        const newCollection = replaceItem(currentCollection as CollectionDefinition, item)
+        const newCollectionExtended = {...newCollection,type: DisplayType.SINGLE_TYPE} satisfies CollectionDefinitionExtended
+        updateCurrentCollection(newCollectionExtended)
     }
 
+
     const onValueChange = (collectionId: string, newVal: string, index: number)=>{
-        const newVariable:VariableDefinition = {
-            ...collection?.variable![index],
-            value: newVal
+        value[index].value = newVal
+        const item  = {
+            ...currentItem,
+            request: {
+                ...currentItem?.request,
+                url: {
+                    ...currentItem?.request?.url as UrlDefinition,
+                    query: value
+                }
+            }
         }
-        setVariable(collectionId,newVariable, index)
+        const newCollection = replaceItem(currentCollection as CollectionDefinition, item)
+        const newCollectionExtended = {...newCollection,type: DisplayType.SINGLE_TYPE} satisfies CollectionDefinitionExtended
+        updateCurrentCollection(newCollectionExtended)
     }
 
     const onAdd = (collectionId: string)=>{
-        addVariable(collectionId)
-    }
-
-    const onSaveOfVariable = ()=>{
-        saveCollection()
+        value.push({
+            value: 'Neuer Wert',
+            key: 'Neuer Key',
+            disabled: false
+        })
+        const item  = {
+            ...currentItem,
+            request: {
+                ...currentItem?.request,
+                url: {
+                    ...currentItem?.request?.url as UrlDefinition,
+                    query: value
+                }
+            }
+        }
+        const newCollection = replaceItem(currentCollection as CollectionDefinition, item)
+        const newCollectionExtended = {...newCollection,type: DisplayType.SINGLE_TYPE} satisfies CollectionDefinitionExtended
+        updateCurrentCollection(newCollectionExtended)
     }
 
     const onDelete = (collectionId: string, index:number)=>{
-        setVariable(collectionId,undefined, index)
+        const resultingValue = value.splice(index,1)
+        const item  = {
+            ...currentItem,
+            request: {
+                ...currentItem?.request,
+                url: {
+                    ...currentItem?.request?.url as UrlDefinition,
+                    query: resultingValue
+                }
+            }
+        }
+        const newCollection = replaceItem(currentCollection as CollectionDefinition, item)
+        const newCollectionExtended = {...newCollection,type: DisplayType.SINGLE_TYPE} satisfies CollectionDefinitionExtended
+        updateCurrentCollection(newCollectionExtended)
     }
 
     const onDescriptionChange = (collectionId: string, newVal: string, index: number)=>{
-        const newVariable:VariableDefinition = {
-            ...collection?.variable![index],
-            description: newVal
+        value[index].description = newVal
+        const item  = {
+            ...currentItem,
+            request: {
+                ...currentItem?.request,
+                url: {
+                    ...currentItem?.request?.url as UrlDefinition,
+                    query: value
+                }
+            }
         }
-        setVariable(collectionId,newVariable, index)
+        const newCollection = replaceItem(currentCollection as CollectionDefinition, item)
+        const newCollectionExtended = {...newCollection,type: DisplayType.SINGLE_TYPE} satisfies CollectionDefinitionExtended
+        updateCurrentCollection(newCollectionExtended)
     }
-*/
 
-    return <EditableTable value={value} onDisabled={disableQueryParam} onKeyChange={()=>{}}
-                          onValueChange={()=>{}} onDescriptionChange={()=>{}} onAdd={()=>{}} onSave={()=>{}} onDelete={()=>{}}/>
+    return <EditableTable value={value} onDisabled={disableQueryParam} onKeyChange={onKeyChange}
+                          onValueChange={onValueChange} onDescriptionChange={onDescriptionChange} onAdd={onAdd} onSave={saveCollection} onDelete={onDelete}/>
 }
