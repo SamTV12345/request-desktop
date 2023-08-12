@@ -114,39 +114,14 @@ html {
     --base-color-error: var(--red-50);
     --base-color-success: var(--green-50);
     /*Content*/
-    --content-color-primary: var(--grey-90);
-    --content-color-secondary: var(--grey-50);
-    --content-color-tertiary: var(--grey-40);
-    --content-color-brand: var(--orange-70);
-    --content-color-info: var(--blue-70);
-    --content-color-error: var(--red-70);
-    --content-color-warning: var(--yellow-70);
-    --content-color-success: var(--green-70);
     --content-color-constant: var(--grey-00);
-    --content-color-link: var(--blue-60);
     /*Highlight*/
-    --highlight-background-color-primary: var(--grey-20);
-    --highlight-background-color-secondary: var(--grey-20);
-    --highlight-background-color-tertiary: var(--grey-30);
     --highlight-background-color-brand: var(--orange-60);
     --highlight-background-color-info: var(--blue-60);
     --highlight-background-color-warning: var(--yellow-60);
     --highlight-background-color-error: var(--red-60);
     --highlight-background-color-success: var(--green-60);
-    --highlight-background-color-transparent: rgba(26, 26, 26, 0.1);
-    /*Background*/
-    --background-color-primary: var(--grey-00);
-    --background-color-secondary: var(--grey-05);
-    --background-color-tertiary: var(--grey-10);
-    --background-color-brand: var(--orange-10);
-    --background-color-info: var(--blue-10);
-    --background-color-warning: var(--yellow-10);
-    --background-color-error: var(--red-10);
-    --background-color-success: var(--green-10);
-    --background-modal-backdrop: rgba(26, 26, 26, 0.5);
     /*Border colors*/
-    --border-color-default: var(--grey-20);
-    --border-color-strong: var(--grey-30);
     --border-color-active: rgba(26, 26, 26, 0.3);
     /*Header*/
     --header-background-color-primary: var(--grey-90);
@@ -164,19 +139,8 @@ html {
     --color-accent-warning: #FFB400;
     --color-accent-success: #249C47;
     /* Content */
-    --color-content-primary: #1A1A1A;
-    --color-content-secondary: #666666;
-    --color-content-tertiary: #999999;
-    --color-content-brand-primary: #C73500;
-    --color-content-brand-secondary: #145EA9;
-    --color-content-accent-error: #B32E14;
-    --color-content-accent-warning: #7D6517;
-    --color-content-accent-success: #127347;
     --color-content-constant: #FFFFFF;
     /* Highlight */
-    --color-highlight-background-primary: #F2F2F2;
-    --color-highlight-background-secondary: #EBEBEB;
-    --color-highlight-background-tertiary: #E3E3E3;
     --color-highlight-brand-primary: #FF4F0F;
     --color-highlight-brand-secondary: #0763C0;
     --color-highlight-accent-warning: #E5A200;
@@ -184,17 +148,12 @@ html {
     --color-highlight-accent-success: #20893E;
     --color-highlight-transparent: rgba(0, 0, 0, 0.05);
     /* Background */
-    --color-background-primary: #FFFFFF;
-    --color-background-secondary: #F7F7F7;
-    --color-background-tertiary: #EBEBEB;
     --color-background-brand-primary: rgba(255, 108, 55, 0.15);
     --color-background-brand-secondary: rgba(9, 123, 237, 0.2);
     --color-background-accent-warning: rgba(255, 180, 0, 0.2);
     --color-background-accent-error: rgba(235, 32, 19, 0.2);
     --color-background-accent-success: rgba(36, 156, 71, 0.2);
     /* Border */
-    --color-border-regular: #E3E3E3;
-    --color-border-strong: #D9D9D9;
     --color-border-active: rgba(0, 0, 0, 0.2);
     --color-border-focus: rgba(56, 140, 225, 0.5);
     /* Overlay */
@@ -746,10 +705,6 @@ body, #root {
     gap: 2%
 }
 
-.request-url-border {
-
-}
-
 .request-details-section {
     flex-grow: 1;
     flex-shrink: 0;
@@ -766,4 +721,15 @@ body, #root {
     overflow: auto;
     margin: 0;
     flex-shrink: 1;
+}
+
+.response-section .tab-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.response-section .response-body-viewer {
+    flex-grow: 1;
+    min-height: 0;
 }
