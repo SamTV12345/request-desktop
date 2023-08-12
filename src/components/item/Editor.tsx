@@ -1,6 +1,6 @@
 import {useAPIStore} from "../../store/store";
 import {useMemo} from "react";
-
+import MonacoEditor, { DiffEditor, useMonaco, loader } from '@monaco-editor/react';
 export const Editor = () => {
     const currentRequest = useAPIStore(state => state.currentRequest)
     const mode = useMemo(()=>{
