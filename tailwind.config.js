@@ -7,6 +7,7 @@ export default {
     theme: {
         extend: {
             colors: {
+                basecol: '#262626',
                 mustard: {
                     100: '#fae5c0',
                     200: '#fad490',

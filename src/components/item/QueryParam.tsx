@@ -5,7 +5,7 @@ import {HeaderTable} from "./HeaderTable";
 import {BodyDecider} from "./BodyDecider";
 
 export const QueryParam = () => {
-    return <Tabs defaultValue="params" className="request-details-section">
+    return <Tabs defaultValue="params" className="request-details-section selector text-white">
         <TabsList className="query-param-list">
             <TabsTrigger value="params" className="">Params</TabsTrigger>
             <TabsTrigger value="authorization">Authorization</TabsTrigger>
