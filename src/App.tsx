@@ -10,7 +10,6 @@ import {CollectionViewer} from "./components/collections/CollectionViewer";
 const ContentModelDecider = () => {
     const currentCollection = useAPIStore(state => state.currentCollection)
 
-    console.log(currentCollection)
     if (currentCollection?.type === DisplayType.COLLECTION_TYPE) {
         return <CollectionViewer/>
     } else {
@@ -25,7 +24,7 @@ const App = () => {
 
     async function get_collections(): Promise<Collection[]> {
         // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
-        return await invoke("get_collections")
+         return await invoke("get_collections")
     }
 
     useEffect(() => {

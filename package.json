@@ -15,18 +15,19 @@
     "@radix-ui/react-dialog": "^1.0.4",
     "@radix-ui/react-tabs": "^1.0.4",
     "@tauri-apps/api": "^1.4.0",
-    "tailwind-merge": "^1.14.0",
+    "ace-builds": "^1.24.0",
+    "buffer": "^6.0.3",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.0.0",
     "lucide-react": "^0.263.1",
+    "material-symbols": "^0.10.4",
     "postman-collection": "^4.1.7",
     "react": "^18.2.0",
+    "react-ace": "^10.1.0",
     "react-dom": "^18.2.0",
     "react-dropzone": "^14.2.3",
     "react-syntax-highlighter": "^15.5.0",
-    "react-ace": "^10.1.0",
-    "ace-builds": "^1.24.0",
-    "material-symbols": "^0.10.4"
+    "tailwind-merge": "^1.14.0"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^1.4.0",
@@ -36,11 +37,11 @@
     "@types/react-dom": "^18.2.7",
     "@types/react-syntax-highlighter": "^15.5.7",
     "@vitejs/plugin-react": "^4.0.4",
+    "autoprefixer": "^10.4.14",
+    "postcss": "^8.4.27",
+    "tailwindcss": "^3.3.3",
     "typescript": "^5.1.6",
     "vite": "^4.4.8",
-    "zustand": "^4.4.0",
-    "tailwindcss": "^3.3.3",
-    "autoprefixer": "^10.4.14",
-    "postcss": "^8.4.27"
+    "zustand": "^4.4.0"
   }
 }

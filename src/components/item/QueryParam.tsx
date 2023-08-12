@@ -1,5 +1,5 @@
 import {TabsContent, TabsList, TabsTrigger, Tabs} from "../bareComponents/Tabs";
-import ParamDataTable from "./QueryParamTable";
+import {ParamTable} from "./QueryParamTable";
 import {HeaderDataTable} from "./HeaderDataTable";
 
 export const QueryParam = () => {
@@ -13,7 +13,7 @@ export const QueryParam = () => {
             <TabsTrigger value="tests">Tests</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
         </TabsList>
-        <TabsContent value="params"><ParamDataTable/></TabsContent>
+        <TabsContent value="params"><ParamTable/></TabsContent>
         <TabsContent value="authorization">Change your password here.</TabsContent>
         <TabsContent value="headers"><HeaderDataTable/></TabsContent>
         <TabsContent value="body">Change your password here.</TabsContent>

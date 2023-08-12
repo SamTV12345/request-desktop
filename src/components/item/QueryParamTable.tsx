@@ -1,52 +1,94 @@
 import * as React from 'react';
-import {useAPIStore} from "../../store/store";
-import {ItemDefinition, QueryParamDefinition, UrlDefinition} from "postman-collection";
+import {CollectionDefinitionExtended, DisplayType, useAPIStore} from "../../store/store";
+import {EditableTable} from "../bareComponents/EditableTable";
+import {
+    Collection,
+    CollectionDefinition,
+    ItemDefinition,
+    QueryParamDefinition,
+    UrlDefinition,
+    VariableDefinition
+} from "postman-collection";
 import {useMemo} from "react";
+import {replaceItem} from "../../utils/CollectionReplaceUtils";
 
 
-export default function DataTable() {
-    const currentItem = useAPIStore(state=>state.currentItem)
+export const ParamTable = ()=> {
+    const currentItem = useAPIStore(state => state.currentItem)
+    const currentCollection = useAPIStore(state => state.currentCollection)
+    const saveCollection = useAPIStore(state => state.saveCollection)
+    const updateCurrentCollection = useAPIStore(state => state.setCurrentCollection)
 
-    const getRowInformation = (currentItem: ItemDefinition)=>{
-        if (currentItem.request&& currentItem.request.url){
-            const urls = (currentItem?.request.url as UrlDefinition).query as QueryParamDefinition[]
-            return urls.map(v=>{
-                return {id: v.key, value: v.value, description: v.description, disabled: v.disabled}
-            })
+    const value = useMemo(()=>{
+        if(!currentItem?.request){
+            return []
         }
+
+        if(typeof !currentItem?.request?.url === 'string'){
+            return []
+        }else {
+            return (currentItem.request.url as UrlDefinition).query as QueryParamDefinition[]
+        }
+    },[currentItem?.request])
+    console.log("Current colleciton123,", currentCollection)
+
+    const disableQueryParam = (collectionId: string, disabled: boolean, index: number)=>{
+
+        value[index].disabled = disabled
+        console.log(value[index].disabled)
+        const item  = {
+            ...currentItem,
+            request: {
+                ...currentItem?.request,
+                url: {
+                    ...currentItem?.request?.url as UrlDefinition,
+                    query: value
+                }
+            }
+        }
+        const newCollection = replaceItem(currentCollection as CollectionDefinition, item)
+        const newCollectionExtended = {...newCollection,type: DisplayType.SINGLE_TYPE} satisfies CollectionDefinitionExtended
+        updateCurrentCollection(newCollectionExtended)
     }
 
-    const mapped_items = useMemo(()=>{
-        if(currentItem){
-            return getRowInformation(currentItem)
+    /*
+    const onKeyChange = (collectionId: string, newKey: string, index: number)=>{
+        const newVariable:VariableDefinition = {
+            ...collection?.variable![index],
+            key: newKey
         }
-        return []
-    }, [currentItem])
+        setVariable(collection!.id!,newVariable, index)
+    }
 
+    const onValueChange = (collectionId: string, newVal: string, index: number)=>{
+        const newVariable:VariableDefinition = {
+            ...collection?.variable![index],
+            value: newVal
+        }
+        setVariable(collectionId,newVariable, index)
+    }
 
+    const onAdd = (collectionId: string)=>{
+        addVariable(collectionId)
+    }
 
-    return (
-            <table className="query-param-table">
-                <thead>
-                <tr>
-                    <th></th>
-                    <th>Key</th>
-                    <th>Value</th>
-                    <th>Description</th>
-                </tr>
-                </thead>
-                <tbody>
-                {mapped_items&&mapped_items.map((v,i)=>{
-                    return <tr key={i}>
-                        <td>
-                            <input type="checkbox" checked={!v.disabled}/>
-                        </td>
-                        <td>{v.id}</td>
-                        <td>{v.value}</td>
-                        <td className="description-table-cell">{v.description as string}</td>
-                    </tr>
-                })}
-                </tbody>
-            </table>
-    );
+    const onSaveOfVariable = ()=>{
+        saveCollection()
+    }
+
+    const onDelete = (collectionId: string, index:number)=>{
+        setVariable(collectionId,undefined, index)
+    }
+
+    const onDescriptionChange = (collectionId: string, newVal: string, index: number)=>{
+        const newVariable:VariableDefinition = {
+            ...collection?.variable![index],
+            description: newVal
+        }
+        setVariable(collectionId,newVariable, index)
+    }
+*/
+
+    return <EditableTable value={value} onDisabled={disableQueryParam} onKeyChange={()=>{}}
+                          onValueChange={()=>{}} onDescriptionChange={()=>{}} onAdd={()=>{}} onSave={()=>{}} onDelete={()=>{}}/>
 }

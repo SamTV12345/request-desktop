@@ -16,6 +16,7 @@ use serde_json::Value;
 use crate::models::postman_collection::{PostmanCollection, Variable};
 use crate::models::response_from_call::ResponseFromCall;
 use uuid::Uuid;
+use crate::models::postman_item::Item;
 
 mod models;
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
@@ -43,15 +44,40 @@ async fn get_collections() -> Vec<Spec> {
 
 #[tauri::command]
 async fn insert_collection(mut collection: Spec) {
-    println!("Inserting");
     let mut db = get_database();
     let mut key = collection.info.postman_id.clone();
     if key.is_none(){
         key = Option::from(Uuid::new_v4().to_string());
         collection.info.postman_id = key.clone();
     }
+
+    collection.item.iter_mut().for_each(|item|{
+        let id = Uuid::new_v4().to_string();
+        item.id = Some(id);
+        if item.item.is_some(){
+            item.item = Some(assign_id_to_every_item(&item));
+        }
+    });
+
     let value = serde_json::to_string(&collection).unwrap();
     db.set(&key.unwrap(), &value).unwrap();
+}
+
+
+fn assign_id_to_every_item(mut collection: &Items) -> Vec<Items> {
+    // Create code that assigns to every item in a postman collection an id
+
+    let mut items = vec![];
+    for item in collection.item.clone().unwrap(){
+        let mut item = item.clone();
+        let id = Uuid::new_v4().to_string();
+        item.id = Some(id);
+        if item.item.is_some(){
+            item.item = Some(assign_id_to_every_item(&item));
+        }
+        items.push(item);
+    }
+     items
 }
 
 #[tauri::command]

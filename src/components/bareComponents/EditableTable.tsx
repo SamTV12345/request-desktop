@@ -1,19 +1,22 @@
 import {useAPIStore} from "../../store/store";
 import {FC} from "react";
-import {VariableDefinition} from "postman-collection";
+import {QueryParamDefinition, VariableDefinition} from "postman-collection";
 
 
 type EditableTableProps<T> = {
     value: T[],
-    onDisabled:(collectionId: string, disabled: boolean, index: number)=>void,
-    onKeyChange:(collectionId: string, newKey: string, index: number)=>void,
-    onValueChange:(collectionId: string, newVal: string, index: number)=>void,
+    onDisabled:(collectionId: string, disabled: boolean, index: number, itemId?:string)=>void,
+    onKeyChange:(collectionId: string, newKey: string, index: number, itemId?:string)=>void,
+    onValueChange:(collectionId: string, newVal: string, index: number, itemId?:string)=>void,
+    onDescriptionChange: (collectionId: string, newVal: string, index: number, itemId?:string)=>void,
     onAdd: (collectionId: string)=>void,
     onSave: ()=>void,
     onDelete: (collectionId: string, index: number)=>void
 }
 
-export const EditableTable:FC<EditableTableProps<VariableDefinition>> = ({value,onValueChange,onKeyChange,onDisabled, onAdd, onSave, onDelete})=>{
+export const EditableTable:FC<EditableTableProps<VariableDefinition|QueryParamDefinition>> = ({value,
+                                                                             onValueChange,onKeyChange,onDisabled,
+                                                                             onAdd, onSave, onDelete, onDescriptionChange})=>{
      const collection = useAPIStore(state=>state.currentCollection)
 
         if(!collection){
@@ -26,19 +29,24 @@ export const EditableTable:FC<EditableTableProps<VariableDefinition>> = ({value,
                     <th></th>
                     <th>Key</th>
                     <th>Value</th>
+                    <th>Description</th>
                     <th>Action</th>
                 </tr>
                 </thead>
                 {collection&&value.map((v,i)=>{
                     return <tr key={i}>
-                        <td><input type="checkbox" checked={v.disabled !== undefined ?v.disabled: true} onChange={v=>{
+                        <td><input type="checkbox" checked={v.disabled !== undefined ?!v.disabled: true} onChange={v=>{
                             onDisabled(collection.id!,!v.target.checked,i)
                         }}/></td>
-                        <td><input className="bg-transparent border-2 border-gray-500 p-1" value={v.key} onChange={(val)=>{
+                        <td><input className="bg-transparent border-2 border-gray-500 p-1" value={v.key!} onChange={(val)=>{
                             onKeyChange(collection?.id!,val.target.value,i)
                         }}/></td>
                         <td><input className="bg-transparent border-2 border-gray-500 p-1" value={v.value} onChange={(val)=>
                             onValueChange(collection?.id!,val.target.value,i)}/>
+                        </td>
+                        <td>
+                            <input className="bg-transparent border-2 border-gray-500 p-1" value={v.description as string} onChange={(val)=>
+                                onDescriptionChange(collection?.id!,val.target.value, i)}/>
                         </td>
                         <td>
                             <button className="bg-red-500 p-1 rounded" onClick={()=>onDelete(collection.id!, i)}>Löschen</button>

@@ -9,20 +9,12 @@ import SyntaxHighlighter from 'react-syntax-highlighter';
 import ResizableBox from "../resizable/ResizableBox";
 import {Editor} from "./Editor";
 
-type ContentModelProps = {}
 
 export const ContentModel = () => {
     const item = useAPIStore(state => state.currentItem)
     const currentRequest = useAPIStore(state => state.currentRequest)
     const setCurrentRequest = useAPIStore(state => state.setCurrentRequest)
     const currentCollection = useAPIStore(state => state.currentCollection)
-
-    const language = useMemo(() => {
-        if (currentRequest == undefined) {
-            return ""
-        }
-        return currentRequest.headers["content-type"]
-    }, [currentRequest])
 
     const url = useMemo(() => {
         if (!item?.request) {
@@ -50,7 +42,6 @@ export const ContentModel = () => {
             <div className="request-name-section">
                 {item?.name}
             </div>
-
             {item && item.request && <>
                 <div className="request-url-section">
                     <div className="border-2 border-mustard-600 p-3 rounded">
@@ -70,7 +61,7 @@ export const ContentModel = () => {
                         Senden
                     </button>
                 </div>
-                {item && (item.request.url as UrlDefinition).query && <QueryParam/>}
+                <QueryParam/>
                 {currentRequest &&
                     <ResizableBox direction={"top"} initialSize={300} className="response-section">
                         <Editor/>

@@ -44,6 +44,16 @@ export const VariableViewer = ()=>{
         setVariable(collectionId,undefined, index)
     }
 
+    const onDescriptionChange = (collectionId: string, newVal: string, index: number)=>{
+        const newVariable:VariableDefinition = {
+            ...collection?.variable![index],
+            description: newVal
+        }
+        setVariable(collectionId,newVariable, index)
+    }
+
     return <EditableTable value={collection?.variable!} onDisabled={disableVariable} onKeyChange={onKeyChange}
-                          onValueChange={onValueChange} onAdd={onAdd} onSave={onSaveOfVariable} onDelete={onDelete}/>
+                          onValueChange={onValueChange} onAdd={onAdd}
+                          onSave={onSaveOfVariable} onDelete={onDelete}
+                          onDescriptionChange={onDescriptionChange}/>
 }

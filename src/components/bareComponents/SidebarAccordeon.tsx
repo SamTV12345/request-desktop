@@ -48,6 +48,7 @@ export const RecursiveItemGroup:FC<RecursiveItemGroupProps> = ({item,indent, col
                         <AccordionTrigger  onClick={()=>{
                             setCurrentItem({...item,type: DisplayType.SINGLE_TYPE})
                             setCurrentCollection({...collection, type: DisplayType.SINGLE_TYPE})
+                            console.log("setted",collection)
                         }}>{item.name}</AccordionTrigger>
                         <AccordionContent className="recursive-item">
                             <RecursiveItemGroup key={item.id} item={item.item} indent={indent+1} collection={collection}/>
@@ -59,6 +60,7 @@ export const RecursiveItemGroup:FC<RecursiveItemGroupProps> = ({item,indent, col
                 return <div key={i} style={{marginLeft: `${indent*3}%`}}
                             onClick={()=>{
                                 setCurrentItem({...item,type: DisplayType.SINGLE_TYPE})
+                                console.log("setted",collection)
                                 setCurrentCollection({...collection, type: DisplayType.SINGLE_TYPE})
                             }} className="sidebar-request">
                     <APIRequestSidebarIcon type={item.request?.method as string}/>

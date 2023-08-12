@@ -9,11 +9,11 @@ export enum DisplayType {
     COLLECTION_TYPE
 }
 
-interface ItemDefinitionExtended extends ItemDefinition {
+export interface ItemDefinitionExtended extends ItemDefinition {
     type: DisplayType
 }
 
-interface CollectionDefinitionExtended extends CollectionDefinition {
+export interface CollectionDefinitionExtended extends CollectionDefinition {
     type: DisplayType
 }
 
