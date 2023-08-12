@@ -80,3 +80,9 @@
 .query-param-table {
     table-layout: fixed;
 }
+
+
+.monaco-editor .editor-widget {
+    display: none !important;
+    visibility: hidden !important;
+}

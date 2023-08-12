@@ -27,7 +27,7 @@ export const ParamTable = ()=> {
         if(typeof !currentItem?.request?.url === 'string'){
             return []
         }else {
-            return (currentItem.request.url as UrlDefinition).query as QueryParamDefinition[]
+            return (currentItem.request.url as UrlDefinition).query as QueryParamDefinition[]||[]
         }
     },[currentItem?.request])
     console.log("Current colleciton123,", currentCollection)
@@ -141,6 +141,6 @@ export const ParamTable = ()=> {
         updateCurrentCollection(newCollectionExtended)
     }
 
-    return value&&<EditableTable value={value} onDisabled={disableQueryParam} onKeyChange={onKeyChange}
+    return <EditableTable value={value} onDisabled={disableQueryParam} onKeyChange={onKeyChange}
                           onValueChange={onValueChange} onDescriptionChange={onDescriptionChange} onAdd={onAdd} onSave={saveCollection} onDelete={onDelete}/>
 }

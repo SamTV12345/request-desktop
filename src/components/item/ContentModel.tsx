@@ -8,6 +8,7 @@ import {ResponseFromCall} from "../../models/ResponseFromCall";
 import SyntaxHighlighter from 'react-syntax-highlighter';
 import ResizableBox from "../resizable/ResizableBox";
 import {Editor} from "./Editor";
+import {ResponseBar} from "./responseBarItems/ResponseBar";
 
 
 export const ContentModel = () => {
@@ -64,7 +65,7 @@ export const ContentModel = () => {
                 <QueryParam/>
                 {currentRequest &&
                     <ResizableBox direction={"top"} initialSize={300} className="response-section">
-                        <Editor/>
+                        <ResponseBar/>
                     </ResizableBox>}
             </>}
         </div>

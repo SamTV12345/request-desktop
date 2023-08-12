@@ -62,7 +62,7 @@ async fn get_collections() -> Vec<Spec> {
 }
 
 #[tauri::command]
-async fn insert_collection(mut collection: Spec) {
+async fn insert_collection(mut collection: Spec) ->Result<Spec,()> {
     let mut db = get_database();
     let mut key = collection.info.postman_id.clone();
     if key.is_none(){
@@ -80,6 +80,7 @@ async fn insert_collection(mut collection: Spec) {
 
     let value = serde_json::to_string(&collection).unwrap();
     db.set(&key.unwrap(), &value).unwrap();
+    Ok(collection)
 }
 
 

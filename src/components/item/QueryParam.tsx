@@ -2,6 +2,7 @@ import {TabsContent, TabsList, TabsTrigger, Tabs} from "../bareComponents/Tabs";
 import {ParamTable} from "./QueryParamTable";
 import {HeaderDataTable} from "./HeaderDataTable";
 import {HeaderTable} from "./HeaderTable";
+import {BodyDecider} from "./BodyDecider";
 
 export const QueryParam = () => {
     return <Tabs defaultValue="params" className="request-details-section">
@@ -17,7 +18,7 @@ export const QueryParam = () => {
         <TabsContent value="params"><ParamTable/></TabsContent>
         <TabsContent value="authorization">Change your password here.</TabsContent>
         <TabsContent value="headers"><HeaderTable/></TabsContent>
-        <TabsContent value="body">Change your password here.</TabsContent>
+        <TabsContent value="body"><BodyDecider/></TabsContent>
         <TabsContent value="prerequest">Pre-request Script</TabsContent>
         <TabsContent value="tests">Change your password here.</TabsContent>
         <TabsContent value="settings">Change your password here.</TabsContent>

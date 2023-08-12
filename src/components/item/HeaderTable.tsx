@@ -24,7 +24,7 @@ export const HeaderTable = ()=> {
             return []
         }
 
-        return currentItem.request.header
+        return currentItem.request.header||[]
     },[currentItem?.request])
 
     const disableQueryParam = (collectionId: string, disabled: boolean, index: number)=>{
@@ -118,6 +118,6 @@ export const HeaderTable = ()=> {
         updateCurrentCollection(newCollectionExtended)
     }
 
-    return headers&&<EditableTable value={headers} onDisabled={disableQueryParam} onKeyChange={onKeyChange}
+    return <EditableTable value={headers} onDisabled={disableQueryParam} onKeyChange={onKeyChange}
                                  onValueChange={onValueChange} onDescriptionChange={onDescriptionChange} onAdd={onAdd} onSave={saveCollection} onDelete={onDelete}/>
 }

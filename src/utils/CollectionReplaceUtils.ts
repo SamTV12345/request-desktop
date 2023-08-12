@@ -3,7 +3,6 @@ import {CollectionDefinition, ItemDefinition, ItemGroupDefinition} from "postman
 export const replaceItem = (collections: CollectionDefinition, collectionToReplace: ItemDefinition|ItemGroupDefinition): CollectionDefinition => {
    // Update the nested item recursively
     const updatedItems = collections.item?.map((item) => {
-        console.log(item.id, collectionToReplace.id)
         if (item.id === collectionToReplace.id) {
             return collectionToReplace
         }
