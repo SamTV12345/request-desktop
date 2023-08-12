@@ -16,9 +16,13 @@ tauri-build = { version = "1.4", features = [] }
 tauri = { version = "1.4.1", features = ["shell-open"] }
 serde = { version = "1.0.178", features = ["derive"] }
 pickledb= {version = "0.5.1", features = ["json"] }
-serde_json = "1.0"
+serde_json = {version="1.0", features = ["raw_value"] }
 reqwest = {version="0.11.18", features= ["json", "cookies"] }
-postman_collection = "0.2.0"
+error-chain = "0.12"
+url = "2.2"
+url_serde = "0.2"
+serde_yaml = "0.9.25"
+semver = "1.0"
 
 [dependencies.uuid]
 version = "1.4.1"
@@ -26,6 +30,10 @@ features = [
     "fast-rng",          # Use a faster (but still sufficiently random) RNG
     "macro-diagnostics", # Enable better diagnostics for compile-time UUIDs
 ]
+
+
+[dev-dependencies]
+glob = "0.3"
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem

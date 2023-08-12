@@ -9,14 +9,17 @@ use std::path::Path;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 use pickledb::{PickleDb, PickleDbDumpPolicy, SerializationMethod};
-use postman_collection::v2_1_0::{HeaderUnion, Items, RequestUnion, Spec};
 use reqwest::{ClientBuilder, Method};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use serde_json::Value;
-use crate::models::postman_collection::{PostmanCollection, Variable};
 use crate::models::response_from_call::ResponseFromCall;
 use uuid::Uuid;
-use crate::models::postman_item::Item;
+use crate::models::postman_collection;
+use crate::models::postman_collection::PostmanCollection;
+use crate::postman_lib::v2_1_0::{HeaderUnion, Items, RequestUnion, Spec};
+
+mod postman_lib;
+
 
 mod models;
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
@@ -128,7 +131,7 @@ async fn do_request(item: Items, collection: Spec) -> ResponseFromCall {
                 let url = request.url.unwrap();
 
                 let method = Method::from_str(&method).unwrap();
-                if let postman_collection::v2_1_0::Url::UrlClass(url) = url {
+                if let postman_lib::v2_1_0::Url::UrlClass(url) = url {
                     let url = url.raw.unwrap();
                     let replaced_url  = replace_vars_in_url(url, collection.variable);
                     println!("Replaced url {}", replaced_url);
@@ -138,7 +141,7 @@ async fn do_request(item: Items, collection: Spec) -> ResponseFromCall {
                         .unwrap()
                         .request(method, replaced_url)
                 }
-                else if let postman_collection::v2_1_0::Url::String(url) = url{
+                else if let postman_lib::v2_1_0::Url::String(url) = url{
                     let replaced_url  = replace_vars_in_url(url, collection.variable);
                     println!("Replaced url {}", replaced_url);
                     built_client = client
@@ -230,7 +233,7 @@ pub fn get_database() -> PickleDb {
 }
 
 
-pub fn replace_vars_in_url(url:String, variables: Option<Vec<postman_collection::v2_1_0::Variable>>) -> String{
+pub fn replace_vars_in_url(url:String, variables: Option<Vec<postman_lib::v2_1_0::Variable>>) -> String{
     let mut url_to_return = url.clone();
     println!("Url to replace {:?}", variables);
     if let Some(variables) = variables{
