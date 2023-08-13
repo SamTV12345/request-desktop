@@ -1,5 +1,6 @@
 import {Tabs, TabsContent, TabsList, TabsTrigger} from "../bareComponents/Tabs";
 import {VariableViewer} from "./VariableViewer";
+import {CollectionAuthorization} from "./CollectionAuthorization";
 
 export const CollectionViewer = ()=>{
     return (
@@ -10,7 +11,7 @@ export const CollectionViewer = ()=>{
             <TabsTrigger value="tests">Tests</TabsTrigger>
             <TabsTrigger value="variables">Variablen</TabsTrigger>
         </TabsList>
-        <TabsContent value="authorization"><div/></TabsContent>
+        <TabsContent value="authorization"><CollectionAuthorization/></TabsContent>
         <TabsContent value="pre-request-script">Change your password here.</TabsContent>
         <TabsContent value="tests"><div/></TabsContent>
         <TabsContent value="variables"><VariableViewer/></TabsContent>

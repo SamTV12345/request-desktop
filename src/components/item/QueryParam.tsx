@@ -1,10 +1,14 @@
-import {TabsContent, TabsList, TabsTrigger, Tabs} from "../bareComponents/Tabs";
+import {Tabs, TabsContent, TabsList, TabsTrigger} from "../bareComponents/Tabs";
 import {ParamTable} from "./QueryParamTable";
-import {HeaderDataTable} from "./HeaderDataTable";
 import {HeaderTable} from "./HeaderTable";
 import {BodyDecider} from "./BodyDecider";
+import {AuthorizationSelector} from "../authorization/AuthorizationSelector";
+import {AuthorizationTypes} from "../../models/AuthorizationTypes";
+import {CollectionAuthorization} from "../collections/CollectionAuthorization";
 
 export const QueryParam = () => {
+
+
     return <Tabs defaultValue="params" className="request-details-section selector text-white">
         <TabsList className="query-param-list">
             <TabsTrigger value="params" className="">Params</TabsTrigger>
@@ -16,7 +20,7 @@ export const QueryParam = () => {
             <TabsTrigger value="settings">Settings</TabsTrigger>
         </TabsList>
         <TabsContent value="params"><ParamTable/></TabsContent>
-        <TabsContent value="authorization">Change your password here.</TabsContent>
+        <TabsContent value="authorization"><div></div></TabsContent>
         <TabsContent value="headers"><HeaderTable/></TabsContent>
         <TabsContent value="body"><BodyDecider/></TabsContent>
         <TabsContent value="prerequest">Pre-request Script</TabsContent>
