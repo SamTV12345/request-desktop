@@ -26,7 +26,7 @@ export const ResponseBar = ()=>{
             <TabsTrigger value="cookies">Cookies</TabsTrigger>
             <TabsTrigger value="headers">Headers</TabsTrigger>
             <TabsTrigger value="test-results">Test Results</TabsTrigger>
-            <div className="flex-grow">test</div>
+            <div className="flex-grow"></div>
             <div>Status</div>
             <div className="text-green-400">{currentRequest?.status}</div>
             <div>Time</div>

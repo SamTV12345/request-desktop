@@ -80,9 +80,13 @@ export const useAPIStore = create<APIState>()((set,getState) => ({
     },
     saveCollection: ()=>{
         const newCollections = getState().collections
-        const index = newCollections.findIndex((collection)=>collection.id === getState().currentCollection?.id)
-        newCollections[index] = getState().currentCollection!
-        set({collections: newCollections})
+        const updatedCollections = newCollections.map((collection)=>{
+            if(collection.id === getState().currentCollection?.id){
+                return getState().currentCollection as CollectionDefinition
+            }
+            return collection
+        })
+        set({collections: updatedCollections})
         invoke("update_collection", {collection: getState().currentCollection!})
     }
 }))
