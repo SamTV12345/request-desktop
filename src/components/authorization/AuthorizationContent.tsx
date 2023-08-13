@@ -17,7 +17,6 @@ type AuthorizationContentProps = {
 export const AuthorizationContent:FC<AuthorizationContentProps> = ()=>{
     const currentCollection = useAPIStore(state=>state.currentCollection)
 
-    console.log(currentCollection?.auth?.type)
     const AuthContentSwitcher = ()=>{
         return <div>
             {

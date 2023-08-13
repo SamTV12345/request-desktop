@@ -8,6 +8,7 @@ import {ResponseFromCall} from "../../models/ResponseFromCall";
 import ResizableBox from "../resizable/ResizableBox";
 import {ResponseBar} from "./responseBarItems/ResponseBar";
 import {replaceItem} from "../../utils/CollectionReplaceUtils";
+import {useDebounce} from "../../hooks/useDebounce";
 
 
 export const ContentModel = () => {
@@ -17,6 +18,12 @@ export const ContentModel = () => {
     const setCurrentRequest = useAPIStore(state => state.setCurrentRequest)
     const currentCollection = useAPIStore(state => state.currentCollection)
     const updateCurrentCollection = useAPIStore(state => state.setCurrentCollection)
+    const saveCollection = useAPIStore(state => state.saveCollection)
+
+
+    useDebounce(()=>{
+        saveCollection()
+    },5000, [currentItem?.request?.url])
 
     const url = useMemo(() => {
         if (!currentItem?.request) {
@@ -26,7 +33,6 @@ export const ContentModel = () => {
     }, [currentItem?.request])
 
     const changeUrl = (url: string) => {
-        console.log("NEw url",url)
         const urlDef = URLParser.parse(url)
         const item:ItemDefinitionExtended  = {
             ...currentItem,
