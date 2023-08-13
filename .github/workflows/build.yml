@@ -35,12 +35,16 @@ jobs:
         uses: actions/setup-node@v2.5.2
         with:
             node-version: 20.2.0
-
+      - uses: pnpm/action-setup@v2
+        name: Install pnpm
+        with:
+          version: 7
+          run_install: false
 
 
       - name: Install app dependencies and build web
         # Remove `&& yarn build` if you build your frontend in `beforeBuildCommand`
-        run: npm i && npm run build # Change this to npm, yarn or pnpm.
+        run: pnpm i && pnpm run build # Change this to npm, yarn or pnpm.
 
       - name: Build the app
         uses: tauri-apps/tauri-action@v0
