@@ -32,7 +32,7 @@ export const AuthorizationContent:FC<AuthorizationContentProps> = ()=>{
 
 
 
-    return <div>
+    return <div className="w-full">
         <AuthContentSwitcher/>
     </div>
 
