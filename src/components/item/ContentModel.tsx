@@ -60,7 +60,7 @@ export const ContentModel = () => {
                         <div className="outline-2 outline-gray-600 bg-transparent">
                             <RequestMethod value={currentItem}/>
                         </div>
-                        <input value={url} className="" onChange={(v) => {
+                        <input value={url} className="bg-transparent text-white" onChange={(v) => {
                             changeUrl(v.target.value)
                         }}/>
                     </div>
