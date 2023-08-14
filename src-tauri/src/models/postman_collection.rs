@@ -33,7 +33,8 @@ pub enum FolderOrItem{
 
 #[derive(Serialize, Deserialize)]
 pub struct ProtocolProfileBehavior{
-    pub disableBodyPruning: Option<bool>,
+    #[serde(rename = "disableBodyPruning")]
+    pub disable_body_pruning: Option<bool>,
 }
 
 

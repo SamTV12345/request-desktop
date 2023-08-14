@@ -8,8 +8,10 @@ use serde::{Deserialize, Serialize};
 
 pub struct PostmanResponse{
     pub id: Option<String>,
-    pub originalRequest: Option<Request>,
-    pub responseTime: Option<i32>,
+    #[serde(rename = "originalRequest")]
+    pub original_request: Option<Request>,
+    #[serde(rename = "responseTime")]
+    pub response_time: Option<i32>,
     pub timings: Option<Vec<String>>,
     pub header: Option<Vec<Header>>,
     pub cookie: Option<Vec<Cookie>>,

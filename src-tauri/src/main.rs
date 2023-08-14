@@ -13,18 +13,22 @@ use crate::models::response_from_call::ResponseFromCall;
 use uuid::Uuid;
 use crate::models::postman_collection::PostmanCollection;
 use crate::postman_lib::v2_1_0::{HeaderUnion, Items, RequestUnion, Spec};
+use crate::request_handling::handle_request;
 
 mod postman_lib;
 
 
 mod models;
+mod request_handling;
 
+static COLLECTION_PREFIX: &str = "collection_";
+static TOKEN_PREFIX: &str = "token_";
 
 #[tauri::command]
 async fn check_parser(collection: serde_json::Value){
-    let serialized_Val = serde_json::to_string(&collection).unwrap();
+    let serialized_val = serde_json::to_string(&collection).unwrap();
     // Some Deserializer.
-    let jd = &mut serde_json::Deserializer::from_str(&serialized_Val);
+    let jd = &mut serde_json::Deserializer::from_str(&serialized_val);
 
     let result: Result<Spec, _> = serde_path_to_error::deserialize(jd);
     match result {
@@ -46,24 +50,26 @@ async fn greet(name: Spec) -> String {
 }
 
 #[tauri::command]
-async fn get_collections() -> Vec<Spec> {
+async fn get_collections(app_handle: tauri::AppHandle) -> Vec<Spec> {
     let mut collections = vec![];
-    let db = get_database();
+    let db = get_database(app_handle);
 
 
     for kv in db.iter() {
-        let collection = kv.get_value::<String>();
-        if collection.is_some() {
-            //collections.push(collection.unwrap()) // Doesnt work
-            collections.push(serde_json::from_str::<Spec>(&collection.unwrap()).unwrap());
+        let key = kv.get_key();
+        if key.starts_with(COLLECTION_PREFIX) {
+            let collection = kv.get_value::<String>();
+            if collection.is_some() {
+                collections.push(serde_json::from_str::<Spec>(&collection.unwrap()).unwrap());
+            }
         }
     }
     return collections
 }
 
 #[tauri::command]
-async fn insert_collection(mut collection: Spec) ->Result<Spec,()> {
-    let mut db = get_database();
+async fn insert_collection(mut collection: Spec, app_handle: tauri::AppHandle) ->Result<Spec,()> {
+    let mut db = get_database(app_handle);
     let mut key = collection.info.postman_id.clone();
     if key.is_none(){
         key = Option::from(Uuid::new_v4().to_string());
@@ -78,8 +84,10 @@ async fn insert_collection(mut collection: Spec) ->Result<Spec,()> {
         }
     });
 
+    let mut collection_string = COLLECTION_PREFIX.clone().to_string();
+    collection_string.push_str(&collection.info.postman_id.clone().unwrap());
     let value = serde_json::to_string(&collection).unwrap();
-    db.set(&key.unwrap(), &value).unwrap();
+    db.set(&collection_string, &value).unwrap();
     Ok(collection)
 }
 
@@ -101,27 +109,29 @@ fn assign_id_to_every_item(mut collection: &Items) -> Vec<Items> {
 }
 
 #[tauri::command]
-async fn update_collection(collection: Spec){
-    let mut db = get_database();
-    let key = collection.info.postman_id.clone();
+async fn update_collection(collection: Spec, app_handle: tauri::AppHandle){
+    let mut db = get_database(app_handle);
+    let mut collection_string = COLLECTION_PREFIX.clone().to_string();
+    collection_string.push_str(&collection.info.postman_id.clone().unwrap());
     let value = serde_json::to_string(&collection).unwrap();
-    db.set(&key.unwrap(), &value).unwrap();
+    db.set(&collection_string, &value).unwrap();
 }
 
 #[tauri::command]
-async fn insert_collection_from_openapi(collection: String) {
-    let mut db = get_database();
+async fn insert_collection_from_openapi(collection: String,  app_handle: tauri::AppHandle) {
+    let mut db = get_database(app_handle);
     let value = serde_json::to_string(&collection).unwrap();
     db.set(&"test", &value).unwrap();
     println!("Value {}",db.get::<String>(&"test").unwrap());
 }
 
 #[tauri::command]
-async fn update_collection_in_backend(collection: Spec){
-    let mut db = get_database();
-    let key = collection.info.name.clone();
+async fn update_collection_in_backend(collection: Spec,  app_handle: tauri::AppHandle){
+    let mut db = get_database(app_handle);
+    let mut collection_string = COLLECTION_PREFIX.clone().to_string();
+    collection_string.push_str(&collection.info.postman_id.clone().unwrap());
     let value = serde_json::to_string(&collection).unwrap();
-    db.set(&key, &value).unwrap();
+    db.set(&collection_string, &value).unwrap();
 }
 
 
@@ -129,72 +139,17 @@ async fn update_collection_in_backend(collection: Spec){
 async fn do_request(item: Items, collection: Spec) -> ResponseFromCall {
     let mut map = HeaderMap::new();
     let client = ClientBuilder::new();
-    let mut built_client;
-    let url = item.request.unwrap();
-    if let RequestUnion::RequestClass(request) = url {
-        if let HeaderUnion::HeaderArray(request) = request.header.unwrap() {
-            for header in request {
-                if header.disabled.is_some() && !header.disabled.unwrap() {
-                    map.insert(HeaderName::from_str(&*header.key).unwrap(), header.value.parse().unwrap());
-                }
-                else if header.disabled.is_none(){
-                    map.insert(HeaderName::from_str(&*header.key).unwrap(), header.value.parse().unwrap());
-                }
-            }
-        }
+    let url = item.request.clone().unwrap();
 
-        match request.method{
-            Some(method) => {
-                let url = request.url.unwrap();
-
-                let method = Method::from_str(&method).unwrap();
-                if let postman_lib::v2_1_0::Url::UrlClass(url) = url {
-                    let url = url.raw.unwrap();
-                    let replaced_url  = replace_vars_in_url(url, collection.variable);
-                    println!("Replaced url {}", replaced_url);
-
-                    built_client = client
-                        .build()
-                        .unwrap()
-                        .request(method, replaced_url)
-                }
-                else if let postman_lib::v2_1_0::Url::String(url) = url{
-                    let replaced_url  = replace_vars_in_url(url, collection.variable);
-                    println!("Replaced url {}", replaced_url);
-                    built_client = client
-                        .build()
-                        .unwrap()
-                        .request(method, replaced_url)
-                }
-                else{
-                    built_client = client
-                        .build()
-                        .unwrap()
-                        .request(method, "https://google.com")
-                }
-            }
-            None => {
-                built_client = client
-                    .build()
-                    .unwrap()
-                    .request(Method::GET, "https://google.com")
-            }
-        }
-    }
-    else{
-        built_client = client
-            .build()
-            .unwrap()
-            .request(Method::GET, "https://google.com")
-    }
+    let built_client = handle_request(url, &collection, client, &mut map, item.clone()).await;
 
     let response_start_time = Instant::now();
 
-    let res = built_client
+    let res_wrapped = built_client
         .send()
-        .await
-        .unwrap();
+        .await;
     let response_end_time = Instant::now();
+    let res = res_wrapped.unwrap();
     let response_duration = response_end_time.duration_since(response_start_time);
 
     let mut map = HashMap::new();
@@ -225,7 +180,6 @@ async fn do_request(item: Items, collection: Spec) -> ResponseFromCall {
         headers: map,
         cookies: cookie_map,
         duration: time_measures,
-
     }
 }
 
@@ -236,14 +190,16 @@ fn main() {
         .expect("error while running tauri application");
 }
 
-pub fn get_database() -> PickleDb {
-    match Path::new("../example.db").exists() {
+pub fn get_database(app_handle: tauri::AppHandle) -> PickleDb {
+    let path_buffer = app_handle.path_resolver().app_data_dir().unwrap_or("..".parse().unwrap()).as_path().join("request.db");
+    let path = path_buffer.as_path();
+    match Path::new(path).exists() {
         true=>{
-                PickleDb::load("../example.db", PickleDbDumpPolicy::AutoDump,
+                PickleDb::load(path, PickleDbDumpPolicy::AutoDump,
                                SerializationMethod::Json).unwrap()
         },
         false=>{
-            PickleDb::new("../example.db", PickleDbDumpPolicy::AutoDump,
+            PickleDb::new(path, PickleDbDumpPolicy::AutoDump,
                           SerializationMethod::Json)
         }
     }
@@ -252,14 +208,13 @@ pub fn get_database() -> PickleDb {
 
 pub fn replace_vars_in_url(url:String, variables: Option<Vec<postman_lib::v2_1_0::Variable>>) -> String{
     let mut url_to_return = url.clone();
-    println!("Url to replace {:?}", variables);
     if let Some(variables) = variables{
         variables.iter().for_each(|v|{
             let mut key_string = "{{".to_string();
             key_string.push_str(&*v.key.clone().unwrap());
             key_string.push_str("}}");
             let val = v.value.clone().unwrap();
-            match  val{
+            match  val {
                 Value::String(request) => {
                     url_to_return = url_to_return.replace(&key_string, &request);
                 },

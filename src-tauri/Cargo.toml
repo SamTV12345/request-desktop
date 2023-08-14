@@ -24,6 +24,7 @@ url_serde = "0.2"
 serde_yaml = "0.9.25"
 semver = "1.0"
 serde_path_to_error = "0.1.14"
+base64 = "0.21.2"
 
 [dependencies.uuid]
 version = "1.4.1"

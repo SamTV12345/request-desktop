@@ -14,5 +14,6 @@ pub struct Item{
     pub event: Option<Vec<Event>>,
     pub request: Request,
     pub response: Option<Vec<PostmanResponse>>,
-    pub protocolProfileBehavior: Option<ProtocolProfileBehavior>,
+    #[serde(rename = "protocolProfileBehavior")]
+    pub protocol_profile_behavior: Option<ProtocolProfileBehavior>,
 }

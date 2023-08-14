@@ -14,5 +14,6 @@ pub struct Folder{
     pub event: Option<Vec<Event>>,
     pub item: Option<Vec<Item>>,
     pub auth: Option<Auth>,
-    pub protocolProfileBehavior: Option<ProtocolProfileBehavior>,
+    #[serde(rename = "protocolProfileBehavior")]
+    pub protocol_profile_behavior: Option<ProtocolProfileBehavior>,
 }
