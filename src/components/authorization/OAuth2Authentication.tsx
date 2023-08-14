@@ -2,6 +2,14 @@ import {CollectionDefinitionExtended, useAPIStore} from "../../store/store";
 import {useForm, useWatch} from "react-hook-form";
 import {useMemo} from "react";
 import {VariableDefinition} from "postman-collection";
+import { emit, listen } from '@tauri-apps/api/event'
+import {invoke} from '@tauri-apps/api/tauri'
+import {
+    AuthorizationCodeFlow,
+    AuthorizationCodeFlowPKCE,
+    ClientCredentialsFlow,
+    ImplicitFlow
+} from "../../models/OAuth2Models";
 
 type OAuth2Data = {
     tokenName: string,
@@ -36,6 +44,11 @@ export const OAuth2Authentication = () => {
     const updateCollection = useAPIStore(state=>state.setCurrentCollection)
     const saveCollection = useAPIStore(state=>state.saveCollection)
 
+    listen('oauth2-callback', (event)=>{
+        console.log(event)
+    })
+        .then(c=>console.log(c))
+        .catch(c=>console.log(c))
 
     const getKey:(key: string, defaultValue: string) => string = (key, defaultValue)=>{
         const filteredCollection =  currentCollection?.auth?.oauth2?.filter((v)=>v.key === key)
@@ -45,7 +58,7 @@ export const OAuth2Authentication = () => {
         return filteredCollection[0].value
     }
 
-    const { register, handleSubmit, watch,
+    const { register, getValues, handleSubmit, watch,
         formState: { errors } } = useForm<OAuth2Data>({
         defaultValues: {
             tokenName: getKey('tokenName', ""),
@@ -67,6 +80,92 @@ export const OAuth2Authentication = () => {
     })
 
     const watchShowAge = watch(['grant_type']); // you can supply default value as second argument
+
+    const doRequest = async ()=>{
+
+        let val = getValues()
+        switch (val.grant_type){
+            case OAuth2Flow.CLIENT_CREDENTIALS:
+                let config1: ClientCredentialsFlow = {
+                    state: "",
+                    accessTokenUrl: val.accessTokenUrl,
+                    clientId: val.clientId,
+                    scope: val.scope,
+                    clientAuthentication: val.client_authentication as "header" | "body",
+                    clientSecret: val.clientSecret,
+                    tokenName: val.tokenName
+                }
+
+                invoke('get_oauth2_token', {
+                    config: config1
+                })
+                break
+            case OAuth2Flow.AUTHORIZATION_CODE_PKCE:
+                let config2: AuthorizationCodeFlowPKCE = {
+                    authUrl: val.authUrl,
+                    clientAuthentication: val.client_authentication as "header" | "body",
+                    accessTokenUrl: val.accessTokenUrl,
+                    clientId: val.clientId,
+                    clientSecret: val.clientSecret,
+                    codeVerifier: val.code_verifier,
+                    callbackURL: val.redirect_uri,
+                    scope: val.scope,
+                    codeChallengeMethod: val.challengeAlgorithm as "S256" | "plain",
+                    state: "",
+                    codeChallenge: val.challengeAlgorithm,
+                    tokenName: val.tokenName
+                }
+                invoke('get_oauth2_token', {
+                    config: config2
+                })
+                break
+            case OAuth2Flow.IMPLICIT:
+                let config3: ImplicitFlow = {
+                    state: "",
+                    clientAuthentication: val.client_authentication as "header" | "body",
+                    authUrl: val.authUrl,
+                    clientId: val.clientId,
+                    scope: val.scope,
+                    callbackURL: val.redirect_uri,
+                    tokenName: val.tokenName
+                }
+                invoke('get_oauth2_token', {
+                    config: config3
+                })
+                break
+            case OAuth2Flow.AUTHORIZATION_CODE:
+                let config4: AuthorizationCodeFlow = {
+                    state: "",
+                    clientAuthentication: val.client_authentication as "header" | "body",
+                    authUrl: val.authUrl,
+                    clientId: val.clientId,
+                    clientSecret: val.clientSecret,
+                    scope: val.scope,
+                    callbackURL: val.redirect_uri,
+                    accessTokenUrl: val.accessTokenUrl,
+                    tokenName: val.tokenName
+                }
+                invoke('get_oauth2_token', {
+                    config: config4
+                })
+                break
+            case OAuth2Flow.PASSWORD_CREDENTIALS:
+                let config5: AuthorizationCodeFlow = {
+                    state: "",
+                    clientAuthentication: val.client_authentication as "header" | "body",
+                    authUrl: val.authUrl,
+                    clientId: val.clientId,
+                    clientSecret: val.clientSecret,
+                    scope: val.scope,
+                    callbackURL: val.redirect_uri,
+                    accessTokenUrl: val.accessTokenUrl,
+                    tokenName: val.tokenName
+                }
+                invoke('get_oauth2_token', {
+                    config: config5
+                })
+        }
+    }
 
     const populateOAuth2Auth = (data: OAuth2Data)=>{
         const newAuth = [{
@@ -256,7 +355,9 @@ export const OAuth2Authentication = () => {
                 <option value="body">Send as POST body parameter</option>
             </select>
             <button type="submit">Speichern</button>
-    </form></div>
+    </form>
+        <button className="bg-mustard-600" onClick={()=>{doRequest()}}>Get token</button>
+    </div>
 
 
 }

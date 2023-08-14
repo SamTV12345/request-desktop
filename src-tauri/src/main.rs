@@ -9,9 +9,11 @@ use pickledb::{PickleDb, PickleDbDumpPolicy, SerializationMethod};
 use reqwest::{ClientBuilder, Method};
 use reqwest::header::{HeaderMap, HeaderName,};
 use serde_json::Value;
+use tauri::Window;
 use crate::models::response_from_call::ResponseFromCall;
 use uuid::Uuid;
 use crate::models::postman_collection::PostmanCollection;
+use crate::oauth::{handle_oauth, OAuth2Type};
 use crate::postman_lib::v2_1_0::{HeaderUnion, Items, RequestUnion, Spec};
 use crate::request_handling::handle_request;
 
@@ -20,6 +22,8 @@ mod postman_lib;
 
 mod models;
 mod request_handling;
+mod oauth;
+mod oauth2_error;
 
 static COLLECTION_PREFIX: &str = "collection_";
 static TOKEN_PREFIX: &str = "token_";
@@ -38,7 +42,11 @@ async fn check_parser(collection: serde_json::Value){
             assert_eq!(path, "dependencies.serde.version");
         }
     }
+}
 
+#[tauri::command]
+async fn get_oauth2_token(window: Window, config: OAuth2Type){
+    handle_oauth(&window, config).await;
 }
 
 
@@ -185,7 +193,7 @@ async fn do_request(item: Items, collection: Spec) -> ResponseFromCall {
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![greet, get_collections, do_request, insert_collection, update_collection, check_parser])
+        .invoke_handler(tauri::generate_handler![greet, get_collections, do_request, insert_collection, update_collection, check_parser, get_oauth2_token])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
