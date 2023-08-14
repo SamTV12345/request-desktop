@@ -20,7 +20,7 @@ export const SidebarAccordeon:FC<SidebarAccordeonProps> = ({collection}) => {
     const setCurrentItem = useAPIStore(state=>state.setCurrentItem)
 
         return  <Accordion type="single" collapsible  key={collection.name+"name"}>
-            <AccordionItem value="item-1" key={collection.name+"item"}>
+            <AccordionItem value="item-1" key={collection.name+"item"} className="cursor-pointer">
                     <AccordionTrigger><span onClick={()=>{
                         setCurrentCollection({...collection, type: DisplayType.COLLECTION_TYPE})
                         setCurrentItem(undefined)

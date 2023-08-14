@@ -1,11 +1,11 @@
-use std::iter::Map;
 use std::str::FromStr;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use reqwest::Method;
-use serde_json::Value;
 use crate::{postman_lib, replace_vars_in_url};
 use crate::postman_lib::v2_1_0::{Auth, AuthType, HeaderUnion, Items, RequestUnion, Spec};
 use base64::{Engine as _, engine::general_purpose::STANDARD_NO_PAD};
+use serde_json::Value;
+
 pub async fn handle_request(url: RequestUnion, collection: &Spec,
                             client: reqwest::ClientBuilder,
                             map: &mut HeaderMap<HeaderValue>,
@@ -98,52 +98,81 @@ fn insert_auth(auth: Auth, mut map: HeaderMap<HeaderValue>) -> HeaderMap<HeaderV
     return match auth.auth_type {
                 AuthType::Awsv4 => {
 
-                    HeaderMap::new()
+                    map
                 }
                 AuthType::Apikey => {
-                    HeaderMap::new()
+                    map
                 }
                 AuthType::Basic => {
                     return match auth.basic {
                         Some(basic) => {
                             let username = basic.iter().find(|&x| x.key == "username").unwrap().value.clone().unwrap();
                             let password = basic.iter().find(|&x| x.key == "password").unwrap().value.clone().unwrap();
-                            let formatted_string = format!("{}:{}", username, password);
+                            let formatted_string = format!("{}:{}", convert_to_string(username), convert_to_string(password));
                             let encoded = STANDARD_NO_PAD.encode(formatted_string.as_bytes());
-                            map.insert(HeaderName::from_str("Authorization").unwrap(), HeaderValue::from_str(&format!("Basic {}", encoded)).unwrap());
+                            map.insert(HeaderName::from_str("Authorization").unwrap(),
+                                       HeaderValue::from_str(&format!("Basic {}", encoded)).unwrap());
                             map.clone()
                         },
                         None => {
-                            HeaderMap::new()
+                            map
                         }
                     }
                 }
                 AuthType::Bearer => {
-
-                    return HeaderMap::new()
-
+                    return match auth.bearer{
+                        Some(bearer) => {
+                            let token = bearer.iter().find(|&x| x.key == "token").unwrap().value.clone().unwrap();
+                            map.insert(HeaderName::from_str("Authorization").unwrap(),
+                                       HeaderValue::from_str(&format!("Bearer {}", convert_to_string(token))).unwrap());
+                            map.clone()
+                        },
+                        None => {
+                            map
+                        }
+                    }
                 }
                 AuthType::Digest => {
-                    return HeaderMap::new()
+                    map
 
                 }
                 AuthType::Hawk => {
-                    return HeaderMap::new()
+                    map
                 }
                 AuthType::Noauth => {
-                    return HeaderMap::new()
+                    map
                 }
                 AuthType::Ntlm => {
-                    return HeaderMap::new()
+                    map
 
                 }
                 AuthType::Oauth1 => {
-                    return HeaderMap::new()
+                    map
 
                 }
                 AuthType::Oauth2 => {
-                    return HeaderMap::new()
+                    map
 
                 }
-            }
+    }
+}
+
+fn convert_to_string(value: Value) ->String{
+    return match value {
+        Value::String(s)=>{
+            s
+        },
+        Value::Bool(b)=>{
+            b.to_string()
+        },
+        Value::Number(n)=>{
+            n.to_string()
+        },
+        Value::Null=>{
+            "".to_string()
+        },
+        _ => {
+            "".to_string()
+        }
+    }
 }

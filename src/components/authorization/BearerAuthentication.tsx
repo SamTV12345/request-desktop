@@ -10,6 +10,7 @@ type BearerData = {
 export const BearerAuthentication = ()=>{
     const currentCollection = useAPIStore(state=>state.currentCollection)
     const updateCollection = useAPIStore(state=>state.setCurrentCollection)
+    const saveCollection = useAPIStore(state=>state.saveCollection)
     const getKey:(key: string, defaultValue: string) => string = (key, defaultValue)=>{
         const filteredCollection =  currentCollection?.auth?.bearer?.filter((v)=>v.key === key)
         if(filteredCollection === undefined|| !filteredCollection[0]){
@@ -19,8 +20,8 @@ export const BearerAuthentication = ()=>{
     }
 
 
-    const { register, handleSubmit, watch,
-        formState: { errors } } = useForm<BearerData>({
+    const { register, handleSubmit
+    } = useForm<BearerData>({
         defaultValues: {
             token: getKey('token', "")
         }
@@ -43,6 +44,7 @@ export const BearerAuthentication = ()=>{
             }
         }
         updateCollection(clonedCollection!)
+        saveCollection()
     }
 
 

@@ -10,6 +10,7 @@ type BasicAuthenticationData = {
 export const BasicAuthentication = ()=>{
     const currentCollection = useAPIStore(state=>state.currentCollection)
     const updateCollection = useAPIStore(state=>state.setCurrentCollection)
+    const saveCollection = useAPIStore(state=>state.saveCollection)
     const getKey:(key: string, defaultValue: string) => string = (key, defaultValue)=>{
         const filteredCollection =  currentCollection?.auth?.basic?.filter((v)=>v.key === key)
         if(filteredCollection === undefined|| !filteredCollection[0]){
@@ -18,8 +19,7 @@ export const BasicAuthentication = ()=>{
         return filteredCollection[0].value
     }
 
-    const { register, handleSubmit, watch,
-        formState: { errors } } = useForm<BasicAuthenticationData>({
+    const { register, handleSubmit} = useForm<BasicAuthenticationData>({
         defaultValues: {
             password: getKey('password', ""),
             username: getKey('username', "")
@@ -49,6 +49,7 @@ export const BasicAuthentication = ()=>{
             }
         }
         updateCollection(clonedCollection)
+        saveCollection()
 
     }
 

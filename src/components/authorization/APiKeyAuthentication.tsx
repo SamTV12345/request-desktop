@@ -18,8 +18,10 @@ export const APiKeyAuthentication = ()=> {
     }
     const currentCollection = useAPIStore(state=>state.currentCollection)
     const updateCollection = useAPIStore(state=>state.setCurrentCollection)
-    const { register, handleSubmit, watch,
-        formState: { errors } } = useForm<APIKeyData>({
+    const saveCollection = useAPIStore(state=>state.saveCollection)
+
+    const { register, handleSubmit
+    } = useForm<APIKeyData>({
         defaultValues: {
             value: getKey('value', ""),
             key: getKey('key', ""),
@@ -56,6 +58,7 @@ export const APiKeyAuthentication = ()=> {
             }
         }
         updateCollection(clonedCollection!)
+        saveCollection()
     }
 
     return <form className="grid grid-cols-2 gap-5 text-white" onSubmit={handleSubmit(populateApiKeyAuth)}>
