@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::str::FromStr;
 use std::time::{Instant};
+use oauth2::basic::BasicTokenResponse;
 use pickledb::{PickleDb, PickleDbDumpPolicy, SerializationMethod};
 use reqwest::{ClientBuilder, Method};
 use reqwest::header::{HeaderMap, HeaderName,};
@@ -14,6 +15,7 @@ use crate::models::response_from_call::ResponseFromCall;
 use uuid::Uuid;
 use crate::models::postman_collection::PostmanCollection;
 use crate::oauth::{handle_oauth, OAuth2Type};
+use crate::oauth2_error::OAuth2Error;
 use crate::postman_lib::v2_1_0::{HeaderUnion, Items, RequestUnion, Spec};
 use crate::request_handling::handle_request;
 
@@ -45,8 +47,8 @@ async fn check_parser(collection: serde_json::Value){
 }
 
 #[tauri::command]
-async fn get_oauth2_token(window: Window, config: OAuth2Type){
-    handle_oauth(&window, config).await;
+async fn get_oauth2_token(window: Window, config: OAuth2Type) -> Result<BasicTokenResponse, OAuth2Error> {
+    handle_oauth(&window, config).await
 }
 
 

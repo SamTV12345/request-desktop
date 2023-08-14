@@ -32,7 +32,7 @@ pub async fn handle_oauth(window: &Window, config: OAuth2Type) ->Result<BasicTok
             }))
         }
         OAuth2Type::AuthorizationCode(a) => {
-           Err(OAuth2Error::new("Not implemented".to_string()))
+           Err(OAuth2Error::new("Not implemented".to_string(), Option::from("test".to_string())))
         }
         OAuth2Type::ClientCredentials(a) => {
             let client =
@@ -46,7 +46,9 @@ pub async fn handle_oauth(window: &Window, config: OAuth2Type) ->Result<BasicTok
             client.exchange_client_credentials()
                 .request_async(async_http_client)
                 .await
-                .map_err(|e| OAuth2Error::new(e.to_string()))
+                .map_err(|e| {
+                        OAuth2Error::from_basic_error(e)
+                })
         }
         OAuth2Type::Password(a) => {
             let client =
@@ -59,7 +61,9 @@ pub async fn handle_oauth(window: &Window, config: OAuth2Type) ->Result<BasicTok
 
             client.exchange_password(&ResourceOwnerUsername::new(a.username),
                                                        &ResourceOwnerPassword::new(a.password)).request_async(async_http_client).await
-                .map_err(|e| OAuth2Error::new(e.to_string()))
+                .map_err(|e| {
+                    OAuth2Error::from_basic_error(e)
+                })
 
 
         }
@@ -76,17 +80,23 @@ pub async fn handle_oauth(window: &Window, config: OAuth2Type) ->Result<BasicTok
 
             let details: StandardDeviceAuthorizationResponse = client
                 .exchange_device_code()
-                .map_err(|e| OAuth2Error::new(e.to_string()))?
+                .map_err(|e| {
+                    OAuth2Error::from_configuration_error(e)
+                })?
                 .add_scope(Scope::new("read".to_string()))
                 .request(http_client)
-                .map_err(|e| OAuth2Error::new(e.to_string()))?;
+                .map_err(|e| {
+                    OAuth2Error::from_basic_error(e)
+                })?;
 
 
 
             client
                     .exchange_device_access_token(&details)
                     .request(http_client, std::thread::sleep, None)
-                    .map_err(|e| OAuth2Error::new(e.to_string()))
+                .map_err(|e| {
+                    OAuth2Error::from_device_error(e)
+                })
 
         }
         RefreshToken(a) => {
@@ -100,7 +110,10 @@ pub async fn handle_oauth(window: &Window, config: OAuth2Type) ->Result<BasicTok
                 );
             client.exchange_refresh_token(&RefreshToken::new(a.token_name))
                 .request_async(async_http_client)
-                .await.map_err(|e| OAuth2Error::new(e.to_string()))
+                .await
+                .map_err(|e| {
+                    OAuth2Error::from_basic_error(e)
+                })
 
         }
         OAuth2Type::AuthorizationCodeWithPKCE(a) => {
@@ -130,7 +143,10 @@ pub async fn handle_oauth(window: &Window, config: OAuth2Type) ->Result<BasicTok
                 // Set the PKCE code verifier.
                 .set_pkce_verifier(pkce_verifier)
                 .request_async(async_http_client)
-                 .await.map_err(|e| OAuth2Error::new(e.to_string()))?)
+                    .await
+                    .map_err(|e| {
+                        OAuth2Error::from_basic_error(e)
+                    })?)
 
         }
     }

@@ -16,3 +16,4 @@ pub mod query_param;
 pub mod response;
 pub mod cookie;
 pub mod response_from_call;
+pub mod oauth2response;

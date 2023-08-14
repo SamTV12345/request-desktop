@@ -10,6 +10,9 @@ import {
     ClientCredentialsFlow,
     ImplicitFlow
 } from "../../models/OAuth2Models";
+import {OAuth2Loader} from "./OAuth2Loader";
+import {OAuth2SucessOutcome} from "../../models/OAuth2Outcome";
+import {TokenManager} from "./TokenManager";
 
 type OAuth2Data = {
     tokenName: string,
@@ -43,6 +46,8 @@ export const OAuth2Authentication = () => {
     const currentCollection = useAPIStore(state=>state.currentCollection)
     const updateCollection = useAPIStore(state=>state.setCurrentCollection)
     const saveCollection = useAPIStore(state=>state.saveCollection)
+    const setOpenSuccessOAuth2 = useAPIStore(state=>state.setOAuth2Screen)
+    const setPayload = useAPIStore(state=>state.setOAuth2Outcome)
 
     listen('oauth2-callback', (event)=>{
         console.log(event)
@@ -81,7 +86,7 @@ export const OAuth2Authentication = () => {
 
     const watchShowAge = watch(['grant_type']); // you can supply default value as second argument
 
-    const doRequest = async ()=>{
+    const doRequest: ()=>Promise<OAuth2SucessOutcome|undefined> = async ()=>{
 
         let val = getValues()
         switch (val.grant_type){
@@ -96,10 +101,9 @@ export const OAuth2Authentication = () => {
                     tokenName: val.tokenName
                 }
 
-                invoke('get_oauth2_token', {
+                return invoke<OAuth2SucessOutcome>('get_oauth2_token', {
                     config: config1
                 })
-                break
             case OAuth2Flow.AUTHORIZATION_CODE_PKCE:
                 let config2: AuthorizationCodeFlowPKCE = {
                     authUrl: val.authUrl,
@@ -115,10 +119,9 @@ export const OAuth2Authentication = () => {
                     codeChallenge: val.challengeAlgorithm,
                     tokenName: val.tokenName
                 }
-                invoke('get_oauth2_token', {
+                return invoke<OAuth2SucessOutcome>('get_oauth2_token', {
                     config: config2
                 })
-                break
             case OAuth2Flow.IMPLICIT:
                 let config3: ImplicitFlow = {
                     state: "",
@@ -129,10 +132,9 @@ export const OAuth2Authentication = () => {
                     callbackURL: val.redirect_uri,
                     tokenName: val.tokenName
                 }
-                invoke('get_oauth2_token', {
+                return invoke<OAuth2SucessOutcome>('get_oauth2_token', {
                     config: config3
                 })
-                break
             case OAuth2Flow.AUTHORIZATION_CODE:
                 let config4: AuthorizationCodeFlow = {
                     state: "",
@@ -145,10 +147,9 @@ export const OAuth2Authentication = () => {
                     accessTokenUrl: val.accessTokenUrl,
                     tokenName: val.tokenName
                 }
-                invoke('get_oauth2_token', {
+                return invoke<OAuth2SucessOutcome>('get_oauth2_token', {
                     config: config4
                 })
-                break
             case OAuth2Flow.PASSWORD_CREDENTIALS:
                 let config5: AuthorizationCodeFlow = {
                     state: "",
@@ -161,9 +162,12 @@ export const OAuth2Authentication = () => {
                     accessTokenUrl: val.accessTokenUrl,
                     tokenName: val.tokenName
                 }
-                invoke('get_oauth2_token', {
+                return invoke<OAuth2SucessOutcome>('get_oauth2_token', {
                     config: config5
                 })
+            default: new Promise<OAuth2SucessOutcome>((resolve, reject)=>{
+                reject("Unknown grant type")
+            })
         }
     }
 
@@ -259,6 +263,8 @@ export const OAuth2Authentication = () => {
     }
 
     return <div>
+        <OAuth2Loader/>
+        <TokenManager/>
             <div>
                 <div>Current token:</div>
                 This token is only available to you. Sync the token to let collaborators on this request use it.
@@ -332,10 +338,6 @@ export const OAuth2Authentication = () => {
             </>
             }
 
-
-
-
-
             {
                 (watchShowAge[0] === OAuth2Flow.PASSWORD_CREDENTIALS) &&
                 <>
@@ -356,7 +358,16 @@ export const OAuth2Authentication = () => {
             </select>
             <button type="submit">Speichern</button>
     </form>
-        <button className="bg-mustard-600" onClick={()=>{doRequest()}}>Get token</button>
+        <button className="bg-mustard-600 pl-2 pr-2 pt-1 pb-1 rounded" onClick={async () => {
+            await doRequest()
+                .then((c)=>{
+                    setPayload({...c, token_name: getValues().tokenName!} as OAuth2SucessOutcome)
+                    setOpenSuccessOAuth2(true)
+                })
+                .catch(c=>{
+                    setPayload(c)
+                    setOpenSuccessOAuth2(true)})
+        }}>Get token</button>
     </div>
 
 

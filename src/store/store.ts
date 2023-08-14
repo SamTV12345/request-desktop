@@ -4,6 +4,7 @@ import {ResponseFromCall} from "../models/ResponseFromCall";
 import {FileUpload} from "../models/FileUpload";
 import {cloneElement} from "react";
 import {invoke} from '@tauri-apps/api/tauri'
+import {OAuth2FailureOutcome, OAuth2SucessOutcome} from "../models/OAuth2Outcome";
 export enum DisplayType {
     SINGLE_TYPE,
     COLLECTION_TYPE
@@ -33,7 +34,11 @@ interface APIState {
     /* Change variable in Top collection*/
     changeVarInCollection: (collectionId: string, newVar: VariableDefinition|undefined, indexOfValue: number)=>void,
     addVarInCollection: (collectionId: string)=>void,
-    saveCollection: ()=>void
+    saveCollection: ()=>void,
+    openOAuth2Screen: boolean,
+    setOAuth2Screen: (by: boolean)=>void,
+    oauth2Outcome: OAuth2SucessOutcome|OAuth2FailureOutcome|undefined,
+    setOAuth2Outcome: (by: OAuth2SucessOutcome|OAuth2FailureOutcome|undefined)=>void,
 }
 
 export const useAPIStore = create<APIState>()((set,getState) => ({
@@ -88,5 +93,9 @@ export const useAPIStore = create<APIState>()((set,getState) => ({
         })
         set({collections: updatedCollections})
         invoke("update_collection", {collection: getState().currentCollection!})
-    }
+    },
+    openOAuth2Screen: false,
+    setOAuth2Screen: (openOAuth2Screen: boolean)=>set({openOAuth2Screen}),
+    oauth2Outcome: undefined,
+    setOAuth2Outcome: (oauth2Outcome: OAuth2SucessOutcome|OAuth2FailureOutcome|undefined)=>set({oauth2Outcome})
 }))
