@@ -17,9 +17,9 @@ export const NewItemInserter = () => {
         return typeof item === "object" && 'info' in item && item.item == undefined
     }
     const changeToSubDirectory = (collection: Collection|ItemDefinition)=>{
+        console.log("subdirectory")
         // @ts-ignore
         setCurrentItem(collection)
-        console.log(collection)
         !isCollectionDefinition(collection)&& setParents([...parents,collection])
     }
 
@@ -45,21 +45,19 @@ export const NewItemInserter = () => {
                 <Dialog.Title className="text-white font-bold text-2xl">Collectionbrowser</Dialog.Title>
                 <div className="flex gap-5">
                     <button className={`${!currentItem && '!hidden'} material-symbols-outlined text-white `} onClick={()=>{
-                        if(currentItem &&"info" in currentItem){
+                        if(parents.length === 1){
                             // Must be a collection
                             setCurrentItem(undefined)
                             setParents([])
-                        }else if (currentItem) {
-                            console.log("currentItem", currentItem)
+                        } else if (currentItem) {
                             // Must be an item
                             const newParents = [...parents]
-                            const item = newParents.pop()
-                            console.log("item", item.item)
-                            setCurrentItem(newParents.pop())
+                            // Pop last item
+                            newParents.pop()
+                            setCurrentItem(newParents[newParents.length-1])
                             setParents(newParents)
                         }
                         else{
-                            console.log("currentItem2", currentItem)
                             setCurrentItem(undefined)
                     }}}>arrow_back</button>
                     <div className="flex gap-2">
