@@ -428,7 +428,6 @@ html {
 }
 
 [data-orientation="vertical"]{
-    background-color: var(--background-color-secondary);
     color: var(--content-color-primary);
     border: none;
 }

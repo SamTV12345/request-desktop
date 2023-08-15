@@ -1,0 +1,31 @@
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
+import {deleteToken, getAllTokens} from "./TokenManagerService";
+
+export const TokenManagerDeleteDropdown = ()=>{
+
+
+
+
+    return <DropdownMenu.Root>
+        <DropdownMenu.Trigger className="flex items-center text-sm bg-basecol w-full text-red-400">
+            Delete
+            <span className="material-symbols-outlined">expand_more</span>
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Content className="overflow-hidden rounded-lg shadow-[0_4px_16px_rgba(0,0,0,0.2)]
+         z-30 bg-basecol">
+            <DropdownMenu.Item className="relative pl-6 pr-4 py-1.5 rounded text-sm text-stone-500 hover:bg-stone-500" >
+                <DropdownMenu.ItemIndicator className="absolute left-0">
+                    <span className="material-symbols-outlined align-middle !leading-none !text-xl">check</span>
+                </DropdownMenu.ItemIndicator>
+                <DropdownMenu.Label className="cursor-pointer">Expired tokens</DropdownMenu.Label>
+            </DropdownMenu.Item>
+            <DropdownMenu.Item>
+                <DropdownMenu.Label onClick={async () => {
+                    const res = await getAllTokens()
+
+                }} className="relative pl-6 pr-4 py-1.5 rounded text-sm hover:text-white hover:bg-stone-500 cursor-pointer">
+                    All tokens</DropdownMenu.Label>
+            </DropdownMenu.Item>
+        </DropdownMenu.Content>
+    </DropdownMenu.Root>
+}

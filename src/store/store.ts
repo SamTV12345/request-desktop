@@ -4,7 +4,7 @@ import {ResponseFromCall} from "../models/ResponseFromCall";
 import {FileUpload} from "../models/FileUpload";
 import {cloneElement} from "react";
 import {invoke} from '@tauri-apps/api/tauri'
-import {OAuth2FailureOutcome, OAuth2SucessOutcome} from "../models/OAuth2Outcome";
+import {OAuth2FailureOutcome, OAuth2SucessOutcome, TokenWithKey} from "../models/OAuth2Outcome";
 export enum DisplayType {
     SINGLE_TYPE,
     COLLECTION_TYPE
@@ -15,7 +15,13 @@ export interface ItemDefinitionExtended extends ItemDefinition {
 }
 
 export interface CollectionDefinitionExtended extends CollectionDefinition {
-    type: DisplayType
+    type: DisplayType,
+    info: {
+        id?: string | undefined
+        name?: string | undefined
+        version?: string | undefined;
+        _postman_id: string,
+    }
 }
 
 interface APIState {
@@ -39,6 +45,10 @@ interface APIState {
     setOAuth2Screen: (by: boolean)=>void,
     oauth2Outcome: OAuth2SucessOutcome|OAuth2FailureOutcome|undefined,
     setOAuth2Outcome: (by: OAuth2SucessOutcome|OAuth2FailureOutcome|undefined)=>void,
+    openTokenManager: boolean,
+    setOpenTokenManager: (by: boolean)=>void,
+    tokens: TokenWithKey[],
+    setTokens: (by: TokenWithKey[])=>void,
 }
 
 export const useAPIStore = create<APIState>()((set,getState) => ({
@@ -97,5 +107,9 @@ export const useAPIStore = create<APIState>()((set,getState) => ({
     openOAuth2Screen: false,
     setOAuth2Screen: (openOAuth2Screen: boolean)=>set({openOAuth2Screen}),
     oauth2Outcome: undefined,
-    setOAuth2Outcome: (oauth2Outcome: OAuth2SucessOutcome|OAuth2FailureOutcome|undefined)=>set({oauth2Outcome})
+    setOAuth2Outcome: (oauth2Outcome: OAuth2SucessOutcome|OAuth2FailureOutcome|undefined)=>set({oauth2Outcome}),
+    openTokenManager: false,
+    setOpenTokenManager: (openTokenManager: boolean)=>set({openTokenManager}),
+    tokens: [],
+    setTokens: (tokens: TokenWithKey[])=>set({tokens})
 }))

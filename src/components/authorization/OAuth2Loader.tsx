@@ -16,7 +16,7 @@ export const OAuth2Loader = () => {
     const openSuccessOAuth2 = useAPIStore(state=>state.openOAuth2Screen)
     const setOpenSuccessOAuth2 = useAPIStore(state=>state.setOAuth2Screen)
     const oauth2Playload = useAPIStore(state=>state.oauth2Outcome)
-
+    const collection = useAPIStore(state=>state.currentCollection)
 
     useEffect(() => {
         if(openSuccessOAuth2 && isOAuth2Success(oauth2Playload)){
@@ -31,7 +31,8 @@ export const OAuth2Loader = () => {
     useEffect(() => {
 
         if(countDown === 0 && isOAuth2Success(oauth2Playload)){
-            insertToken( crypto.randomUUID(),oauth2Playload.access_token, oauth2Playload.token_name)
+            // @ts-ignore
+            insertToken( crypto.randomUUID(),oauth2Playload.access_token, oauth2Playload.token_name,collection?.info._postman_id as string )
             setOpenSuccessOAuth2(false)
         }
     }, [countDown]);

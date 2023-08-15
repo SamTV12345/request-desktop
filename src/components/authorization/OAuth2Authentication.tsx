@@ -13,6 +13,7 @@ import {
 import {OAuth2Loader} from "./OAuth2Loader";
 import {OAuth2SucessOutcome} from "../../models/OAuth2Outcome";
 import {TokenManager} from "./TokenManager";
+import {TokenSelector} from "./TokenSelector";
 
 type OAuth2Data = {
     tokenName: string,
@@ -87,9 +88,9 @@ export const OAuth2Authentication = () => {
     const watchShowAge = watch(['grant_type']); // you can supply default value as second argument
 
     const doRequest: ()=>Promise<OAuth2SucessOutcome|undefined> = async ()=>{
-
+        console.log(watchShowAge[0])
         let val = getValues()
-        switch (val.grant_type){
+            switch (watchShowAge[0]){
             case OAuth2Flow.CLIENT_CREDENTIALS:
                 let config1: ClientCredentialsFlow = {
                     state: "",
@@ -151,6 +152,7 @@ export const OAuth2Authentication = () => {
                     config: config4
                 })
             case OAuth2Flow.PASSWORD_CREDENTIALS:
+                console.log("password credentials")
                 let config5: AuthorizationCodeFlow = {
                     state: "",
                     clientAuthentication: val.client_authentication as "header" | "body",
@@ -270,9 +272,9 @@ export const OAuth2Authentication = () => {
                 This token is only available to you. Sync the token to let collaborators on this request use it.
                 <div className="grid grid-cols-2 gap-5 pt-2">
                     <div>Token</div>
-                    <select className="bg-basecol p-1">
-                        <option>Token Name</option>
-                    </select>
+                    <div className="block">
+                        <TokenSelector/>
+                    </div>
                     <div>Use token type</div>
                     <select className="bg-basecol p-1">
                         <option>Access Token</option>

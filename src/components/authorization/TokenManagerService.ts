@@ -1,45 +1,100 @@
-import {Token} from "../../models/OAuth2Outcome";
+import {Token, TokenLoadResult, TokenWithKey} from "../../models/OAuth2Outcome";
+import {parseJWT} from "./TokenManager";
+
+const TOKEN_DB = "tokens"
+const ITEM_TO_DB = "item-to-token"
+
 
 export const deleteToken = (id: string)=>{
-    const dbRq = indexedDB.open("tokens", 1)
+    const dbRq = indexedDB.open(TOKEN_DB, 1)
     dbRq.onsuccess = (event)=>{
         const db = dbRq.result
-        const transaction = db.transaction("tokens", "readwrite")
-        const objectStore = transaction.objectStore("tokens")
+        const transaction = db.transaction(TOKEN_DB, "readwrite")
+        const transaction2 = db.transaction(ITEM_TO_DB, "readwrite")
+        const objectStore2 = transaction2.objectStore(ITEM_TO_DB)
+        const objectStore = transaction.objectStore(TOKEN_DB)
         const request = objectStore.delete(id)
+        console.log("Token deleted",id)
+        objectStore2.openCursor().onsuccess = (event:any)=>{
+            const cursor = event.target.result
+            if (cursor) {
+                if(cursor.value === id){
+                    objectStore2.delete(cursor.key)
+                }
+                cursor.continue()
+            }
+        }
         request.onsuccess = ()=>{
             console.log("Token deleted")
         }
     }
 }
 
-
-export const insertToken = ( key:string, token: string,token_name:string)=>{
-    const dbRq = indexedDB.open("tokens", 1)
+export const insertToken = ( token_key:string, token: string, token_name: string, item_id:string)=>{
+    const dbRq = indexedDB.open(TOKEN_DB, 1)
     dbRq.onsuccess = (event)=>{
         const db = dbRq.result
-        const transaction = db.transaction("tokens", "readwrite")
-        const objectStore = transaction.objectStore("tokens")
+        const transaction = db.transaction(TOKEN_DB, "readwrite")
+        const objectStore = transaction.objectStore(TOKEN_DB)
         const request = objectStore.add({
-            token,
+            access_token: token,
             token_name
-        }, key)
+        }, token_key)
         request.onsuccess = ()=>{
-            console.log("Token inserted")
+            setTokenToItem(token_key, item_id)
         }
+    }
+}
+
+
+export const setTokenToItem = (token_key:string, item_id:string)=>{
+    const dbRq = indexedDB.open(TOKEN_DB, 1)
+    dbRq.onsuccess = (event)=> {
+        const db = dbRq.result
+        const transaction = db.transaction(ITEM_TO_DB, "readwrite")
+        const objectStore = transaction.objectStore(ITEM_TO_DB)
+        objectStore.put(token_key, item_id)
+        console.log("Token inserted")
     }
 }
 
 export const getToken = (id: string): Promise<Token>=>{
     return new Promise((resolve, reject)=>{
-        const dbRq = indexedDB.open("tokens", 1)
+        const dbRq = indexedDB.open(TOKEN_DB, 1)
         dbRq.onsuccess = (event)=>{
             const db = dbRq.result
-            const transaction = db.transaction("tokens", "readwrite")
-            const objectStore = transaction.objectStore("tokens")
+            const transaction = db.transaction(TOKEN_DB, "readwrite")
+            const objectStore = transaction.objectStore(TOKEN_DB)
             const request = objectStore.get(id)
             request.onsuccess = ()=>{
                 resolve(request.result)
+            }
+            request.onerror = ()=>{
+                reject(request.error)
+            }
+        }
+    })
+}
+
+export const getTokenByCollectionId = (postman_id: string): Promise<TokenWithKey>=>{
+    return new Promise((resolve, reject)=>{
+        const dbRq = indexedDB.open(TOKEN_DB, 1)
+        dbRq.onsuccess = (event)=>{
+            const db = dbRq.result
+            const transaction = db.transaction(ITEM_TO_DB, "readwrite")
+            const objectStore = transaction.objectStore(ITEM_TO_DB)
+            const request:IDBRequest<string> = objectStore.get(postman_id)
+            request.onsuccess = ()=> {
+                if (!request.result) reject("No token found")
+                const transaction = db.transaction(TOKEN_DB, "readwrite")
+                const objectStore = transaction.objectStore(TOKEN_DB)
+                const request2:IDBRequest<TokenLoadResult> = objectStore.get(request.result)
+                request2.onsuccess = ()=>{
+                    if (!request2.result) reject("No token found")
+                    const token = parseJWT(request2.result)
+                    const tokenWithKey = Object.assign(token, {key: request.result})
+                    resolve(tokenWithKey)
+                }
             }
             request.onerror = ()=>{
                 reject(request.error)
@@ -59,4 +114,29 @@ export const updateToken = (token: Token, key:string)=>{
             console.log("Token updated")
         }
     }
+}
+
+export const getAllTokens = (): Promise<TokenWithKey[]>=>{
+    return new Promise((resolve, reject)=>{
+        const dbRq = indexedDB.open(TOKEN_DB, 1)
+        const tokens:TokenWithKey[] = []
+        dbRq.onsuccess = (event)=>{
+            const db = dbRq.result
+            const transaction = db.transaction(TOKEN_DB, "readwrite")
+            const objectStore = transaction.objectStore(TOKEN_DB)
+            const cursor = objectStore.openCursor()
+            cursor.onsuccess = (event:any)=> {
+                    const cursor = event.target.result
+                    if (cursor) {
+                        const val = parseJWT(cursor.value)
+                        tokens.push({key: cursor.key, ...val})
+                        cursor.continue()
+                    }
+                }
+            cursor.onerror = (event:any)=>{
+                    reject(event)
+                }
+            }
+        resolve(tokens)
+    })
 }

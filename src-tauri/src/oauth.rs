@@ -10,6 +10,7 @@ use oauth2::reqwest::http_client;
 
 
 pub async fn handle_oauth(window: &Window, config: OAuth2Type) ->Result<BasicTokenResponse, OAuth2Error>{
+    println!("Config: {:?}", config);
     return match config {
         OAuth2Type::Implicit(s) => {
             let client =
@@ -153,19 +154,19 @@ pub async fn handle_oauth(window: &Window, config: OAuth2Type) ->Result<BasicTok
 }
 
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(untagged)]
 pub enum OAuth2Type {
-    ClientCredentials(ClientCredentialsFlow),
     Implicit(ImplicitFlow),
     AuthorizationCode(AuthorizationCodeFlow),
     AuthorizationCodeWithPKCE(AuthorizationCodeFlowWithPKCE),
     Password(PasswordFlow),
     DeviceCode,
-    RefreshToken(RefreshTokenFlow)
+    RefreshToken(RefreshTokenFlow),
+    ClientCredentials(ClientCredentialsFlow)
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ImplicitFlow {
     token_name: String,
@@ -177,7 +178,7 @@ pub struct ImplicitFlow {
     client_authentication: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct AuthorizationCodeFlow {
     token_name: String,
     callback_url:String,
@@ -189,7 +190,7 @@ pub struct AuthorizationCodeFlow {
     client_authentication: String
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct AuthorizationCodeFlowWithPKCE {
     token_name: String,
     callback_url:String,
@@ -204,7 +205,7 @@ pub struct AuthorizationCodeFlowWithPKCE {
     code_challenge: String
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize,Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ClientCredentialsFlow {
     token_name: String,
@@ -216,7 +217,7 @@ pub struct ClientCredentialsFlow {
     client_authentication: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct PasswordFlow {
     token_name: String,
     access_token_url: String,
@@ -228,7 +229,7 @@ pub struct PasswordFlow {
     client_authentication: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct RefreshTokenFlow {
     token_name: String
 }
