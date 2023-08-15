@@ -6,17 +6,18 @@ import {Tabs, TabsContent, TabsList, TabsTrigger} from "../components/bareCompon
 import {FileToUpload} from "../components/upload/FileToUpload";
 import {UploadFilePreview} from "../components/upload/UploadFilePreview";
 import ResizableBox from "../components/resizable/ResizableBox";
+import {NewItemModel} from "../components/collections/NewItemModel";
 
 export const SidebarComponent = ()=>{
     const collections = useAPIStore(state=>state.collections)
     const collectionToUpload = useAPIStore(state=>state.fileToUpload)
-
+    const setNewCollectionOpen = useAPIStore(state=>state.setOpenNewCollectionModal)
 
     return (
             <ResizableBox direction={"right"} initialSize={400} className={"sidebar"}>
-
+                <NewItemModel/>
                 <div className="sidebar-import-buttons">
-                    <button>New</button>
+                    <button onClick={()=>setNewCollectionOpen(true)}>New</button>
                     <Dialog.Root>
                         <Dialog.Trigger>
                             <button className="sidebar-button"  onClick={()=>{}}>Import</button>

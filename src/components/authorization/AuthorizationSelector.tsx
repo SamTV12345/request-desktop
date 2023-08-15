@@ -1,6 +1,7 @@
 import * as Select from '@radix-ui/react-select';
 import {AuthorizationTypes} from "../../models/AuthorizationTypes";
 import {FC} from "react";
+import {useAPIStore} from "../../store/store";
 
 type AuthorizationSelectorProps = {
     value: AuthorizationTypes,
@@ -9,10 +10,12 @@ type AuthorizationSelectorProps = {
 
 
 export const AuthorizationSelector:FC<AuthorizationSelectorProps> = ({value,onChange}) => {
+    const currentCollection = useAPIStore(state=>state.currentCollection)
 
     return <div className="">
-            <select value={value} className="bg-basecol" onChange={v=>onChange(v.target.value as AuthorizationTypes)}>
+            <select value={currentCollection?.auth?.type} className="bg-basecol" onChange={v=>onChange(v.target.value as AuthorizationTypes)}>
                 <option value={AuthorizationTypes.NOAUTH}>No Auth</option>
+                <option value={undefined}>No Auth</option>
                 <option value={AuthorizationTypes.APIKEY}>API key</option>
                 <option value={AuthorizationTypes.BEARER}>Bearer Token</option>
                 <option value={AuthorizationTypes.AWSV4}>AWS Signature</option>

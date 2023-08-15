@@ -7,7 +7,7 @@ export const CollectionAuthorization = ()=>{
     const currentCollection = useAPIStore(state=>state.currentCollection)
     const updateCollection = useAPIStore(state=>state.setCurrentCollection)
     const updateAuthorization = (authChange: AuthorizationTypes)=>{
-        const clonedCollection:CollectionDefinitionExtended = {
+        const clonedCollection:any = {
             ...currentCollection,
             auth: {
                 ...currentCollection?.auth,

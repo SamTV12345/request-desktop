@@ -46,7 +46,7 @@ export const ParamTable = ()=> {
             }
         }
         const newCollection = replaceItem(currentCollection as CollectionDefinition, item)
-        const newCollectionExtended = {...newCollection,type: DisplayType.SINGLE_TYPE} satisfies CollectionDefinitionExtended
+        const newCollectionExtended = {...newCollection,type: DisplayType.SINGLE_TYPE} as CollectionDefinitionExtended
         updateCurrentCollection(newCollectionExtended)
     }
 
@@ -64,7 +64,7 @@ export const ParamTable = ()=> {
             }
         }
         const newCollection = replaceItem(currentCollection as CollectionDefinition, item)
-        const newCollectionExtended = {...newCollection,type: DisplayType.SINGLE_TYPE} satisfies CollectionDefinitionExtended
+        const newCollectionExtended = {...newCollection,type: DisplayType.SINGLE_TYPE} as CollectionDefinitionExtended
         updateCurrentCollection(newCollectionExtended)
     }
 
@@ -82,7 +82,7 @@ export const ParamTable = ()=> {
             }
         }
         const newCollection = replaceItem(currentCollection as CollectionDefinition, item)
-        const newCollectionExtended = {...newCollection,type: DisplayType.SINGLE_TYPE} satisfies CollectionDefinitionExtended
+        const newCollectionExtended = {...newCollection,type: DisplayType.SINGLE_TYPE} as CollectionDefinitionExtended
         updateCurrentCollection(newCollectionExtended)
     }
 
@@ -103,7 +103,7 @@ export const ParamTable = ()=> {
             }
         }
         const newCollection = replaceItem(currentCollection as CollectionDefinition, item)
-        const newCollectionExtended = {...newCollection,type: DisplayType.SINGLE_TYPE} satisfies CollectionDefinitionExtended
+        const newCollectionExtended = {...newCollection,type: DisplayType.SINGLE_TYPE} as CollectionDefinitionExtended
         updateCurrentCollection(newCollectionExtended)
     }
 
@@ -120,7 +120,7 @@ export const ParamTable = ()=> {
             }
         }
         const newCollection = replaceItem(currentCollection as CollectionDefinition, item)
-        const newCollectionExtended = {...newCollection,type: DisplayType.SINGLE_TYPE} satisfies CollectionDefinitionExtended
+        const newCollectionExtended = {...newCollection,type: DisplayType.SINGLE_TYPE} as CollectionDefinitionExtended
         updateCurrentCollection(newCollectionExtended)
     }
 
@@ -137,7 +137,7 @@ export const ParamTable = ()=> {
             }
         }
         const newCollection = replaceItem(currentCollection as CollectionDefinition, item)
-        const newCollectionExtended = {...newCollection,type: DisplayType.SINGLE_TYPE} satisfies CollectionDefinitionExtended
+        const newCollectionExtended = {...newCollection,type: DisplayType.SINGLE_TYPE} as CollectionDefinitionExtended
         updateCurrentCollection(newCollectionExtended)
     }
 

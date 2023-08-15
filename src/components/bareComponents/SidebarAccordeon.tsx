@@ -22,6 +22,7 @@ export const SidebarAccordeon:FC<SidebarAccordeonProps> = ({collection}) => {
         return  <Accordion type="single" collapsible  key={collection.name+"name"}>
             <AccordionItem value="item-1" key={collection.name+"item"} className="cursor-pointer">
                     <AccordionTrigger><span onClick={()=>{
+                        // @ts-ignore
                         setCurrentCollection({...collection, type: DisplayType.COLLECTION_TYPE})
                         setCurrentItem(undefined)
                     }}>{collection.info?.name}</span></AccordionTrigger>
@@ -47,6 +48,7 @@ export const RecursiveItemGroup:FC<RecursiveItemGroupProps> = ({item,indent, col
                     <AccordionItem value="item-1">
                         <AccordionTrigger  onClick={()=>{
                             setCurrentItem({...item,type: DisplayType.SINGLE_TYPE})
+                            // @ts-ignore
                             setCurrentCollection({...collection, type: DisplayType.SINGLE_TYPE})
                             console.log("setted",collection)
                         }}>{item.name}</AccordionTrigger>
@@ -61,6 +63,7 @@ export const RecursiveItemGroup:FC<RecursiveItemGroupProps> = ({item,indent, col
                             onClick={()=>{
                                 setCurrentItem({...item,type: DisplayType.SINGLE_TYPE})
                                 console.log("setted",collection)
+                                // @ts-ignore
                                 setCurrentCollection({...collection, type: DisplayType.SINGLE_TYPE})
                             }} className="sidebar-request">
                     <APIRequestSidebarIcon type={item.request?.method as string}/>

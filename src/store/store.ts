@@ -50,7 +50,12 @@ interface APIState {
     tokens: TokenWithKey[],
     setTokens: (by: TokenWithKey[])=>void,
     selectedToken: TokenWithKey|undefined,
-    setSelectedToken: (by: TokenWithKey|undefined)=>void
+    setSelectedToken: (by: TokenWithKey|undefined)=>void,
+    openNewCollectionModal: boolean,
+    setOpenNewCollectionModal: (by: boolean)=>void,
+    insertNewCollection: (collection: CollectionDefinition)=>void,
+    newItemInserterOpen: boolean,
+    setNewItemInserterOpen: (by: boolean)=>void
 }
 
 export const useAPIStore = create<APIState>()((set,getState) => ({
@@ -115,5 +120,12 @@ export const useAPIStore = create<APIState>()((set,getState) => ({
     tokens: [],
     setTokens: (tokens: TokenWithKey[])=>set({tokens}),
     selectedToken: undefined,
-    setSelectedToken: (selectedToken: TokenWithKey|undefined)=>set({selectedToken})
+    setSelectedToken: (selectedToken: TokenWithKey|undefined)=>set({selectedToken}),
+    openNewCollectionModal: false,
+    setOpenNewCollectionModal: (openNewCollectionModal: boolean)=>set({openNewCollectionModal}),
+    insertNewCollection: (collection: CollectionDefinition)=>{
+        set({collections: [...getState().collections, collection]})
+    },
+    newItemInserterOpen: false,
+    setNewItemInserterOpen: (newItemInserterOpen: boolean)=>set({newItemInserterOpen})
 }))
