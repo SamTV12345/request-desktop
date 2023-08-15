@@ -15,6 +15,7 @@ export const parseJWT = (token: TokenLoadResult): Token => {
 
     return {
         ...JSON.parse(jsonPayload),
+        access_token: token.access_token,
         token_name: token.token_name
     };
 }

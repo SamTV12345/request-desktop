@@ -10,8 +10,8 @@ export const TokenSelector = ()=>{
     const setOpenManager = useAPIStore(state=>state.setOpenTokenManager)
     const tokens = useAPIStore(state=>state.tokens)
     const setTokens = useAPIStore(state=>state.setTokens)
-    const [selectedToken, setSelectedToken] = useState<TokenWithKey|undefined>(undefined)
-    let db
+    const setSelectedToken = useAPIStore(state=>state.setSelectedToken)
+    const selectedToken = useAPIStore(state=>state.selectedToken)
 
     useEffect(() => {
         getAllTokens().then((tokens) => {

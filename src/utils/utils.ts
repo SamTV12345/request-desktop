@@ -8,3 +8,7 @@ export function cn(...inputs: ClassValue[]) {
 export const convertSearchParamsToString = (searchParams: string[]) => {
 
 }
+
+export const copyToClipboard = (text: string) => {
+    return navigator.clipboard.writeText(text)
+}

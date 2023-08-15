@@ -49,6 +49,8 @@ interface APIState {
     setOpenTokenManager: (by: boolean)=>void,
     tokens: TokenWithKey[],
     setTokens: (by: TokenWithKey[])=>void,
+    selectedToken: TokenWithKey|undefined,
+    setSelectedToken: (by: TokenWithKey|undefined)=>void
 }
 
 export const useAPIStore = create<APIState>()((set,getState) => ({
@@ -111,5 +113,7 @@ export const useAPIStore = create<APIState>()((set,getState) => ({
     openTokenManager: false,
     setOpenTokenManager: (openTokenManager: boolean)=>set({openTokenManager}),
     tokens: [],
-    setTokens: (tokens: TokenWithKey[])=>set({tokens})
+    setTokens: (tokens: TokenWithKey[])=>set({tokens}),
+    selectedToken: undefined,
+    setSelectedToken: (selectedToken: TokenWithKey|undefined)=>set({selectedToken})
 }))

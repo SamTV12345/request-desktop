@@ -14,6 +14,7 @@ import {OAuth2Loader} from "./OAuth2Loader";
 import {OAuth2SucessOutcome} from "../../models/OAuth2Outcome";
 import {TokenManager} from "./TokenManager";
 import {TokenSelector} from "./TokenSelector";
+import {copyToClipboard} from "../../utils/utils";
 
 type OAuth2Data = {
     tokenName: string,
@@ -49,6 +50,7 @@ export const OAuth2Authentication = () => {
     const saveCollection = useAPIStore(state=>state.saveCollection)
     const setOpenSuccessOAuth2 = useAPIStore(state=>state.setOAuth2Screen)
     const setPayload = useAPIStore(state=>state.setOAuth2Outcome)
+    const selectedToken = useAPIStore(state=>state.selectedToken)
 
     listen('oauth2-callback', (event)=>{
         console.log(event)
@@ -277,9 +279,11 @@ export const OAuth2Authentication = () => {
                         <TokenSelector/>
                     </div>
                     <div>Use token type</div>
-                    <select className="bg-basecol p-1">
-                        <option>Access Token</option>
-                    </select>
+                    {selectedToken&&<div className="grid grid-cols-[1fr_auto] gap-3">
+                            <input readOnly className="bg-basecol p-1  pr-5 text-ellipsis" value={selectedToken?.access_token}/>
+                            <button className="material-symbols-outlined self-center active:scale-95 " onClick={()=>copyToClipboard(selectedToken.access_token)}>content_copy</button>
+                        </div>
+                    }
                     <div>Header Prefix</div>
                     <input className="bg-basecol p-1" defaultValue="Bearer"/>
                     <div>Auto refresh token</div>
@@ -289,7 +293,7 @@ export const OAuth2Authentication = () => {
                 </div>
             </div>
         <h2 className="font-bold mt-5">Configure New Token</h2>
-        <form onSubmit={handleSubmit(populateOAuth2Auth)} className="grid grid-cols-2 gap-5 text-white">
+        <form onSubmit={handleSubmit(populateOAuth2Auth)} className="grid grid-cols-2 gap-5 text-white mb-2">
                 <label>Token Name:</label>
                 <input {...register('tokenName')} className="bg-basecol p-1"/>
                 <label>Grant Type:</label>
@@ -359,7 +363,7 @@ export const OAuth2Authentication = () => {
                 <option value="header">Send as Basic Auth header</option>
                 <option value="body">Send as POST body parameter</option>
             </select>
-            <button type="submit">Save</button>
+            <button type="submit" className="bg-mustard-600">Save</button>
     </form>
         <button className="bg-mustard-600 pl-2 pr-2 pt-1 pb-1 rounded" onClick={async () => {
             await doRequest()

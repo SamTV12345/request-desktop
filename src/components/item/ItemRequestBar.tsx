@@ -37,8 +37,8 @@ export const ItemRequestBar = ()=>{
             type: DisplayType.SINGLE_TYPE
         }
 
-        const newCollection = replaceItem(currentCollection as CollectionDefinition, item)
-        const newCollectionExtended = {...newCollection,type: DisplayType.SINGLE_TYPE} satisfies CollectionDefinitionExtended
+        const newCollection = replaceItem(currentCollection as CollectionDefinitionExtended, item)
+        const newCollectionExtended = {...newCollection,type: DisplayType.SINGLE_TYPE} as CollectionDefinitionExtended
         updateCurrentCollection(newCollectionExtended)
         setCurrentItem(item)
     }
