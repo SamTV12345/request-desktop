@@ -45,3 +45,15 @@ export interface ClientCredentialsFlow {
     clientAuthentication: "header"|"body"
     state: string;
 }
+
+export interface PasswordCredentialsFlow {
+    tokenName: string;
+    accessTokenUrl: string;
+    clientId: string;
+    clientSecret: string;
+    scope: string;
+    clientAuthentication: "header"|"body"
+    state: string;
+    username: string;
+    password: string;
+}

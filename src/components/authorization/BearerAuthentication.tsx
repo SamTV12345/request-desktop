@@ -51,6 +51,6 @@ export const BearerAuthentication = ()=>{
     return <form onSubmit={handleSubmit(populateBearerKeyAuth)} className="grid grid-cols-2 gap-5 text-white">
         <label>Token:</label>
         <input {...register('token')} className="bg-basecol p-1"/>
-        <button type="submit">Speichern</button>
+        <button type="submit">Save</button>
     </form>
 }

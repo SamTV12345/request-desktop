@@ -58,6 +58,6 @@ export const BasicAuthentication = ()=>{
         <input {...register('username')} className="bg-basecol p-1"/>
         <label>Password:</label>
         <input {...register('password')} className="bg-basecol p-1"/>
-        <button type="submit">Speichern</button>
+        <button type="submit">Save</button>
     </form>
 }

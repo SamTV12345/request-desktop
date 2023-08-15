@@ -8,7 +8,7 @@ import {
     AuthorizationCodeFlow,
     AuthorizationCodeFlowPKCE,
     ClientCredentialsFlow,
-    ImplicitFlow
+    ImplicitFlow, PasswordCredentialsFlow
 } from "../../models/OAuth2Models";
 import {OAuth2Loader} from "./OAuth2Loader";
 import {OAuth2SucessOutcome} from "../../models/OAuth2Outcome";
@@ -153,17 +153,18 @@ export const OAuth2Authentication = () => {
                 })
             case OAuth2Flow.PASSWORD_CREDENTIALS:
                 console.log("password credentials")
-                let config5: AuthorizationCodeFlow = {
+                let config5: PasswordCredentialsFlow = {
                     state: "",
                     clientAuthentication: val.client_authentication as "header" | "body",
-                    authUrl: val.authUrl,
                     clientId: val.clientId,
                     clientSecret: val.clientSecret,
                     scope: val.scope,
-                    callbackURL: val.redirect_uri,
                     accessTokenUrl: val.accessTokenUrl,
-                    tokenName: val.tokenName
+                    tokenName: val.tokenName,
+                    password: val.password,
+                    username: val.username
                 }
+                console.log(config5)
                 return invoke<OAuth2SucessOutcome>('get_oauth2_token', {
                     config: config5
                 })
@@ -358,7 +359,7 @@ export const OAuth2Authentication = () => {
                 <option value="header">Send as Basic Auth header</option>
                 <option value="body">Send as POST body parameter</option>
             </select>
-            <button type="submit">Speichern</button>
+            <button type="submit">Save</button>
     </form>
         <button className="bg-mustard-600 pl-2 pr-2 pt-1 pb-1 rounded" onClick={async () => {
             await doRequest()

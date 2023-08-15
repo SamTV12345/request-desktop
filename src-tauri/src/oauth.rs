@@ -61,7 +61,8 @@ pub async fn handle_oauth(window: &Window, config: OAuth2Type) ->Result<BasicTok
                 );
 
             client.exchange_password(&ResourceOwnerUsername::new(a.username),
-                                                       &ResourceOwnerPassword::new(a.password)).request_async(async_http_client).await
+                                                       &ResourceOwnerPassword::new(a.password))
+                .request_async(async_http_client).await
                 .map_err(|e| {
                     OAuth2Error::from_basic_error(e)
                 })
@@ -179,6 +180,7 @@ pub struct ImplicitFlow {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct AuthorizationCodeFlow {
     token_name: String,
     callback_url:String,
@@ -191,6 +193,7 @@ pub struct AuthorizationCodeFlow {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct AuthorizationCodeFlowWithPKCE {
     token_name: String,
     callback_url:String,
@@ -218,6 +221,7 @@ pub struct ClientCredentialsFlow {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct PasswordFlow {
     token_name: String,
     access_token_url: String,
@@ -230,6 +234,7 @@ pub struct PasswordFlow {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct RefreshTokenFlow {
     token_name: String
 }

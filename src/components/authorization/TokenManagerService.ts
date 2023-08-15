@@ -117,26 +117,26 @@ export const updateToken = (token: Token, key:string)=>{
 }
 
 export const getAllTokens = (): Promise<TokenWithKey[]>=>{
-    return new Promise((resolve, reject)=>{
+    return new Promise((resolve, reject)=> {
         const dbRq = indexedDB.open(TOKEN_DB, 1)
-        const tokens:TokenWithKey[] = []
-        dbRq.onsuccess = (event)=>{
+        dbRq.onsuccess = (event) => {
             const db = dbRq.result
             const transaction = db.transaction(TOKEN_DB, "readwrite")
             const objectStore = transaction.objectStore(TOKEN_DB)
             const cursor = objectStore.openCursor()
-            cursor.onsuccess = (event:any)=> {
-                    const cursor = event.target.result
-                    if (cursor) {
-                        const val = parseJWT(cursor.value)
-                        tokens.push({key: cursor.key, ...val})
-                        cursor.continue()
-                    }
-                }
-            cursor.onerror = (event:any)=>{
-                    reject(event)
+            const tokens: TokenWithKey[] = []
+            cursor.onsuccess = (event: any) => {
+                const cursor = event.target.result
+                if (cursor) {
+                    const val = parseJWT(cursor.value)
+                    tokens.push({key: cursor.key, ...val})
+                    cursor.continue()
                 }
             }
-        resolve(tokens)
+            resolve(tokens)
+            cursor.onerror = (event: any) => {
+                reject(event)
+            }
+        }
     })
 }
