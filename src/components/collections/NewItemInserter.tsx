@@ -39,11 +39,32 @@ export const NewItemInserter = () => {
         </div>
     }
 
+    const getIdOfItem = (collection: CollectionDefinition)=>{
+        // @ts-ignore
+        return collection.id || collection.info!._postman_id
+    }
+    const goBackToElement = (collection: CollectionDefinition)=>{
+        let idOfItem = getIdOfItem(collection)
+        // @ts-ignore
+        const newParent = [...parents]
+
+        while (getIdOfItem(newParent[newParent.length-1]) !== idOfItem){
+            newParent.pop()
+        }
+        setParents(newParent)
+        setCurrentItem(collection)
+    }
+
+    const goToBack = ()=>{
+        setParents([])
+        setCurrentItem(undefined)
+    }
+
     return <Dialog.Root open={newItemInserterOpen}>
         <Dialog.Portal>
             <Dialog.Content className="dialog-centered">
                 <Dialog.Title className="text-white font-bold text-2xl">Collectionbrowser</Dialog.Title>
-                <div className="flex gap-5">
+                <div className="flex gap-5 mb-5 mt-2">
                     <button className={`${!currentItem && '!hidden'} material-symbols-outlined text-white `} onClick={()=>{
                         if(parents.length === 1){
                             // Must be a collection
@@ -61,7 +82,8 @@ export const NewItemInserter = () => {
                             setCurrentItem(undefined)
                     }}}>arrow_back</button>
                     <div className="flex gap-2">
-                        {parents.map(c=><div className="text-white flex gap-2"><span className="material-symbols-outlined">chevron_right</span><span>{c.name? c.name:c.info.name}</span></div>)}
+                        <span className="material-symbols-outlined text-white" onClick={()=>goToBack()}>house</span>
+                        {parents.map(c=><div className="text-white flex gap-2"><span className="material-symbols-outlined">chevron_right</span><span onClick={()=>goBackToElement(c)}>{c.name? c.name:c.info.name}</span></div>)}
                     </div>
                 </div>
                 <div className=" overflow-auto h-80">
