@@ -87,12 +87,12 @@ export const OAuth2Authentication = () => {
         }
     })
 
-    const watchShowAge = watch(['grant_type']); // you can supply default value as second argument
+    const grant_type_selection = watch(['grant_type']); // you can supply default value as second argument
 
     const doRequest: ()=>Promise<OAuth2SucessOutcome|undefined> = async ()=>{
-        console.log(watchShowAge[0])
         let val = getValues()
-            switch (watchShowAge[0]){
+        console.log(val)
+            switch (grant_type_selection[0]){
             case OAuth2Flow.CLIENT_CREDENTIALS:
                 let config1: ClientCredentialsFlow = {
                     state: "",
@@ -108,6 +108,7 @@ export const OAuth2Authentication = () => {
                     config: config1
                 })
             case OAuth2Flow.AUTHORIZATION_CODE_PKCE:
+                console.log("Authorization Code")
                 let config2: AuthorizationCodeFlowPKCE = {
                     authUrl: val.authUrl,
                     clientAuthentication: val.client_authentication as "header" | "body",
@@ -115,7 +116,7 @@ export const OAuth2Authentication = () => {
                     clientId: val.clientId,
                     clientSecret: val.clientSecret,
                     codeVerifier: val.code_verifier,
-                    callbackURL: val.redirect_uri,
+                    callbackUrl: val.redirect_uri,
                     scope: val.scope,
                     codeChallengeMethod: val.challengeAlgorithm as "S256" | "plain",
                     state: "",
@@ -132,7 +133,7 @@ export const OAuth2Authentication = () => {
                     authUrl: val.authUrl,
                     clientId: val.clientId,
                     scope: val.scope,
-                    callbackURL: val.redirect_uri,
+                    callbackUrl: val.redirect_uri,
                     tokenName: val.tokenName
                 }
                 return invoke<OAuth2SucessOutcome>('get_oauth2_token', {
@@ -146,10 +147,11 @@ export const OAuth2Authentication = () => {
                     clientId: val.clientId,
                     clientSecret: val.clientSecret,
                     scope: val.scope,
-                    callbackURL: val.redirect_uri,
+                    callbackUrl: val.redirect_uri,
                     accessTokenUrl: val.accessTokenUrl,
                     tokenName: val.tokenName
                 }
+                console.log("Authorization Code", config4)
                 return invoke<OAuth2SucessOutcome>('get_oauth2_token', {
                     config: config4
                 })
@@ -278,11 +280,16 @@ export const OAuth2Authentication = () => {
                     <div className="block">
                         <TokenSelector/>
                     </div>
-                    <div>Use token type</div>
-                    {selectedToken&&<div className="grid grid-cols-[1fr_auto] gap-3">
-                            <input readOnly className="bg-basecol p-1  pr-5 text-ellipsis" value={selectedToken?.access_token}/>
-                            <button className="material-symbols-outlined self-center active:scale-95 " onClick={()=>copyToClipboard(selectedToken.access_token)}>content_copy</button>
+                    {selectedToken&& <>
+                        <div>Use token type</div>
+                        <div className="grid grid-cols-[1fr_auto] gap-3">
+                            <input readOnly className="bg-basecol p-1  pr-5 text-ellipsis"
+                                   value={selectedToken?.access_token}/>
+                            <button className="material-symbols-outlined self-center active:scale-95 "
+                                    onClick={() => copyToClipboard(selectedToken.access_token)}>content_copy
+                            </button>
                         </div>
+                    </>
                     }
                     <div>Header Prefix</div>
                     <input className="bg-basecol p-1" defaultValue="Bearer"/>
@@ -304,19 +311,19 @@ export const OAuth2Authentication = () => {
                 <option value={OAuth2Flow.PASSWORD_CREDENTIALS}>Password Credentials</option>
                 <option value={OAuth2Flow.CLIENT_CREDENTIALS}>Client Credentials</option>
             </select>
-            { (watchShowAge[0] !== OAuth2Flow.PASSWORD_CREDENTIALS) && (watchShowAge[0] !== OAuth2Flow.CLIENT_CREDENTIALS) &&
+            { (grant_type_selection[0] !== OAuth2Flow.PASSWORD_CREDENTIALS) && (grant_type_selection[0] !== OAuth2Flow.CLIENT_CREDENTIALS) &&
                 <>
                     <label>Callback URL:</label>
                     <input {...register('redirect_uri')} className="bg-basecol p-1"/>
                 </>
             }
-            { (watchShowAge[0] !== OAuth2Flow.PASSWORD_CREDENTIALS) && (watchShowAge[0] !== OAuth2Flow.CLIENT_CREDENTIALS) &&
+            { (grant_type_selection[0] !== OAuth2Flow.PASSWORD_CREDENTIALS) && (grant_type_selection[0] !== OAuth2Flow.CLIENT_CREDENTIALS) &&
                 <>
                     <label>Auth URL:</label>
                     <input {...register('authUrl')} className="bg-basecol p-1"/>
                 </>
             }
-            { (watchShowAge[0] !== OAuth2Flow.IMPLICIT)&&
+            { (grant_type_selection[0] !== OAuth2Flow.IMPLICIT)&&
                 <>
                 <label>Access Token URL:</label>
                 <input {...register('accessTokenUrl')} className="bg-basecol p-1"/>
@@ -324,14 +331,14 @@ export const OAuth2Authentication = () => {
         }
                 <label>Client ID:</label>
                 <input {...register('clientId')} className="bg-basecol p-1"/>
-            {(watchShowAge[0] !== OAuth2Flow.IMPLICIT) && <>
+            {(grant_type_selection[0] !== OAuth2Flow.IMPLICIT) && <>
                 <label>Client Secret:</label>
                 <input {...register('clientSecret')} className="bg-basecol p-1"/>
                 </>
             }
 
             {
-                (watchShowAge[0] === OAuth2Flow.AUTHORIZATION_CODE_PKCE) && <>
+                (grant_type_selection[0] === OAuth2Flow.AUTHORIZATION_CODE_PKCE) && <>
                     <label>Code Challenge Method</label>
                     <select className="bg-basecol p-1" {...register('challengeAlgorithm')}>
                         <option value="S256">SHA-256</option>
@@ -339,14 +346,14 @@ export const OAuth2Authentication = () => {
                     </select>
                 </>
             }
-            {(watchShowAge[0] === OAuth2Flow.AUTHORIZATION_CODE_PKCE) && <>
+            {(grant_type_selection[0] === OAuth2Flow.AUTHORIZATION_CODE_PKCE) && <>
                 <label>Code Verifier:</label>
                 <input {...register('code_verifier')} className="bg-basecol p-1"/>
             </>
             }
 
             {
-                (watchShowAge[0] === OAuth2Flow.PASSWORD_CREDENTIALS) &&
+                (grant_type_selection[0] === OAuth2Flow.PASSWORD_CREDENTIALS) &&
                 <>
                     <label>Username:</label>
                     <input {...register('username')} className="bg-basecol p-1"/>

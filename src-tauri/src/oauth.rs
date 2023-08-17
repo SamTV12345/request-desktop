@@ -1,3 +1,4 @@
+use std::fmt::format;
 use oauth2::basic::{BasicClient, BasicErrorResponseType, BasicTokenResponse, BasicTokenType};
 use oauth2::{AccessToken, AuthorizationCode, AuthUrl, Client, ClientId, ClientSecret, CsrfToken, DeviceAuthorizationUrl, EmptyExtraTokenFields, ErrorResponseType, PkceCodeChallenge, RedirectUrl, RequestTokenError, ResourceOwnerPassword, ResourceOwnerUsername, Scope, StandardDeviceAuthorizationResponse, StandardErrorResponse, TokenResponse, TokenUrl};
 use serde::{Deserialize, Serialize};
@@ -7,6 +8,7 @@ use oauth2::reqwest::async_http_client;
 use crate::oauth2_error::OAuth2Error;
 use crate::oauth::OAuth2Type::RefreshToken;
 use oauth2::reqwest::http_client;
+use tauri_plugin_oauth::start;
 
 
 pub async fn handle_oauth(window: &Window, config: OAuth2Type, app_state: AppHandle) ->Result<BasicTokenResponse, OAuth2Error>{
@@ -33,8 +35,19 @@ pub async fn handle_oauth(window: &Window, config: OAuth2Type, app_state: AppHan
             }))
         }
         OAuth2Type::AuthorizationCode(a) => {
+            let docs_window = tauri::WindowBuilder::new(
+                &app_state,
+                "external", /* the unique window label */
+                tauri::WindowUrl::External(format!("{}?response_type=code&client_id={}&scope={}&redirect_uri={}", a.auth_url, a.client_id,a.scope,a.callback_url).parse().unwrap())
+            ).build().unwrap();
+            let cloned_window = window.clone();
 
-
+            start(move |url| {
+                // Because of the unprotected localhost port, you must verify the URL here.
+                // Preferebly send back only the token, or nothing at all if you can handle everything else in Rust.
+                cloned_window.emit("redirect_uri", url).expect("TODO: panic message");
+            })
+                .map_err(|err| err.to_string()).expect("Error");
 
            Err(OAuth2Error::new("Not implemented".to_string(), Option::from("test".to_string())))
         }
@@ -161,8 +174,8 @@ pub async fn handle_oauth(window: &Window, config: OAuth2Type, app_state: AppHan
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(untagged)]
 pub enum OAuth2Type {
-    Implicit(ImplicitFlow),
     AuthorizationCode(AuthorizationCodeFlow),
+    Implicit(ImplicitFlow),
     AuthorizationCodeWithPKCE(AuthorizationCodeFlowWithPKCE),
     Password(PasswordFlow),
     DeviceCode,

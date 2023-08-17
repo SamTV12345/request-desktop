@@ -1,6 +1,6 @@
 export interface ImplicitFlow {
     tokenName: string;
-    callbackURL: string;
+    callbackUrl: string;
     authUrl: string;
     clientId: string;
     scope: string;
@@ -11,7 +11,7 @@ export interface ImplicitFlow {
 
 export interface AuthorizationCodeFlow {
     tokenName: string;
-    callbackURL: string;
+    callbackUrl: string;
     authUrl: string;
     accessTokenUrl: string;
     clientId: string;
@@ -23,7 +23,7 @@ export interface AuthorizationCodeFlow {
 
 export interface AuthorizationCodeFlowPKCE {
     tokenName: string;
-    callbackURL: string;
+    callbackUrl: string;
     authUrl: string;
     accessTokenUrl: string;
     clientId: string;

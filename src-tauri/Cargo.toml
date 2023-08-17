@@ -26,6 +26,7 @@ semver = "1.0"
 serde_path_to_error = "0.1.14"
 base64 = "0.21.2"
 oauth2 = "4.4.1"
+tauri-plugin-oauth = { git = "https://github.com/FabianLars/tauri-plugin-oauth", branch = "main" }
 
 [dependencies.uuid]
 version = "1.4.1"
