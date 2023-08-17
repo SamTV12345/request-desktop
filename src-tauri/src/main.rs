@@ -47,8 +47,8 @@ async fn check_parser(collection: serde_json::Value){
 }
 
 #[tauri::command]
-async fn get_oauth2_token(window: Window, config: OAuth2Type) -> Result<BasicTokenResponse, OAuth2Error> {
-    handle_oauth(&window, config).await
+async fn get_oauth2_token(window: Window, config: OAuth2Type, app_state: tauri::AppHandle) -> Result<BasicTokenResponse, OAuth2Error> {
+    handle_oauth(&window, config, app_state).await
 }
 
 

@@ -1,7 +1,7 @@
 use oauth2::basic::{BasicClient, BasicErrorResponseType, BasicTokenResponse, BasicTokenType};
 use oauth2::{AccessToken, AuthorizationCode, AuthUrl, Client, ClientId, ClientSecret, CsrfToken, DeviceAuthorizationUrl, EmptyExtraTokenFields, ErrorResponseType, PkceCodeChallenge, RedirectUrl, RequestTokenError, ResourceOwnerPassword, ResourceOwnerUsername, Scope, StandardDeviceAuthorizationResponse, StandardErrorResponse, TokenResponse, TokenUrl};
 use serde::{Deserialize, Serialize};
-use tauri::Window;
+use tauri::{AppHandle, Window};
 
 use oauth2::reqwest::async_http_client;
 use crate::oauth2_error::OAuth2Error;
@@ -9,7 +9,7 @@ use crate::oauth::OAuth2Type::RefreshToken;
 use oauth2::reqwest::http_client;
 
 
-pub async fn handle_oauth(window: &Window, config: OAuth2Type) ->Result<BasicTokenResponse, OAuth2Error>{
+pub async fn handle_oauth(window: &Window, config: OAuth2Type, app_state: AppHandle) ->Result<BasicTokenResponse, OAuth2Error>{
     println!("Config: {:?}", config);
     return match config {
         OAuth2Type::Implicit(s) => {
@@ -33,6 +33,9 @@ pub async fn handle_oauth(window: &Window, config: OAuth2Type) ->Result<BasicTok
             }))
         }
         OAuth2Type::AuthorizationCode(a) => {
+
+
+
            Err(OAuth2Error::new("Not implemented".to_string(), Option::from("test".to_string())))
         }
         OAuth2Type::ClientCredentials(a) => {
@@ -163,8 +166,8 @@ pub enum OAuth2Type {
     AuthorizationCodeWithPKCE(AuthorizationCodeFlowWithPKCE),
     Password(PasswordFlow),
     DeviceCode,
-    RefreshToken(RefreshTokenFlow),
-    ClientCredentials(ClientCredentialsFlow)
+    ClientCredentials(ClientCredentialsFlow),
+    RefreshToken(RefreshTokenFlow)
 }
 
 #[derive(Serialize, Deserialize, Debug)]
