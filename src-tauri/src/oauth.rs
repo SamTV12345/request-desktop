@@ -1,15 +1,28 @@
+use std::collections::HashMap;
 use std::fmt::format;
 use oauth2::basic::{BasicClient, BasicErrorResponseType, BasicTokenResponse, BasicTokenType};
 use oauth2::{AccessToken, AuthorizationCode, AuthUrl, Client, ClientId, ClientSecret, CsrfToken, DeviceAuthorizationUrl, EmptyExtraTokenFields, ErrorResponseType, PkceCodeChallenge, RedirectUrl, RequestTokenError, ResourceOwnerPassword, ResourceOwnerUsername, Scope, StandardDeviceAuthorizationResponse, StandardErrorResponse, TokenResponse, TokenUrl};
+use oauth2::http::HeaderMap;
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Window};
+use tauri::{AppHandle, Manager, Window};
 
 use oauth2::reqwest::async_http_client;
 use crate::oauth2_error::OAuth2Error;
 use crate::oauth::OAuth2Type::RefreshToken;
 use oauth2::reqwest::http_client;
+use tauri::api::Error::Url as ErrorURL;
 use tauri_plugin_oauth::start;
+use url::Url;
 
+#[derive(Serialize, Deserialize, Debug)]
+struct OAuth2Response {
+    access_token: String,
+    token_type: String,
+    expires_in: i64,
+    refresh_token: String,
+    scope: String,
+    id_token: String
+}
 
 pub async fn handle_oauth(window: &Window, config: OAuth2Type, app_state: AppHandle) ->Result<BasicTokenResponse, OAuth2Error>{
     println!("Config: {:?}", config);
@@ -35,19 +48,40 @@ pub async fn handle_oauth(window: &Window, config: OAuth2Type, app_state: AppHan
             }))
         }
         OAuth2Type::AuthorizationCode(a) => {
+            println!("AuthorizationCode");
+            let client_id = a.client_id.clone();
+            let port = start(move |url| {
+                println!("URL: {}", url);
+                // Because of the unprotected localhost port, you must verify the URL here.
+                // Preferebly send back only the token, or nothing at all if you can handle everything else in Rust.
+                let parsed_url = Url::parse(&url).unwrap();
+                let port = parsed_url.port().unwrap();
+                let hash_query: HashMap<_, _> = parsed_url.query_pairs().into_owned().collect();
+                let auth_code = hash_query.get("code").unwrap().to_string();
+                let reqwest_client = reqwest::blocking::Client::new();
+
+                let mut map = HeaderMap::new();
+                map.insert("Content-Type", "application/x-www-form-urlencoded".parse().unwrap());
+
+                let encoded_url = urlencoding::encode(&auth_code).to_string();
+                let encoded_url2 = urlencoding::encode(&format!("http://localhost:{port}")).to_string();
+                let body = format!("grant_type=authorization_code&code={encoded_url}&redirect_uri={encoded_url2}&client_id={}", client_id);
+                println!("Body: {}", body);
+                let res = reqwest_client.post(a.access_token_url.clone())
+                    .headers(map)
+                    .body(body).send().map_err(|e| {
+                    OAuth2Error::new(e.to_string(), Option::from("test".to_string()));
+                }).unwrap();
+                println!("Response: {:?}", res.json::<OAuth2Response>().unwrap());
+            })
+                .map_err(|err| err.to_string()).expect("Error");
+            println!("{}",format!("{}?response_type=code&client_id={}&scope={}&redirect_uri=http://localhost:{port}", a.auth_url, a.client_id.clone(),a.scope));
+            println!("Auth URL: http://localhost:{port}");
             let docs_window = tauri::WindowBuilder::new(
                 &app_state,
                 "external", /* the unique window label */
-                tauri::WindowUrl::External(format!("{}?response_type=code&client_id={}&scope={}&redirect_uri={}", a.auth_url, a.client_id,a.scope,a.callback_url).parse().unwrap())
+                tauri::WindowUrl::External(format!("{}?response_type=code&client_id={}&scope={}&redirect_uri=http://localhost:{port}", a.auth_url, a.client_id.clone(),a.scope).parse().unwrap())
             ).build().unwrap();
-            let cloned_window = window.clone();
-
-            start(move |url| {
-                // Because of the unprotected localhost port, you must verify the URL here.
-                // Preferebly send back only the token, or nothing at all if you can handle everything else in Rust.
-                cloned_window.emit("redirect_uri", url).expect("TODO: panic message");
-            })
-                .map_err(|err| err.to_string()).expect("Error");
 
            Err(OAuth2Error::new("Not implemented".to_string(), Option::from("test".to_string())))
         }
