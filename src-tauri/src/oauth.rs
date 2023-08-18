@@ -87,7 +87,7 @@ pub async fn handle_oauth(window: &Window, config: OAuth2Type, app_state: AppHan
 
             // Exchange code for token
 
-            let reqwest_client = reqwest::blocking::Client::new();
+            let reqwest_client = reqwest::Client::new();
 
             let mut map = HeaderMap::new();
             map.insert("Content-Type", "application/x-www-form-urlencoded".parse().unwrap());
@@ -98,12 +98,13 @@ pub async fn handle_oauth(window: &Window, config: OAuth2Type, app_state: AppHan
             println!("Body: {}", body);
             let res = reqwest_client.post(a.access_token_url.clone())
                 .headers(map)
-                .body(body).send().map_err(|e| {
+                .body(body).send()
+                .await.map_err(|e| {
                 OAuth2Error::new(e.to_string(), Option::from("test".to_string()));
             }).unwrap();
             // println!("Response: {:?}", res.json::<OAuth2Response>().unwrap());
 
-            let parsed_response = res.json::<OAuth2Response>().unwrap();
+            let parsed_response = res.json::<OAuth2Response>().await.unwrap();
 
             println!("Response: {:?}", parsed_response);
 
