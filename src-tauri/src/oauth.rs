@@ -53,15 +53,15 @@ pub async fn handle_oauth(window: &Window, config: OAuth2Type, app_state: AppHan
             // Channel for sending the token
             let (tx, rx) = std::sync::mpsc::channel::<Option<String>>();
 
-            let redirect_uri = a.callback_url.as_str().clone();
-
+            let redirect_uri = a.callback_url.clone();
+            let redirect_uri_navigation = a.callback_url.clone();
             let auth_window = tauri::WindowBuilder::new(
                 &app_state,
                 "external", /* the unique window label */
-                tauri::WindowUrl::External(format!("{}?response_type=code&client_id={}&scope={}&redirect_uri={}", a.auth_url, a.client_id, a.scope, a.callback_url).parse().unwrap())
+                tauri::WindowUrl::External(format!("{}?response_type=code&client_id={}&scope={}&redirect_uri={}", a.auth_url, a.client_id, a.scope, &a.callback_url).parse().unwrap())
             )
                 .on_navigation(move |url| {
-                    let is_callback_url = url.to_string().starts_with("http://localhost/my-custom-callback");
+                    let is_callback_url = url.to_string().starts_with(&redirect_uri_navigation);
 
                     println!("Navigation URL is callback: {:?}", is_callback_url);
 
