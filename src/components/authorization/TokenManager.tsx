@@ -28,21 +28,22 @@ export const TokenManager = ()=>{
     const [selectedToken, setSelectedToken] = useState<TokenWithKey|undefined>(undefined)
 
     useEffect(() => {
-        const token:TokenWithKey[] = []
-        const dbRq = indexedDB.open("tokens", 1)
-        dbRq.onupgradeneeded = (event)=>{
-            db = (event.target as any).result
-            const tokenStore = db.createObjectStore("tokens", {
-                autoIncrement: true
-            })
-            db.createObjectStore("item-to-token", {
-                autoIncrement:true
+        if (openTokenManager) {
+            const dbRq = indexedDB.open("tokens", 1)
+            dbRq.onupgradeneeded = (event) => {
+                db = (event.target as any).result
+                db.createObjectStore("tokens", {
+                    autoIncrement: true
+                })
+                db.createObjectStore("item-to-token", {
+                    autoIncrement: true
+                })
+            }
+            getAllTokens().then((tokens) => {
+                setTokens(tokens)
             })
         }
-        getAllTokens().then((tokens) => {
-            setTokens(tokens)
-        })
-    }, []);
+    }, [openTokenManager]);
 
     const showValues = (storeName:unknown)=>{
         if(typeof storeName === "string"){

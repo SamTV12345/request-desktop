@@ -53,7 +53,6 @@ pub async fn handle_oauth(window: &Window, config: OAuth2Type, app_state: AppHan
             // Channel for sending the token
             let (tx, rx) = std::sync::mpsc::channel::<Option<String>>();
 
-            let redirect_uri = a.callback_url.clone();
             let redirect_uri_navigation = a.callback_url.clone();
             let auth_window = tauri::WindowBuilder::new(
                 &app_state,

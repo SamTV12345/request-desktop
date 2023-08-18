@@ -7,6 +7,7 @@ import {FileToUpload} from "../components/upload/FileToUpload";
 import {UploadFilePreview} from "../components/upload/UploadFilePreview";
 import ResizableBox from "../components/resizable/ResizableBox";
 import {NewItemModel} from "../components/collections/NewItemModel";
+import {SidebarContextMenu} from "../components/bareComponents/SidebarContextMenu";
 
 export const SidebarComponent = ()=>{
     const collections = useAPIStore(state=>state.collections)

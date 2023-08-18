@@ -429,7 +429,6 @@ html {
 
 [data-orientation="vertical"]{
     color: var(--content-color-primary);
-    border: none;
 }
 
 .chevron-animation {

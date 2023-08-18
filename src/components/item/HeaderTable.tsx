@@ -38,7 +38,7 @@ export const HeaderTable = ()=> {
             }
         }
         const newCollection = replaceItem(currentCollection as CollectionDefinition, item)
-        const newCollectionExtended = {...newCollection,type: DisplayType.SINGLE_TYPE} satisfies CollectionDefinitionExtended
+        const newCollectionExtended = {...newCollection,type: DisplayType.SINGLE_TYPE} as CollectionDefinitionExtended
         updateCurrentCollection(newCollectionExtended)
     }
 
@@ -53,7 +53,7 @@ export const HeaderTable = ()=> {
             }
         }
         const newCollection = replaceItem(currentCollection as CollectionDefinition, item)
-        const newCollectionExtended = {...newCollection,type: DisplayType.SINGLE_TYPE} satisfies CollectionDefinitionExtended
+        const newCollectionExtended = {...newCollection,type: DisplayType.SINGLE_TYPE,} as CollectionDefinitionExtended
         updateCurrentCollection(newCollectionExtended)
     }
 
@@ -68,7 +68,7 @@ export const HeaderTable = ()=> {
             }
         }
         const newCollection = replaceItem(currentCollection as CollectionDefinition, item)
-        const newCollectionExtended = {...newCollection,type: DisplayType.SINGLE_TYPE} satisfies CollectionDefinitionExtended
+        const newCollectionExtended = {...newCollection,type: DisplayType.SINGLE_TYPE} as CollectionDefinitionExtended
         updateCurrentCollection(newCollectionExtended)
     }
 
@@ -86,7 +86,7 @@ export const HeaderTable = ()=> {
             }
         }
         const newCollection = replaceItem(currentCollection as CollectionDefinition, item)
-        const newCollectionExtended = {...newCollection,type: DisplayType.SINGLE_TYPE} satisfies CollectionDefinitionExtended
+        const newCollectionExtended = {...newCollection,type: DisplayType.SINGLE_TYPE} as CollectionDefinitionExtended
         updateCurrentCollection(newCollectionExtended)
     }
 
@@ -100,7 +100,7 @@ export const HeaderTable = ()=> {
             }
         }
         const newCollection = replaceItem(currentCollection as CollectionDefinition, item)
-        const newCollectionExtended = {...newCollection,type: DisplayType.SINGLE_TYPE} satisfies CollectionDefinitionExtended
+        const newCollectionExtended = {...newCollection,type: DisplayType.SINGLE_TYPE} as CollectionDefinitionExtended
         updateCurrentCollection(newCollectionExtended)
     }
 
@@ -114,7 +114,7 @@ export const HeaderTable = ()=> {
             }
         }
         const newCollection = replaceItem(currentCollection as CollectionDefinition, item)
-        const newCollectionExtended = {...newCollection,type: DisplayType.SINGLE_TYPE} satisfies CollectionDefinitionExtended
+        const newCollectionExtended = {...newCollection,type: DisplayType.SINGLE_TYPE} as CollectionDefinitionExtended
         updateCurrentCollection(newCollectionExtended)
     }
 

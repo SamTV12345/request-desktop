@@ -1,4 +1,4 @@
-import {useAPIStore} from "../../store/store";
+import {CollectionDefinitionExtended, useAPIStore} from "../../store/store";
 import {VERSIONS} from "../../constants";
 import {invoke} from "@tauri-apps/api/tauri";
 import {Collection} from "postman-collection";
@@ -13,7 +13,7 @@ export const UploadFilePreview = ()=>{
 
     const importCollection = ()=>{
         console.log(collectionToUpload.spec)
-        invoke<Collection>("insert_collection", {collection: collectionToUpload.spec})
+        invoke<CollectionDefinitionExtended>("insert_collection", {collection: collectionToUpload.spec})
             .then((c)=>{
                 setCollections([...collections, c])
             })

@@ -1,5 +1,5 @@
 import * as Dialog from "@radix-ui/react-dialog";
-import {useAPIStore} from "../../store/store";
+import {CollectionDefinitionExtended, useAPIStore} from "../../store/store";
 import {Collection, CollectionDefinition} from "postman-collection";
 import {invoke} from "@tauri-apps/api/tauri";
 import {NewItemInserter} from "./NewItemInserter";
@@ -31,12 +31,13 @@ export const NewItemModel = ()=>{
                     </button>
                     <button className="gap-5 flex text-white" onClick={()=>{
                         // @ts-ignore
-                        const defaultCollection:Collection = {info: {name: "New Collection", schema:"https://schema.getpostman.com/json/collection/v2.1.0/collection.json"}, item: []}
+                        const defaultCollection:Collection = {info: {name: "New Collection",
+                                schema:"https://schema.getpostman.com/json/collection/v2.1.0/collection.json"}, item: []}
 
-                        invoke('insert_collection',{
+                        invoke<CollectionDefinitionExtended>('insert_collection',{
                             collection:defaultCollection
-                    }).then(()=>{
-                            insertNewCollection(defaultCollection)
+                    }).then((c)=>{
+                            insertNewCollection(c)
                         })
                     }}>
                         <span className="material-symbols-outlined">filter_none</span>

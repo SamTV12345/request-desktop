@@ -25,10 +25,10 @@ export interface CollectionDefinitionExtended extends CollectionDefinition {
 }
 
 interface APIState {
-    collections:CollectionDefinition[]
-    addCollection: (by: CollectionDefinition) => void,
-    addCollections: (by: CollectionDefinition[]) => void,
-    setCollections: (by: CollectionDefinition[]) => void,
+    collections: CollectionDefinitionExtended[]
+    addCollection: (by: CollectionDefinitionExtended) => void,
+    addCollections: (by: CollectionDefinitionExtended[]) => void,
+    setCollections: (by: CollectionDefinitionExtended[]) => void,
     currentItem: ItemDefinitionExtended| undefined,
     setCurrentItem: (by: ItemDefinitionExtended|undefined) => void,
     currentRequest: ResponseFromCall | undefined,
@@ -53,7 +53,7 @@ interface APIState {
     setSelectedToken: (by: TokenWithKey|undefined)=>void,
     openNewCollectionModal: boolean,
     setOpenNewCollectionModal: (by: boolean)=>void,
-    insertNewCollection: (collection: CollectionDefinition)=>void,
+    insertNewCollection: (collection: CollectionDefinitionExtended)=>void,
     newItemInserterOpen: boolean,
     setNewItemInserterOpen: (by: boolean)=>void
 }
@@ -64,9 +64,9 @@ export const useAPIStore = create<APIState>()((set,getState) => ({
     currentRequest: undefined,
     setCurrentRequest: (currentRequest: ResponseFromCall) => set({currentRequest}),
     setCurrentItem: (currentItem: ItemDefinitionExtended|undefined) => set({currentItem}),
-    setCollections: (collections: CollectionDefinition[]) => set({collections}),
-    addCollection: (collection: CollectionDefinition) => set((state) => ({collections: [...state.collections, collection]})),
-    addCollections: (collection: CollectionDefinition[]) => set((state) => ({collections: [...state.collections, ...collection]})),
+    setCollections: (collections: CollectionDefinitionExtended[]) => set({collections}),
+    addCollection: (collection: CollectionDefinitionExtended) => set((state) => ({collections: [...state.collections, collection]})),
+    addCollections: (collection: CollectionDefinitionExtended[]) => set((state) => ({collections: [...state.collections, ...collection]})),
     fileToUpload: undefined,
     setFileToUpload: (fileToUpload: FileUpload|undefined) => set({fileToUpload}),
     currentCollection: undefined,
@@ -103,8 +103,8 @@ export const useAPIStore = create<APIState>()((set,getState) => ({
     saveCollection: ()=>{
         const newCollections = getState().collections
         const updatedCollections = newCollections.map((collection)=>{
-            if(collection.id === getState().currentCollection?.id){
-                return getState().currentCollection as CollectionDefinition
+            if(collection.info._postman_id === getState().currentCollection?.info._postman_id){
+                return getState().currentCollection as CollectionDefinitionExtended
             }
             return collection
         })
@@ -123,7 +123,7 @@ export const useAPIStore = create<APIState>()((set,getState) => ({
     setSelectedToken: (selectedToken: TokenWithKey|undefined)=>set({selectedToken}),
     openNewCollectionModal: false,
     setOpenNewCollectionModal: (openNewCollectionModal: boolean)=>set({openNewCollectionModal}),
-    insertNewCollection: (collection: CollectionDefinition)=>{
+    insertNewCollection: (collection: CollectionDefinitionExtended)=>{
         set({collections: [...getState().collections, collection]})
     },
     newItemInserterOpen: false,
