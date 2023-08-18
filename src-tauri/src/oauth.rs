@@ -49,39 +49,65 @@ pub async fn handle_oauth(window: &Window, config: OAuth2Type, app_state: AppHan
         }
         OAuth2Type::AuthorizationCode(a) => {
             println!("AuthorizationCode");
-            let client_id = a.client_id.clone();
-            let port = start(move |url| {
-                println!("URL: {}", url);
-                // Because of the unprotected localhost port, you must verify the URL here.
-                // Preferebly send back only the token, or nothing at all if you can handle everything else in Rust.
-                let parsed_url = Url::parse(&url).unwrap();
-                let port = parsed_url.port().unwrap();
-                let hash_query: HashMap<_, _> = parsed_url.query_pairs().into_owned().collect();
-                let auth_code = hash_query.get("code").unwrap().to_string();
-                let reqwest_client = reqwest::blocking::Client::new();
 
-                let mut map = HeaderMap::new();
-                map.insert("Content-Type", "application/x-www-form-urlencoded".parse().unwrap());
+            // Channel for sending the token
+            let (tx, rx) = std::sync::mpsc::channel::<Option<String>>();
 
-                let encoded_url = urlencoding::encode(&auth_code).to_string();
-                let encoded_url2 = urlencoding::encode(&format!("http://localhost:{port}")).to_string();
-                let body = format!("grant_type=authorization_code&code={encoded_url}&redirect_uri={encoded_url2}&client_id={}", client_id);
-                println!("Body: {}", body);
-                let res = reqwest_client.post(a.access_token_url.clone())
-                    .headers(map)
-                    .body(body).send().map_err(|e| {
-                    OAuth2Error::new(e.to_string(), Option::from("test".to_string()));
-                }).unwrap();
-                println!("Response: {:?}", res.json::<OAuth2Response>().unwrap());
-            })
-                .map_err(|err| err.to_string()).expect("Error");
-            println!("{}",format!("{}?response_type=code&client_id={}&scope={}&redirect_uri=http://localhost:{port}", a.auth_url, a.client_id.clone(),a.scope));
-            println!("Auth URL: http://localhost:{port}");
-            let docs_window = tauri::WindowBuilder::new(
+            let redirect_uri = a.callback_url.as_str().clone();
+
+            let auth_window = tauri::WindowBuilder::new(
                 &app_state,
                 "external", /* the unique window label */
-                tauri::WindowUrl::External(format!("{}?response_type=code&client_id={}&scope={}&redirect_uri=http://localhost:{port}", a.auth_url, a.client_id.clone(),a.scope).parse().unwrap())
-            ).build().unwrap();
+                tauri::WindowUrl::External(format!("{}?response_type=code&client_id={}&scope={}&redirect_uri={}", a.auth_url, a.client_id, a.scope, a.callback_url).parse().unwrap())
+            )
+                .on_navigation(move |url| {
+                    let is_callback_url = url.to_string().starts_with("http://localhost/my-custom-callback");
+
+                    println!("Navigation URL is callback: {:?}", is_callback_url);
+
+                    if is_callback_url {
+                        let hash_query: HashMap<_, _> = url.query_pairs().into_owned().collect();
+                        let code = hash_query.get("code").map(|s| {s.clone()});
+
+                        println!("Obtained code is: {:?}", code);
+
+                        tx.send(code.clone()).expect("Failed to send code to channel");
+                    }
+
+                    return !is_callback_url;
+                })
+                .build().unwrap();
+
+            // Wait for code from authentication window
+
+            let obtained_code = rx.recv().unwrap().expect("Got no code");
+
+            auth_window.close().expect("Could not close authentication window");
+            println!("Code in outer method is: {:?}", obtained_code);
+
+            // Exchange code for token
+
+            let reqwest_client = reqwest::blocking::Client::new();
+
+            let mut map = HeaderMap::new();
+            map.insert("Content-Type", "application/x-www-form-urlencoded".parse().unwrap());
+
+            let encoded_url = urlencoding::encode(&obtained_code).to_string();
+            let encoded_url2 = urlencoding::encode(&redirect_uri.clone()).to_string();
+            let body = format!("grant_type=authorization_code&code={encoded_url}&redirect_uri={encoded_url2}&client_id={}", a.client_id);
+            println!("Body: {}", body);
+            let res = reqwest_client.post(a.access_token_url.clone())
+                .headers(map)
+                .body(body).send().map_err(|e| {
+                OAuth2Error::new(e.to_string(), Option::from("test".to_string()));
+            }).unwrap();
+            // println!("Response: {:?}", res.json::<OAuth2Response>().unwrap());
+
+            let parsed_response = res.json::<OAuth2Response>().unwrap();
+
+            println!("Response: {:?}", parsed_response);
+
+            // Ok(BasicTokenResponse::new(parsed_response.access_token, parsed_response.token_type))
 
            Err(OAuth2Error::new("Not implemented".to_string(), Option::from("test".to_string())))
         }
