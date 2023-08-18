@@ -87,30 +87,22 @@ pub async fn handle_oauth(window: &Window, config: OAuth2Type, app_state: AppHan
 
             // Exchange code for token
 
-            let reqwest_client = reqwest::Client::new();
+            let client =
+                BasicClient::new(
+                    ClientId::new(a.client_id.clone()),
+                    None,
+                    AuthUrl::new(a.auth_url.clone()).unwrap(),
+                    Some(TokenUrl::new(a.access_token_url.clone()).unwrap())
+                )
+                    // Set the URL the user will be redirected to after the authorization process.
+                    .set_redirect_uri(RedirectUrl::new(a.callback_url.clone()).unwrap());
 
-            let mut map = HeaderMap::new();
-            map.insert("Content-Type", "application/x-www-form-urlencoded".parse().unwrap());
-
-            let encoded_url = urlencoding::encode(&obtained_code).to_string();
-            let encoded_url2 = urlencoding::encode(&redirect_uri.clone()).to_string();
-            let body = format!("grant_type=authorization_code&code={encoded_url}&redirect_uri={encoded_url2}&client_id={}", a.client_id);
-            println!("Body: {}", body);
-            let res = reqwest_client.post(a.access_token_url.clone())
-                .headers(map)
-                .body(body).send()
-                .await.map_err(|e| {
-                OAuth2Error::new(e.to_string(), Option::from("test".to_string()));
-            }).unwrap();
-            // println!("Response: {:?}", res.json::<OAuth2Response>().unwrap());
-
-            let parsed_response = res.json::<OAuth2Response>().await.unwrap();
-
-            println!("Response: {:?}", parsed_response);
-
-            // Ok(BasicTokenResponse::new(parsed_response.access_token, parsed_response.token_type))
-
-           Err(OAuth2Error::new("Not implemented".to_string(), Option::from("test".to_string())))
+            client.exchange_code(AuthorizationCode::new(obtained_code))
+                .request_async(async_http_client)
+                .await
+                .map_err(|e| {
+                    OAuth2Error::from_basic_error(e)
+                })
         }
         OAuth2Type::ClientCredentials(a) => {
             let client =
