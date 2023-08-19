@@ -10,9 +10,6 @@ use oauth2::reqwest::async_http_client;
 use crate::oauth2_error::OAuth2Error;
 use crate::oauth::OAuth2Type::RefreshToken;
 use oauth2::reqwest::http_client;
-use tauri::api::Error::Url as ErrorURL;
-use tauri_plugin_oauth::start;
-use url::Url;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct OAuth2Response {
