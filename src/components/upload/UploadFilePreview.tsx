@@ -12,13 +12,13 @@ export const UploadFilePreview = ()=>{
     if (collectionToUpload === undefined) return <div></div>
 
     const importCollection = ()=>{
-        console.log(collectionToUpload.spec)
         invoke<CollectionDefinitionExtended>("insert_collection", {collection: collectionToUpload.spec})
             .then((c)=>{
                 setCollections([...collections, c])
             })
             .catch(e=>console.log(e))
     }
+
     return <div>
         <h2 className="import-heading">The following file will be uploaded</h2>
         <table className="import-table">

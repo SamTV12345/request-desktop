@@ -1,14 +1,16 @@
 import * as Dialog from '@radix-ui/react-dialog'
-import {useAPIStore} from "../../store/store";
+import {CollectionDefinitionExtended, useAPIStore} from "../../store/store";
 import {useState} from "react";
 import {Collection, CollectionDefinition, ItemDefinition} from "postman-collection";
+import {getDefaultRequest} from "../../constants/config";
+import {addNewItem, replaceItem} from "../../utils/CollectionReplaceUtils";
 export const NewItemInserter = () => {
     const newItemInserterOpen = useAPIStore(state => state.newItemInserterOpen)
     const setNewItemInserterOpen = useAPIStore(state => state.setNewItemInserterOpen)
     const currentCollections = useAPIStore(state => state.collections)
     const [currentItem,setCurrentItem] = useState<CollectionDefinition>()
     const [parents, setParents] = useState<any[]>([])
-
+    const saveCollection = useAPIStore(state => state.saveGivenCollection)
     const isItemGroupDefinition = (item: any): item is ItemDefinition => {
         return typeof item === "object" && 'item' in item && item.item != undefined
     }
@@ -17,8 +19,6 @@ export const NewItemInserter = () => {
         return typeof item === "object" && 'info' in item && item.item == undefined
     }
     const changeToSubDirectory = (collection: Collection|ItemDefinition)=>{
-        console.log("subdirectory")
-        // @ts-ignore
         setCurrentItem(collection)
         !isCollectionDefinition(collection)&& setParents([...parents,collection])
     }
@@ -60,6 +60,14 @@ export const NewItemInserter = () => {
         setCurrentItem(undefined)
     }
 
+
+    const createItem = (collection:CollectionDefinitionExtended, parentId: string)=>{
+        const itemToInsert = getDefaultRequest()
+        const collectionChanged = addNewItem(collection, parentId, itemToInsert)
+        saveCollection(collectionChanged as CollectionDefinitionExtended)
+        setCurrentItem({...currentItem, item: [...currentItem?.item!, itemToInsert]})
+    }
+
     return <Dialog.Root open={newItemInserterOpen}>
         <Dialog.Portal>
             <Dialog.Content className="dialog-centered">
@@ -94,8 +102,8 @@ export const NewItemInserter = () => {
                 </div>
                 {
                     currentItem&&
-                    <button className="mt-5 text-center w-full rounded bg-green-700 flex justify-center pt-2 pb-2">
-                        <span className="material-symbols-outlined ">upload</span>
+                    <button className="mt-5 text-center w-full rounded bg-green-700 flex justify-center pt-2 pb-2"  onClick={()=>createItem(parents[0] as CollectionDefinitionExtended, parents[parents.length-1])}>
+                        <span className="material-symbols-outlined">upload</span>
                         Create new request</button>
                 }
 

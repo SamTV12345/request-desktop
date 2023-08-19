@@ -2,7 +2,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::collections::HashMap;
-use std::path::Path;
+use std::fs;
+use std::fs::read_dir;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::{Instant};
 use oauth2::basic::BasicTokenResponse;
@@ -31,7 +33,7 @@ static COLLECTION_PREFIX: &str = "collection_";
 static TOKEN_PREFIX: &str = "token_";
 
 #[tauri::command]
-async fn check_parser(collection: serde_json::Value){
+async fn check_parser(collection: Value){
     let serialized_val = serde_json::to_string(&collection).unwrap();
     // Some Deserializer.
     let jd = &mut serde_json::Deserializer::from_str(&serialized_val);
@@ -81,10 +83,9 @@ async fn get_collections(app_handle: tauri::AppHandle) -> Vec<Spec> {
 async fn insert_collection(mut collection: Spec, app_handle: tauri::AppHandle) ->Result<Spec,()> {
     let mut db = get_database(app_handle);
     let mut key = collection.info.postman_id.clone();
-    if key.is_none(){
-        key = Option::from(Uuid::new_v4().to_string());
-        collection.info.postman_id = key.clone();
-    }
+
+    key = Option::from(Uuid::new_v4().to_string());
+    collection.info.postman_id = key.clone();
 
     collection.item.iter_mut().for_each(|item|{
         let id = Uuid::new_v4().to_string();
@@ -195,7 +196,8 @@ async fn do_request(item: Items, collection: Spec) -> ResponseFromCall {
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![greet, get_collections, do_request, insert_collection, update_collection, check_parser, get_oauth2_token])
+        .invoke_handler(tauri::generate_handler![greet, get_collections, do_request, insert_collection,
+            update_collection, check_parser, get_oauth2_token, get_postman_files_from_dir])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
@@ -230,7 +232,54 @@ pub fn replace_vars_in_url(url:String, variables: Option<Vec<postman_lib::v2_1_0
                 },
                 _ =>{}
             }
-        });
+        })
     }
     url_to_return
+}
+
+#[tauri::command]
+async fn get_postman_files_from_dir(path:String) ->Result<Vec<Spec>, ()>{
+    let files = recurse_files(path).unwrap();
+    let mut collections = vec![];
+    for file in files{
+        let content = fs::read_to_string(file);
+        match content {
+            Ok(content) => {
+                let collection = serde_json::from_str::<Spec>(&content);
+                match collection {
+                    Ok(collection) => {
+                        collections.push(collection);
+                    },
+                    Err(..) => {
+                        // Nothing to do here. Just ignore the file
+                    }
+                }
+            },
+            Err(..) => {
+                // Nothing to do here. Just ignore the file
+            }
+        }
+    }
+    return Ok(collections);
+}
+
+fn recurse_files(path: impl AsRef<Path>) -> std::io::Result<Vec<PathBuf>> {
+    let mut buf = vec![];
+    let entries = read_dir(path)?;
+
+    for entry in entries {
+        let entry = entry?;
+        let meta = entry.metadata()?;
+
+        if meta.is_dir() {
+            let mut subdir = recurse_files(entry.path())?;
+            buf.append(&mut subdir);
+        }
+
+        if meta.is_file() {
+            buf.push(entry.path());
+        }
+    }
+
+    Ok(buf)
 }

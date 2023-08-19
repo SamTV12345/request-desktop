@@ -21,6 +21,7 @@ export interface CollectionDefinitionExtended extends CollectionDefinition {
         name?: string | undefined
         version?: string | undefined;
         _postman_id: string,
+        schema?: string
     }
 }
 
@@ -41,6 +42,7 @@ interface APIState {
     changeVarInCollection: (collectionId: string, newVar: VariableDefinition|undefined, indexOfValue: number)=>void,
     addVarInCollection: (collectionId: string)=>void,
     saveCollection: ()=>void,
+    saveGivenCollection: (collection: CollectionDefinitionExtended)=>void,
     openOAuth2Screen: boolean,
     setOAuth2Screen: (by: boolean)=>void,
     oauth2Outcome: OAuth2SucessOutcome|OAuth2FailureOutcome|undefined,
@@ -127,5 +129,16 @@ export const useAPIStore = create<APIState>()((set,getState) => ({
         set({collections: [...getState().collections, collection]})
     },
     newItemInserterOpen: false,
-    setNewItemInserterOpen: (newItemInserterOpen: boolean)=>set({newItemInserterOpen})
+    setNewItemInserterOpen: (newItemInserterOpen: boolean)=>set({newItemInserterOpen}),
+    saveGivenCollection: (collection: CollectionDefinitionExtended)=>{
+        const newCollections = getState().collections
+        const updatedCollections = newCollections.map((collectionInState)=>{
+            if(collectionInState.info._postman_id === collection.info._postman_id){
+                return collection
+            }
+            return collectionInState
+        })
+        set({collections: updatedCollections})
+        invoke("update_collection", {collection: collection})
+    }
 }))
