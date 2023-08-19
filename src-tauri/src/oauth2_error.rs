@@ -1,6 +1,6 @@
 use std::error::Error as StdErr;
 use oauth2::basic::BasicErrorResponse;
-use oauth2::{ConfigurationError, DeviceCodeErrorResponse, ErrorResponse, RequestTokenError};
+use oauth2::{ConfigurationError, DeviceCodeErrorResponse, RequestTokenError};
 use oauth2::reqwest::Error;
 use reqwest::Error as ReqwestError;
 use serde::{Deserialize, Serialize};

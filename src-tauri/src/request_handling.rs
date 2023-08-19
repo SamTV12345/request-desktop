@@ -16,10 +16,10 @@ pub async fn handle_request(url: RequestUnion, collection: &Spec,
         if let HeaderUnion::HeaderArray(request) = request.header.unwrap() {
             for header in request {
                 if header.disabled.is_some() && !header.disabled.unwrap() {
-                    map.insert(HeaderName::from_str(&*header.key).unwrap(), header.value.parse().unwrap());
+                    map.insert(HeaderName::from_str(&header.key).unwrap(), header.value.parse().unwrap());
                 }
                 else if header.disabled.is_none(){
-                    map.insert(HeaderName::from_str(&*header.key).unwrap(), header.value.parse().unwrap());
+                    map.insert(HeaderName::from_str(&header.key).unwrap(), header.value.parse().unwrap());
                 }
             }
         }
@@ -158,7 +158,7 @@ fn insert_auth(auth: Auth, mut map: HeaderMap<HeaderValue>) -> HeaderMap<HeaderV
 }
 
 fn convert_to_string(value: Value) ->String{
-    return match value {
+    match value {
         Value::String(s)=>{
             s
         },

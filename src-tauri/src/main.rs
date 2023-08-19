@@ -9,8 +9,8 @@ use std::str::FromStr;
 use std::time::{Instant};
 use oauth2::basic::BasicTokenResponse;
 use pickledb::{PickleDb, PickleDbDumpPolicy, SerializationMethod};
-use reqwest::{ClientBuilder, Method};
-use reqwest::header::{HeaderMap, HeaderName,};
+use reqwest::{ClientBuilder};
+use reqwest::header::{HeaderMap,};
 use serde_json::Value;
 use tauri::Window;
 use crate::models::response_from_call::ResponseFromCall;
@@ -18,7 +18,7 @@ use uuid::Uuid;
 use crate::models::postman_collection::PostmanCollection;
 use crate::oauth::{handle_oauth, OAuth2Type};
 use crate::oauth2_error::OAuth2Error;
-use crate::postman_lib::v2_1_0::{HeaderUnion, Items, RequestUnion, Spec};
+use crate::postman_lib::v2_1_0::{Items, Spec};
 use crate::request_handling::handle_request;
 
 mod postman_lib;
@@ -58,7 +58,7 @@ async fn get_oauth2_token(window: Window, config: OAuth2Type, app_state: tauri::
 #[tauri::command]
 async fn greet(name: Spec) -> String {
     PostmanCollection::save(name).await.expect("TODO: panic message");
-    return "OK".to_string()
+    "OK".to_string()
 }
 
 #[tauri::command]
@@ -76,7 +76,7 @@ async fn get_collections(app_handle: tauri::AppHandle) -> Vec<Spec> {
             }
         }
     }
-    return collections
+    collections
 }
 
 #[tauri::command]
@@ -91,7 +91,7 @@ async fn insert_collection(mut collection: Spec, app_handle: tauri::AppHandle) -
         let id = Uuid::new_v4().to_string();
         item.id = Some(id);
         if item.item.is_some(){
-            item.item = Some(assign_id_to_every_item(&item));
+            item.item = Some(assign_id_to_every_item(item));
         }
     });
 
@@ -103,7 +103,7 @@ async fn insert_collection(mut collection: Spec, app_handle: tauri::AppHandle) -
 }
 
 
-fn assign_id_to_every_item(mut collection: &Items) -> Vec<Items> {
+fn assign_id_to_every_item(collection: &Items) -> Vec<Items> {
     // Create code that assigns to every item in a postman collection an id
 
     let mut items = vec![];
@@ -132,8 +132,8 @@ async fn update_collection(collection: Spec, app_handle: tauri::AppHandle){
 async fn insert_collection_from_openapi(collection: String,  app_handle: tauri::AppHandle) {
     let mut db = get_database(app_handle);
     let value = serde_json::to_string(&collection).unwrap();
-    db.set(&"test", &value).unwrap();
-    println!("Value {}",db.get::<String>(&"test").unwrap());
+    db.set("test", &value).unwrap();
+    println!("Value {}",db.get::<String>("test").unwrap());
 }
 
 #[tauri::command]
@@ -223,15 +223,13 @@ pub fn replace_vars_in_url(url:String, variables: Option<Vec<postman_lib::v2_1_0
     if let Some(variables) = variables{
         variables.iter().for_each(|v|{
             let mut key_string = "{{".to_string();
-            key_string.push_str(&*v.key.clone().unwrap());
+            key_string.push_str(&v.key.clone().unwrap());
             key_string.push_str("}}");
             let val = v.value.clone().unwrap();
-            match  val {
-                Value::String(request) => {
-                    url_to_return = url_to_return.replace(&key_string, &request);
-                },
-                _ =>{}
+            if let Value::String(request) = val {
+                url_to_return = url_to_return.replace(&key_string, &request);
             }
+
         })
     }
     url_to_return
@@ -243,24 +241,14 @@ async fn get_postman_files_from_dir(path:String) ->Result<Vec<Spec>, ()>{
     let mut collections = vec![];
     for file in files{
         let content = fs::read_to_string(file);
-        match content {
-            Ok(content) => {
-                let collection = serde_json::from_str::<Spec>(&content);
-                match collection {
-                    Ok(collection) => {
-                        collections.push(collection);
-                    },
-                    Err(..) => {
-                        // Nothing to do here. Just ignore the file
+        if let Ok(content_of_var) = content {
+                        let collection = serde_json::from_str::<Spec>(&content_of_var);
+                       if let Ok(converted_collection) = collection {
+                            collections.push(converted_collection);
                     }
-                }
-            },
-            Err(..) => {
-                // Nothing to do here. Just ignore the file
-            }
         }
     }
-    return Ok(collections);
+    Ok(collections)
 }
 
 fn recurse_files(path: impl AsRef<Path>) -> std::io::Result<Vec<PathBuf>> {

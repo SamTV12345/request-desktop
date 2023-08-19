@@ -1,8 +1,8 @@
 use std::collections::HashMap;
-use std::fmt::format;
-use oauth2::basic::{BasicClient, BasicErrorResponseType, BasicTokenResponse, BasicTokenType};
-use oauth2::{AccessToken, AuthorizationCode, AuthUrl, Client, ClientId, ClientSecret, CsrfToken, DeviceAuthorizationUrl, EmptyExtraTokenFields, ErrorResponseType, PkceCodeChallenge, RedirectUrl, RequestTokenError, ResourceOwnerPassword, ResourceOwnerUsername, Scope, StandardDeviceAuthorizationResponse, StandardErrorResponse, TokenResponse, TokenUrl};
-use oauth2::http::HeaderMap;
+
+use oauth2::basic::{BasicClient, BasicTokenResponse, BasicTokenType};
+use oauth2::{AccessToken, AuthorizationCode, AuthUrl, ClientId, ClientSecret, CsrfToken, DeviceAuthorizationUrl, EmptyExtraTokenFields, PkceCodeChallenge, RedirectUrl, ResourceOwnerPassword, ResourceOwnerUsername, Scope, StandardDeviceAuthorizationResponse, TokenResponse, TokenUrl};
+
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, Window};
 
@@ -21,10 +21,10 @@ struct OAuth2Response {
     id_token: String
 }
 
-pub async fn handle_oauth(window: &Window, config: OAuth2Type, app_state: AppHandle) ->Result<BasicTokenResponse, OAuth2Error>{
+pub async fn handle_oauth(_window: &Window, config: OAuth2Type, app_state: AppHandle) ->Result<BasicTokenResponse, OAuth2Error>{
     println!("Config: {:?}", config);
     return match config {
-        OAuth2Type::Implicit(s) => {
+        OAuth2Type::Implicit(_s) => {
             let client =
                 BasicClient::new(
                     ClientId::new("client_id".to_string()),
@@ -33,7 +33,7 @@ pub async fn handle_oauth(window: &Window, config: OAuth2Type, app_state: AppHan
                     None
                 );
 
-            let (auth_url, csrf_token) = client
+            let (_auth_url, _csrf_token) = client
                 .authorize_url(CsrfToken::new_random)
                 .use_implicit_flow()
                 .url();
@@ -63,14 +63,14 @@ pub async fn handle_oauth(window: &Window, config: OAuth2Type, app_state: AppHan
 
                     if is_callback_url {
                         let hash_query: HashMap<_, _> = url.query_pairs().into_owned().collect();
-                        let code = hash_query.get("code").map(|s| {s.clone()});
+                        let code = hash_query.get("code").cloned();
 
                         println!("Obtained code is: {:?}", code);
 
                         tx.send(code.clone()).expect("Failed to send code to channel");
                     }
 
-                    return !is_callback_url;
+                    !is_callback_url
                 })
                 .build().unwrap();
 
@@ -183,7 +183,7 @@ pub async fn handle_oauth(window: &Window, config: OAuth2Type, app_state: AppHan
                 })
 
         }
-        OAuth2Type::AuthorizationCodeWithPKCE(a) => {
+        OAuth2Type::AuthorizationCodeWithPKCE(_a) => {
             let client =
                 BasicClient::new(
                     ClientId::new("client_id".to_string()),
@@ -196,7 +196,7 @@ pub async fn handle_oauth(window: &Window, config: OAuth2Type, app_state: AppHan
             // Generate a PKCE challenge.
             let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
 
-            let (auth_url, csrf_token) = client
+            let (_auth_url, _csrf_token) = client
                 .authorize_url(CsrfToken::new_random)
                 // Set the desired scopes.
                 .add_scope(Scope::new("read".to_string()))
