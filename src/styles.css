@@ -640,7 +640,7 @@ body, #root {
 }
 
 
-.import-tabs > div >button {
+.import-tabs div:first-child >button {
     color: white;
     background: transparent;
     border: transparent;

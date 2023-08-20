@@ -7,6 +7,8 @@ export default {
     theme: {
         extend: {
             colors: {
+                border_strong: 'var(--color-border-strong)',
+                background_tertiary: 'var(--background-color-tertiary)',
                 basecol: '#262626',
                 mustard: {
                     100: '#fae5c0',

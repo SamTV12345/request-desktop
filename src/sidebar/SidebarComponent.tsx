@@ -9,6 +9,7 @@ import ResizableBox from "../components/resizable/ResizableBox";
 import {NewItemModel} from "../components/collections/NewItemModel";
 import {SidebarContextMenu} from "../components/bareComponents/SidebarContextMenu";
 import {DirectoryToUpload} from "../components/upload/DirectoryToUpload";
+import {ImportByLink} from "../components/collections/ImportByLink";
 
 export const SidebarComponent = ()=>{
     const collections = useAPIStore(state=>state.collections)
@@ -47,7 +48,7 @@ export const SidebarComponent = ()=>{
                                             }
                                         </div>}</TabsContent>
                                     <TabsContent value="folder"><DirectoryToUpload/></TabsContent>
-                                    <TabsContent value="link">Link</TabsContent>
+                                    <TabsContent value="link"><ImportByLink/></TabsContent>
                                     <TabsContent value="raw-text">Raw text</TabsContent>
                                     <TabsContent value="code-repository">Code repository </TabsContent>
                                 </Tabs>

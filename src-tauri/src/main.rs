@@ -20,7 +20,7 @@ use crate::oauth::{handle_oauth, OAuth2Type};
 use crate::oauth2_error::OAuth2Error;
 use crate::postman_lib::v2_1_0::{Items, Spec};
 use crate::request_handling::handle_request;
-
+use crate::collections::*;
 mod postman_lib;
 
 
@@ -28,6 +28,7 @@ mod models;
 mod request_handling;
 mod oauth;
 mod oauth2_error;
+mod collections;
 
 static COLLECTION_PREFIX: &str = "collection_";
 static TOKEN_PREFIX: &str = "token_";
@@ -52,99 +53,6 @@ async fn check_parser(collection: Value){
 async fn get_oauth2_token(window: Window, config: OAuth2Type, app_state: tauri::AppHandle) -> Result<BasicTokenResponse, OAuth2Error> {
     handle_oauth(&window, config, app_state).await
 }
-
-
-// Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
-#[tauri::command]
-async fn greet(name: Spec) -> String {
-    PostmanCollection::save(name).await.expect("TODO: panic message");
-    "OK".to_string()
-}
-
-#[tauri::command]
-async fn get_collections(app_handle: tauri::AppHandle) -> Vec<Spec> {
-    let mut collections = vec![];
-    let db = get_database(app_handle);
-
-
-    for kv in db.iter() {
-        let key = kv.get_key();
-        if key.starts_with(COLLECTION_PREFIX) {
-            let collection = kv.get_value::<String>();
-            if collection.is_some() {
-                collections.push(serde_json::from_str::<Spec>(&collection.unwrap()).unwrap());
-            }
-        }
-    }
-    collections
-}
-
-#[tauri::command]
-async fn insert_collection(mut collection: Spec, app_handle: tauri::AppHandle) ->Result<Spec,()> {
-    let mut db = get_database(app_handle);
-    let mut key = collection.info.postman_id.clone();
-
-    key = Option::from(Uuid::new_v4().to_string());
-    collection.info.postman_id = key.clone();
-
-    collection.item.iter_mut().for_each(|item|{
-        let id = Uuid::new_v4().to_string();
-        item.id = Some(id);
-        if item.item.is_some(){
-            item.item = Some(assign_id_to_every_item(item));
-        }
-    });
-
-    let mut collection_string = COLLECTION_PREFIX.clone().to_string();
-    collection_string.push_str(&collection.info.postman_id.clone().unwrap());
-    let value = serde_json::to_string(&collection).unwrap();
-    db.set(&collection_string, &value).unwrap();
-    Ok(collection)
-}
-
-
-fn assign_id_to_every_item(collection: &Items) -> Vec<Items> {
-    // Create code that assigns to every item in a postman collection an id
-
-    let mut items = vec![];
-    for item in collection.item.clone().unwrap(){
-        let mut item = item.clone();
-        let id = Uuid::new_v4().to_string();
-        item.id = Some(id);
-        if item.item.is_some(){
-            item.item = Some(assign_id_to_every_item(&item));
-        }
-        items.push(item);
-    }
-     items
-}
-
-#[tauri::command]
-async fn update_collection(collection: Spec, app_handle: tauri::AppHandle){
-    let mut db = get_database(app_handle);
-    let mut collection_string = COLLECTION_PREFIX.clone().to_string();
-    collection_string.push_str(&collection.info.postman_id.clone().unwrap());
-    let value = serde_json::to_string(&collection).unwrap();
-    db.set(&collection_string, &value).unwrap();
-}
-
-#[tauri::command]
-async fn insert_collection_from_openapi(collection: String,  app_handle: tauri::AppHandle) {
-    let mut db = get_database(app_handle);
-    let value = serde_json::to_string(&collection).unwrap();
-    db.set("test", &value).unwrap();
-    println!("Value {}",db.get::<String>("test").unwrap());
-}
-
-#[tauri::command]
-async fn update_collection_in_backend(collection: Spec,  app_handle: tauri::AppHandle){
-    let mut db = get_database(app_handle);
-    let mut collection_string = COLLECTION_PREFIX.clone().to_string();
-    collection_string.push_str(&collection.info.postman_id.clone().unwrap());
-    let value = serde_json::to_string(&collection).unwrap();
-    db.set(&collection_string, &value).unwrap();
-}
-
 
 #[tauri::command]
 async fn do_request(item: Items, collection: Spec) -> ResponseFromCall {
@@ -196,8 +104,8 @@ async fn do_request(item: Items, collection: Spec) -> ResponseFromCall {
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![greet, get_collections, do_request, insert_collection,
-            update_collection, check_parser, get_oauth2_token, get_postman_files_from_dir])
+        .invoke_handler(tauri::generate_handler![get_collections, do_request, insert_collection,
+            update_collection, check_parser, get_oauth2_token, get_postman_files_from_dir, update_collection_in_backend, download_from_url])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
