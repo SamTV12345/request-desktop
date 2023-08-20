@@ -11,7 +11,7 @@ export enum BodyType {
 
 
 export const BodySelector = () => {
-    const selectedItem = useAPIStore(state => state.currentItem!)
+    const selectedItem = useAPIStore(state => state.currentItem!) as ItemDefinitionExtended
     const setSelectedItem = useAPIStore(state => state.setCurrentItem)
     const currentCollection = useAPIStore(state => state.currentCollection!)
     const updateCurrentCollection = useAPIStore(state => state.setCurrentCollection)

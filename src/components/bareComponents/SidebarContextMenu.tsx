@@ -4,7 +4,7 @@ import {FC} from "react";
 
 type SidebarContextMenuProps = {
     children: React.ReactNode|React.ReactNode[],
-    triggerLabel: string
+    triggerLabel: string|React.ReactNode
 }
 
 export const SidebarContextMenu:FC<SidebarContextMenuProps> = ({children,triggerLabel})=>{

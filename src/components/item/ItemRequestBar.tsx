@@ -13,7 +13,7 @@ export const ItemRequestBar = ()=>{
     const updateCurrentCollection = useAPIStore(state => state.setCurrentCollection)
     const setCurrentItem = useAPIStore(state => state.setCurrentItem)
     const saveCollection = useAPIStore(state => state.saveCollection)
-    const currentItem = useAPIStore(state => state.currentItem)
+    const currentItem = useAPIStore(state => state.currentItem) as ItemDefinitionExtended
 
     useDebounce(()=>{
         saveCollection()

@@ -1,4 +1,4 @@
-import {useAPIStore} from "../../store/store";
+import {ItemDefinitionExtended, useAPIStore} from "../../store/store";
 import {BodySelector, BodyType} from "./BodySelector";
 import {RawBody} from "./bodyTypes/RawBody";
 import {UrlEncodedBody} from "./bodyTypes/UrlEncodedBody";
@@ -6,7 +6,7 @@ import {FormDataBody} from "./bodyTypes/FormDataBody";
 import {FileBody} from "./bodyTypes/FileBody";
 
 export const BodyDecider = () => {
-    const collection = useAPIStore(state => state.currentItem)
+    const collection = useAPIStore(state => state.currentItem) as ItemDefinitionExtended
 
     const Body = ()=>{
          switch(collection?.request?.body?.mode){

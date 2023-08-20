@@ -2,9 +2,10 @@ use std::str::FromStr;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use reqwest::Method;
 use crate::{postman_lib, replace_vars_in_url};
-use crate::postman_lib::v2_1_0::{Auth, AuthType, HeaderUnion, Items, RequestUnion, Spec};
+use crate::postman_lib::v2_1_0::{Auth, AuthType, HeaderUnion, Host, Items, RequestUnion, Spec, UrlPath};
 use base64::{Engine as _, engine::general_purpose::STANDARD_NO_PAD};
 use serde_json::Value;
+use crate::postman_lib::v2_1_0::PathElement::{PathClass, String as PString};
 
 pub async fn handle_request(url: RequestUnion, collection: &Spec,
                             client: reqwest::ClientBuilder,
@@ -30,8 +31,75 @@ pub async fn handle_request(url: RequestUnion, collection: &Spec,
 
                 let method = Method::from_str(&method).unwrap();
                 if let postman_lib::v2_1_0::Url::UrlClass(url) = url {
-                    let url = url.raw.unwrap();
-                    let replaced_url  = replace_vars_in_url(url, collection.variable.clone());
+                    let mut url_to_use:String = "".to_string();
+
+                    match url.raw{
+                        Some(raw) => {
+                            url_to_use = raw;
+                        }
+                        None => {
+
+                            match url.protocol {
+                                Some(protocol) => {
+                                    match protocol.as_str() {
+                                        "http" => {
+                                            url_to_use.push_str("http://");
+                                        }
+                                        "https" => {
+                                            url_to_use.push_str("https://");
+                                        }
+                                        _ => {
+                                            url_to_use.push_str("http://");
+                                        }
+                                    }
+                                }
+                                None => {
+                                    url_to_use = "http://".to_string();;
+                                }
+                            }
+
+                            match url.host {
+                                Some(host) => {
+                                    match host {
+                                        Host::String(host) => {
+                                            url_to_use = host;
+                                        }
+                                        Host::StringArray(host) => {
+                                            url_to_use = host[0].clone()
+                                        }
+                                    }
+                                }
+                                None => {
+                                    url_to_use = "".to_string();
+                                }
+                            }
+
+                            if let Some(port) = url.port {
+                                url_to_use.push_str(&format!(":{}", port));
+                            }
+
+                            if let Some(path) = url.path {
+                                match path {
+                                    UrlPath::String(s) => {
+                                        url_to_use.push_str(&s);
+                                    }
+                                    UrlPath::UnionArray(arr) => {
+                                        for part in arr {
+                                            match part {
+                                                PathClass(arr) => {
+                                                        url_to_use.push_str(&format!("/{}",&arr.value.unwrap()));
+                                                }
+                                                PString(path) => {
+                                                    url_to_use.push_str(&format!("/{}",&path));
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    let replaced_url  = replace_vars_in_url(url_to_use, collection.variable.clone());
 
                     built_client = client
                         .build()

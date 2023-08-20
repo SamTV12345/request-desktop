@@ -1,4 +1,4 @@
-import {FC} from "react";
+import {FC, useMemo} from "react";
 import {CollectionDefinition, ItemDefinition, ItemGroupDefinition} from "postman-collection";
 import {Accordion, AccordionContent, AccordionItem, AccordionTrigger,} from "./Accordeon"
 import {CollectionDefinitionExtended, DisplayType, useAPIStore} from "../../store/store";
@@ -7,6 +7,9 @@ import {SidebarContextMenu} from "./SidebarContextMenu";
 import {CollectionContextMenu} from "../collections/CollectionContextMenu";
 import {FolderContextMenu} from "../collections/FolderContextMenu";
 import {ItemContextMenu} from "../item/ItemContextMenu";
+import {isItemsGroupDefinition} from "../../utils/utils";
+import {ItemSidebarComponent} from "../item/ItemSidebarComponent";
+import {ItemGroupSidebarComponent} from "../item/ItemGroupSidebarComponent";
 
 
 type SidebarAccordeonProps = {
@@ -18,12 +21,11 @@ export const isItemGroupDefinition = (item: any): item is ItemGroupDefinition =>
 }
 
 export const SidebarAccordeon:FC<SidebarAccordeonProps> = ({collection}) => {
-    const initialNumber = 1
-
     const setCurrentCollection = useAPIStore(state=>state.setCurrentCollection)
     const setCurrentItem = useAPIStore(state=>state.setCurrentItem)
+    const currentCollection = useAPIStore(state=>state.currentCollection)
 
-        return  <Accordion type="single" collapsible  key={collection.name+"name"} className="border-none">
+        return  <Accordion type="single" collapsible  key={collection.name+"name"} className={`border-none ${currentCollection?.type === DisplayType.COLLECTION_TYPE && currentCollection.info._postman_id === collection.info._postman_id&& 'bg-background_tertiary'}` }>
             <AccordionItem value="item-1" key={collection.name+"item"} className="cursor-pointer border-none">
                     <AccordionTrigger><span onClick={()=>{
                         // @ts-ignore
@@ -31,46 +33,24 @@ export const SidebarAccordeon:FC<SidebarAccordeonProps> = ({collection}) => {
                         setCurrentItem(undefined)
                     }}><SidebarContextMenu triggerLabel={collection.info?.name as string} children={<CollectionContextMenu collection={collection}/>}/></span></AccordionTrigger>
                         <AccordionContent className="">
-                            <RecursiveItemGroup item={collection.item} collection={collection}/>
+                            <RecursiveItemGroup items={collection.item} collection={collection}/>
                         </AccordionContent>
             </AccordionItem>
     </Accordion>
 }
 
 type RecursiveItemGroupProps = {
-    item: (ItemGroupDefinition | ItemDefinition)[] | undefined,
-    collection: CollectionDefinition
+    items: (ItemGroupDefinition | ItemDefinition)[] | undefined,
+    collection: CollectionDefinitionExtended
 }
-export const RecursiveItemGroup:FC<RecursiveItemGroupProps> = ({item, collection})=>{
-    const setCurrentItem = useAPIStore(state=>state.setCurrentItem)
-    const setCurrentCollection = useAPIStore(state=>state.setCurrentCollection)
+export const RecursiveItemGroup:FC<RecursiveItemGroupProps> = ({items, collection})=>{
 
-    return <div>{item?.map((item, i)=>{
+    return <div>{items?.map((item, i)=>{
             if(isItemGroupDefinition(item)){
-                return <Accordion type="single" collapsible style={{marginLeft: `2em`}} key={item.name}>
-                    <AccordionItem value="item-1" className="border-none">
-                        <AccordionTrigger  onClick={()=>{
-                            setCurrentItem({...item,type: DisplayType.SINGLE_TYPE})
-                            // @ts-ignore
-                            setCurrentCollection({...collection, type: DisplayType.SINGLE_TYPE})
-                            console.log("setted",collection)
-                        }}><SidebarContextMenu triggerLabel={item.name!} children={<FolderContextMenu collection={item}/>}/></AccordionTrigger>
-                        <AccordionContent className="recursive-item border-none">
-                            <RecursiveItemGroup key={item.id} item={item.item} collection={collection}/>
-                        </AccordionContent>
-                    </AccordionItem>
-                </Accordion>
+                return <ItemGroupSidebarComponent index={i} item={item}/>
             }
             else{
-                return <div key={i} style={{marginLeft: `2em`}}
-                            onClick={()=>{
-                                setCurrentItem({...item,type: DisplayType.SINGLE_TYPE})
-                                // @ts-ignore
-                                setCurrentCollection({...collection, type: DisplayType.SINGLE_TYPE})
-                            }} className="sidebar-request border-none">
-                    <APIRequestSidebarIcon type={item.request?.method as string}/>
-                    <SidebarContextMenu triggerLabel={item.name as string} children={<ItemContextMenu/>}/>
-                </div>
+                return <ItemSidebarComponent index={i} item={item}/>
             }
         })}</div>
 

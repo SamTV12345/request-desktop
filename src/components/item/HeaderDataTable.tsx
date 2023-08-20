@@ -1,10 +1,10 @@
 import * as React from 'react';
-import {useAPIStore} from "../../store/store";
+import {ItemDefinitionExtended, useAPIStore} from "../../store/store";
 
 
 
 export const HeaderDataTable = ()=> {
-    const currentItem = useAPIStore(state=>state.currentItem)
+    const currentItem = useAPIStore(state=>state.currentItem) as ItemDefinitionExtended
     const getRowInformation = ()=>{
         if (currentItem?.request&& currentItem.request.header){
             const headers = currentItem.request.header

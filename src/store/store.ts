@@ -1,5 +1,5 @@
 import {create} from 'zustand'
-import {CollectionDefinition, ItemDefinition, VariableDefinition} from 'postman-collection'
+import {CollectionDefinition, ItemDefinition, ItemGroupDefinition, VariableDefinition} from 'postman-collection'
 import {ResponseFromCall} from "../models/ResponseFromCall";
 import {FileUpload} from "../models/FileUpload";
 import {cloneElement} from "react";
@@ -30,8 +30,8 @@ interface APIState {
     addCollection: (by: CollectionDefinitionExtended) => void,
     addCollections: (by: CollectionDefinitionExtended[]) => void,
     setCollections: (by: CollectionDefinitionExtended[]) => void,
-    currentItem: ItemDefinitionExtended| undefined,
-    setCurrentItem: (by: ItemDefinitionExtended|undefined) => void,
+    currentItem: ItemDefinitionExtended|ItemGroupDefinition| undefined,
+    setCurrentItem: (by: ItemDefinitionExtended|ItemGroupDefinition|undefined) => void,
     currentRequest: ResponseFromCall | undefined,
     setCurrentRequest: (by: ResponseFromCall) => void,
     fileToUpload: FileUpload|undefined,
@@ -65,7 +65,7 @@ export const useAPIStore = create<APIState>()((set,getState) => ({
     currentItem: undefined,
     currentRequest: undefined,
     setCurrentRequest: (currentRequest: ResponseFromCall) => set({currentRequest}),
-    setCurrentItem: (currentItem: ItemDefinitionExtended|undefined) => set({currentItem}),
+    setCurrentItem: (currentItem: ItemDefinitionExtended|ItemGroupDefinition|undefined) => set({currentItem}),
     setCollections: (collections: CollectionDefinitionExtended[]) => set({collections}),
     addCollection: (collection: CollectionDefinitionExtended) => set((state) => ({collections: [...state.collections, collection]})),
     addCollections: (collection: CollectionDefinitionExtended[]) => set((state) => ({collections: [...state.collections, ...collection]})),

@@ -2,8 +2,7 @@ import {Tabs, TabsContent, TabsList, TabsTrigger} from "../bareComponents/Tabs";
 import {ParamTable} from "./QueryParamTable";
 import {HeaderTable} from "./HeaderTable";
 import {BodyDecider} from "./BodyDecider";
-import {AuthorizationSelector} from "../authorization/AuthorizationSelector";
-import {AuthorizationTypes} from "../../models/AuthorizationTypes";
+import {AuthorizationContent} from "../collection_authorization/AuthorizationContent";
 import {CollectionAuthorization} from "../collections/CollectionAuthorization";
 
 export const QueryParam = () => {
@@ -20,7 +19,7 @@ export const QueryParam = () => {
             <TabsTrigger value="settings">Settings</TabsTrigger>
         </TabsList>
         <TabsContent value="params"><ParamTable/></TabsContent>
-        <TabsContent value="authorization"><div></div></TabsContent>
+        <TabsContent value="authorization"><CollectionAuthorization/></TabsContent>
         <TabsContent value="headers"><HeaderTable/></TabsContent>
         <TabsContent value="body"><BodyDecider/></TabsContent>
         <TabsContent value="prerequest">Pre-request Script</TabsContent>

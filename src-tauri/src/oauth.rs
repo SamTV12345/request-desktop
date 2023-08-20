@@ -45,7 +45,6 @@ pub async fn handle_oauth(_window: &Window, config: OAuth2Type, app_state: AppHa
             }))
         }
         OAuth2Type::AuthorizationCode(a) => {
-            println!("AuthorizationCode");
 
             // Channel for sending the token
             let (tx, rx) = std::sync::mpsc::channel::<Option<String>>();

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import {CollectionDefinitionExtended, DisplayType, useAPIStore} from "../../store/store";
+import {CollectionDefinitionExtended, DisplayType, ItemDefinitionExtended, useAPIStore} from "../../store/store";
 import {EditableTable} from "../bareComponents/EditableTable";
 import {
     Collection,
@@ -14,7 +14,7 @@ import {replaceItem} from "../../utils/CollectionReplaceUtils";
 
 
 export const HeaderTable = ()=> {
-    const currentItem = useAPIStore(state => state.currentItem)
+    const currentItem = useAPIStore(state => state.currentItem) as ItemDefinitionExtended
     const currentCollection = useAPIStore(state => state.currentCollection)
     const saveCollection = useAPIStore(state => state.saveCollection)
     const updateCurrentCollection = useAPIStore(state => state.setCurrentCollection)

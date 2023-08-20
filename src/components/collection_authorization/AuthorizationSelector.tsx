@@ -1,7 +1,8 @@
 import * as Select from '@radix-ui/react-select';
 import {AuthorizationTypes} from "../../models/AuthorizationTypes";
 import {FC} from "react";
-import {useAPIStore} from "../../store/store";
+import {DisplayType, useAPIStore} from "../../store/store";
+import {isItemsGroupDefinition} from "../../utils/utils";
 
 type AuthorizationSelectorProps = {
     value: AuthorizationTypes,
@@ -11,11 +12,24 @@ type AuthorizationSelectorProps = {
 
 export const AuthorizationSelector:FC<AuthorizationSelectorProps> = ({value,onChange}) => {
     const currentCollection = useAPIStore(state=>state.currentCollection)
+    const currentItem = useAPIStore(state=>state.currentItem)
+
+    const getAuthSelection = ()=>{
+        if(currentCollection?.type === DisplayType.COLLECTION_TYPE){
+            return currentCollection?.auth?.type
+        }
+        else if (isItemsGroupDefinition(currentItem)) {
+            return currentItem?.auth?.type
+        }
+        else if(currentItem!==undefined){
+            return currentItem?.request?.auth?.type
+        }
+    }
 
     return <div className="">
-            <select value={currentCollection?.auth?.type} className="bg-basecol" onChange={v=>onChange(v.target.value as AuthorizationTypes)}>
+            <select value={getAuthSelection()} className="bg-basecol" onChange={v=>onChange(v.target.value as AuthorizationTypes)}>
                 <option value={AuthorizationTypes.NOAUTH}>No Auth</option>
-                <option value={undefined}>No Auth</option>
+                <option value={undefined}>Inherit from parent</option>
                 <option value={AuthorizationTypes.APIKEY}>API key</option>
                 <option value={AuthorizationTypes.BEARER}>Bearer Token</option>
                 <option value={AuthorizationTypes.AWSV4}>AWS Signature</option>

@@ -1,4 +1,4 @@
-import {useAPIStore} from "../../store/store";
+import {ItemDefinitionExtended, useAPIStore} from "../../store/store";
 import {QueryParam} from "./QueryParam";
 import ResizableBox from "../resizable/ResizableBox";
 import {ResponseBar} from "./responseBarItems/ResponseBar";
@@ -7,7 +7,7 @@ import {ItemNameAdapter} from "./ItemNameAdapter";
 
 
 export const ContentModel = () => {
-    const currentItem = useAPIStore(state => state.currentItem)
+    const currentItem = useAPIStore(state => state.currentItem) as ItemDefinitionExtended
     const currentRequest = useAPIStore(state => state.currentRequest)
 
 
