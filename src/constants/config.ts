@@ -1,4 +1,4 @@
-import {ItemDefinition} from "postman-collection";
+import {ItemDefinition, ItemGroupDefinition} from "postman-collection";
 
 export const getDefaultRequest:()=>ItemDefinition = ()=> {
     return {
@@ -14,4 +14,15 @@ export const getDefaultRequest:()=>ItemDefinition = ()=> {
         events: [],
         description: ''
     }
+}
+
+export const getDefaultFolder:()=>ItemGroupDefinition = ()=> {
+    return {
+        auth: undefined,
+        description: '',
+        event: [],
+        id: crypto.randomUUID(),
+        item: [],
+        name: 'New Folder',
+    } satisfies ItemGroupDefinition
 }

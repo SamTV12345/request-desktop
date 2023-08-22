@@ -291,7 +291,7 @@ fn convert_respective_body(collection:RequestUnion) ->Result<String, ()> {
                                     }
                                 }
                                 Mode::Formdata => {
-                                    let form_data = body.formdata.unwrap();
+                                    let form_data = body.formdata.unwrap_or(vec![]);
                                     let mut form_data_string:String = "".to_string();
                                    form_data.iter().filter(|x|!x.disabled.unwrap_or(false))
                                        .for_each(|x|{
