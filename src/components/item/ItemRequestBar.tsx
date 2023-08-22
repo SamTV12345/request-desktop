@@ -7,6 +7,7 @@ import {CollectionDefinitionExtended, DisplayType, ItemDefinitionExtended, useAP
 import {replaceItem} from "../../utils/CollectionReplaceUtils";
 import {useDebounce} from "../../hooks/useDebounce";
 import {ExtraField} from "../../models/ExtraField";
+import {getToken, getTokenByCollectionId} from "../collection_authorization/TokenManagerService";
 
 export const ItemRequestBar = ()=>{
     const setCurrentRequest = useAPIStore(state => state.setCurrentRequest)
@@ -44,7 +45,19 @@ export const ItemRequestBar = ()=>{
         setCurrentItem(item)
     }
 
-    console.log("My collection",currentCollection)
+   const performInternalRequest = (extra_fields: any)=>{
+       invoke("do_request", {item: currentItem, collection: currentCollection, extraFields: extra_fields})
+           .then((c) => {
+               setCurrentRequest(c as ResponseFromCall)
+           })
+           .catch(e => setCurrentRequest({
+               body: e.toString(), cookies: {}, duration: {
+                   duration: "0",
+                   response_duration: "0",
+               }, headers: {}, status: ""
+
+           }))
+   }
 
     return  <div className="request-url-section">
         <div className="border-2 border-mustard-600 p-3 rounded">
@@ -55,25 +68,19 @@ export const ItemRequestBar = ()=>{
                 changeUrl(v.target.value)
             }} onBlur={saveCollection}/>
         </div>
-        <button onClick={() => {
-            const extra_fields:ExtraField[] = []
-            if(currentItem.request?.auth?.type === "oauth2") {
-
-
+        <button onClick={async () => {
+            const extra_fields: ExtraField[] = []
+            if (currentItem.request?.auth?.type === "oauth2") {
+                await getTokenByCollectionId(currentItem.id!)
+                    .then((token) => {
+                        extra_fields.push({key: "token", value: token.access_token})
+                        performInternalRequest(extra_fields)
+                    })
+            }
+            else {
+                performInternalRequest(extra_fields)
             }
 
-
-            invoke("do_request", {item: currentItem, collection: currentCollection, extra_fields})
-                .then((c) => {
-                    setCurrentRequest(c as ResponseFromCall)
-                })
-                .catch(e => setCurrentRequest({
-                    body: e.toString(), cookies: {}, duration: {
-                        duration: "0",
-                        response_duration: "0",
-                    }, headers: {}, status: ""
-
-                }))
         }} className="bg-mustard-600 p-2 w-28 text-white hover:bg-mustard-500 leading-none px-4 py-3 rounded-lg shadow-[0_4px_16px_rgba(0,0,0,0.2)] hover:shadow-[0_4px_16px_theme(colors.mustard.500)] text-sm transition disabled:opacity-50 disabled:shadow-none disabled:hover:bg-mustard-600">
             Senden
         </button>

@@ -16,7 +16,7 @@ pub async fn handle_request(url: RequestUnion, collection: &Spec,
                             client: reqwest::ClientBuilder,
                             map: &mut HeaderMap<HeaderValue>,
                             item: Items,
-                            extra_fields: Option<Vec<ExtraField>>) -> reqwest::RequestBuilder {
+                            extra_fields: Vec<ExtraField>) -> reqwest::RequestBuilder {
     let mut built_client;
 
     if let RequestUnion::RequestClass(request) = url {
@@ -182,7 +182,7 @@ pub async fn handle_request(url: RequestUnion, collection: &Spec,
 }
 
 pub fn add_auth_headers(collection: &Spec, item: Items, map: &mut HeaderMap<HeaderValue>,
-                        extra_fields: Option<Vec<ExtraField>>) -> HeaderMap<HeaderValue>{
+                        extra_fields: Vec<ExtraField>) -> HeaderMap<HeaderValue>{
     match item.auth {
         Some(auth) => {
             insert_auth(auth, map.clone(), extra_fields)
@@ -201,9 +201,7 @@ pub fn add_auth_headers(collection: &Spec, item: Items, map: &mut HeaderMap<Head
 }
 
 
-fn insert_auth(auth: Auth, mut map: HeaderMap<HeaderValue>, extra_fields: Option<Vec<ExtraField>>) -> HeaderMap<HeaderValue>{
-    const DEFAULT_EXTRAFIELDS: Vec<ExtraField> = vec![];
-    let extra_fields = extra_fields.unwrap_or(DEFAULT_EXTRAFIELDS);
+fn insert_auth(auth: Auth, mut map: HeaderMap<HeaderValue>, extra_fields: Vec<ExtraField>) -> HeaderMap<HeaderValue>{
     return match auth.auth_type {
                 AuthType::Awsv4 => {
 

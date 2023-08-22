@@ -12,6 +12,7 @@ export const TokenSelector = ()=>{
     const setSelectedToken = useAPIStore(state=>state.setSelectedToken)
     const selectedToken = useAPIStore(state=>state.selectedToken)
     const currentItem = useAPIStore(state=>state.currentItem)
+
     useEffect(() => {
         getAllTokens().then((tokens) => {
             setTokens(tokens)
@@ -59,8 +60,7 @@ export const TokenSelector = ()=>{
                         </Select.Item>)}
                 <Select.Separator className="border-[1px] border-white"></Select.Separator>
                         <Select.Item onClick={()=>{setOpenManager(true)}}
-                                     className="relative pl-6 pr-4 py-1.5 rounded text-white text-sm hover:bg-mustard-600 hover:text-white">
-                            Manage tokens</Select.Item>
+                                     className="relative pl-6 pr-4 py-1.5 rounded text-white text-sm hover:bg-mustard-600 hover:text-white">Manage tokens</Select.Item>
             </Select.Content>
     </Select.Root>
 }

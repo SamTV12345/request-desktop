@@ -56,7 +56,7 @@ async fn get_oauth2_token(window: Window, config: OAuth2Type, app_state: tauri::
     handle_oauth(&window, config, app_state).await
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ExtraField {
     pub value: String,
@@ -64,9 +64,10 @@ pub struct ExtraField {
 }
 
 #[tauri::command]
-async fn do_request(item: Items, collection: Spec, extra_fields: Option<Vec<ExtraField>>) ->
+async fn do_request(item: Items, collection: Spec, extra_fields: Vec<ExtraField>) ->
                                                                               Result<ResponseFromCall,
     String> {
+    println!("{:?}",extra_fields);
     let mut map = HeaderMap::new();
     let client = ClientBuilder::new();
     let url = item.request.clone().unwrap();

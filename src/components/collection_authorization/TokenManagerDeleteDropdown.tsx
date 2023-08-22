@@ -1,10 +1,9 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import {deleteToken, getAllTokens} from "./TokenManagerService";
+import {useAPIStore} from "../../store/store";
 
 export const TokenManagerDeleteDropdown = ()=>{
-
-
-
+    const setTokens = useAPIStore(state=>state.setTokens)
 
     return <DropdownMenu.Root>
         <DropdownMenu.Trigger className="flex items-center text-sm bg-basecol w-full text-red-400">
@@ -22,6 +21,10 @@ export const TokenManagerDeleteDropdown = ()=>{
             <DropdownMenu.Item>
                 <DropdownMenu.Label onClick={async () => {
                     const res = await getAllTokens()
+                    for (const token of res) {
+                        deleteToken(token.key)
+                        setTokens([])
+                }
                 }} className="relative pl-6 pr-4 py-1.5 rounded text-sm hover:text-white hover:bg-stone-500 cursor-pointer">
                     All tokens</DropdownMenu.Label>
             </DropdownMenu.Item>
