@@ -705,12 +705,14 @@ body, #root {
 
 .request-details-section {
     flex-grow: 1;
-    flex-shrink: 0;
+    flex-shrink: 1;
+    min-height: 0;
+    overflow: scroll;
 }
 
 .response-section {
     min-height: 100px;
-    flex-shrink: 1;
+    flex-shrink: 0;
 }
 
 .response-section pre {
