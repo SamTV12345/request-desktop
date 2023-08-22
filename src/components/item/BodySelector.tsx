@@ -35,7 +35,7 @@ export const BodySelector = () => {
         saveCollection()
     }
 
-    return <div className="flex gap-6"><SelectorKnob value={selectedItem.request!.body === undefined||selectedItem.request?.body?.mode === BodyType.none} onChange={(v)=>{
+    return <div className="flex gap-6"><SelectorKnob value={selectedItem.request!.body == undefined||selectedItem.request?.body?.mode === BodyType.none} onChange={(v)=>{
         if(v){
             switchBodyType(currentCollection.id!,BodyType.none)
         }

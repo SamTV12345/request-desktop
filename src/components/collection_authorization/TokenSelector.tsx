@@ -1,8 +1,7 @@
 import * as Select from "@radix-ui/react-dropdown-menu";
-import {useAPIStore} from "../../store/store";
-import {useEffect, useMemo, useState} from "react";
+import {DisplayType, useAPIStore} from "../../store/store";
+import {useEffect} from "react";
 import {TokenWithKey} from "../../models/OAuth2Outcome";
-import {parseJWT} from "./TokenManager";
 import {getAllTokens, getTokenByCollectionId, setTokenToItem} from "./TokenManagerService";
 
 export const TokenSelector = ()=>{
@@ -12,7 +11,7 @@ export const TokenSelector = ()=>{
     const setTokens = useAPIStore(state=>state.setTokens)
     const setSelectedToken = useAPIStore(state=>state.setSelectedToken)
     const selectedToken = useAPIStore(state=>state.selectedToken)
-
+    const currentItem = useAPIStore(state=>state.currentItem)
     useEffect(() => {
         getAllTokens().then((tokens) => {
             setTokens(tokens)
@@ -21,15 +20,20 @@ export const TokenSelector = ()=>{
 
     const changeSelectedToken = (token:TokenWithKey)=>{
         setSelectedToken(token)
-        setTokenToItem(token.key, currentCollection!.info._postman_id)
+        if(currentCollection?.type === DisplayType.COLLECTION_TYPE){
+            setTokenToItem(token.key, currentCollection!.info._postman_id)
+        }
+        else{
+            setTokenToItem(token.key, currentItem?.id!)
+        }
     }
 
     useEffect(() => {
-        getTokenByCollectionId(currentCollection?.info._postman_id!).then((token) => {
+        const id = currentCollection?.type === DisplayType.COLLECTION_TYPE ? currentCollection?.info._postman_id : currentItem?.id
+        getTokenByCollectionId(id!).then((token) => {
           setSelectedToken(token)
         })
             .catch(e=>{
-                console.log(e)
                 setSelectedToken(undefined)
             })
     }, []);

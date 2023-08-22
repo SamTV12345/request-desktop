@@ -1,5 +1,5 @@
 import {Accordion, AccordionContent, AccordionItem, AccordionTrigger} from "../bareComponents/Accordeon";
-import {DisplayType, useAPIStore} from "../../store/store";
+import {CollectionDefinitionExtended, DisplayType, useAPIStore} from "../../store/store";
 import {SidebarContextMenu} from "../bareComponents/SidebarContextMenu";
 import {FolderContextMenu} from "../collections/FolderContextMenu";
 import {ItemGroupDefinition} from "postman-collection";
@@ -8,10 +8,10 @@ import {RecursiveItemGroup} from "../bareComponents/SidebarAccordeon";
 
 type ItemSidebarComponentProps = {
     item: ItemGroupDefinition,
-    index: number
+    index: number,
+    collection:CollectionDefinitionExtended
 }
-export const ItemGroupSidebarComponent:FC<ItemSidebarComponentProps> = ({item,index})=>{
-    const collection = useAPIStore(state=>state.currentCollection)
+export const ItemGroupSidebarComponent:FC<ItemSidebarComponentProps> = ({item,index, collection})=>{
     const currentItem = useAPIStore(state=>state.currentItem)
     const setCurrentItem = useAPIStore(state=>state.setCurrentItem)
     const setCurrentCollection = useAPIStore(state=>state.setCurrentCollection)

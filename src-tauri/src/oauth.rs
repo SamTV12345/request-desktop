@@ -53,7 +53,9 @@ pub async fn handle_oauth(_window: &Window, config: OAuth2Type, app_state: AppHa
             let auth_window = tauri::WindowBuilder::new(
                 &app_state,
                 "external", /* the unique window label */
-                tauri::WindowUrl::External(format!("{}?response_type=code&client_id={}&scope={}&redirect_uri={}", a.auth_url, a.client_id, a.scope, &a.callback_url).parse().unwrap())
+                tauri::WindowUrl::External(format!
+                ("{}?response_type=code&client_id={}&scope={}&redirect_uri={}", a.auth_url,
+                                                   a.client_id, a.scope, &a.callback_url).parse().unwrap())
             )
                 .on_navigation(move |url| {
                     let is_callback_url = url.to_string().starts_with(&redirect_uri_navigation);

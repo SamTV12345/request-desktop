@@ -11,6 +11,7 @@ use oauth2::basic::BasicTokenResponse;
 use pickledb::{PickleDb, PickleDbDumpPolicy, SerializationMethod};
 use reqwest::{ClientBuilder};
 use reqwest::header::{HeaderMap,};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::Window;
 use crate::models::response_from_call::ResponseFromCall;
@@ -29,6 +30,7 @@ mod request_handling;
 mod oauth;
 mod oauth2_error;
 mod collections;
+mod constants;
 
 static COLLECTION_PREFIX: &str = "collection_";
 static TOKEN_PREFIX: &str = "token_";
@@ -54,13 +56,22 @@ async fn get_oauth2_token(window: Window, config: OAuth2Type, app_state: tauri::
     handle_oauth(&window, config, app_state).await
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExtraField {
+    pub value: String,
+    pub key: String,
+}
+
 #[tauri::command]
-async fn do_request(item: Items, collection: Spec) -> Result<ResponseFromCall, String> {
+async fn do_request(item: Items, collection: Spec, extra_fields: Option<Vec<ExtraField>>) ->
+                                                                              Result<ResponseFromCall,
+    String> {
     let mut map = HeaderMap::new();
     let client = ClientBuilder::new();
     let url = item.request.clone().unwrap();
 
-    let built_client = handle_request(url, &collection, client, &mut map, item.clone()).await;
+    let built_client = handle_request(url, &collection, client, &mut map, item.clone(), extra_fields).await;
 
     let response_start_time = Instant::now();
 

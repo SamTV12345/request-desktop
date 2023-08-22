@@ -1,18 +1,22 @@
+use std::fmt::format;
 use std::fs;
 use std::io::{Read};
 use std::str::FromStr;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use reqwest::Method;
-use crate::{postman_lib, replace_vars_in_url};
+use crate::{ExtraField, postman_lib, replace_vars_in_url};
 use crate::postman_lib::v2_1_0::{Auth, AuthType, HeaderUnion, Host, Items, Mode, RequestUnion, Spec, UrlPath};
 use base64::{Engine as _, engine::general_purpose::STANDARD_NO_PAD};
 use serde_json::Value;
+use crate::constants::HEADER_AUTHORIZATION;
 use crate::postman_lib::v2_1_0::PathElement::{PathClass, String as PString};
+
 
 pub async fn handle_request(url: RequestUnion, collection: &Spec,
                             client: reqwest::ClientBuilder,
                             map: &mut HeaderMap<HeaderValue>,
-                            item: Items) -> reqwest::RequestBuilder {
+                            item: Items,
+                            extra_fields: Option<Vec<ExtraField>>) -> reqwest::RequestBuilder {
     let mut built_client;
 
     if let RequestUnion::RequestClass(request) = url {
@@ -169,7 +173,7 @@ pub async fn handle_request(url: RequestUnion, collection: &Spec,
             .request(Method::GET, "https://google.com")
     }
 
-    let map = add_auth_headers(collection, item, map);
+    let map = add_auth_headers(collection, item, map, extra_fields);
 
 
     built_client = built_client.headers(map.clone());
@@ -177,15 +181,16 @@ pub async fn handle_request(url: RequestUnion, collection: &Spec,
     built_client
 }
 
-pub fn add_auth_headers(collection: &Spec, item: Items,map: &mut HeaderMap<HeaderValue>) -> HeaderMap<HeaderValue>{
+pub fn add_auth_headers(collection: &Spec, item: Items, map: &mut HeaderMap<HeaderValue>,
+                        extra_fields: Option<Vec<ExtraField>>) -> HeaderMap<HeaderValue>{
     match item.auth {
         Some(auth) => {
-            insert_auth(auth, map.clone())
+            insert_auth(auth, map.clone(), extra_fields)
         }
         None => {
             match collection.auth.clone() {
                 Some(auth) => {
-                    insert_auth(auth, map.clone())
+                    insert_auth(auth, map.clone(), extra_fields)
                 }
                 None => {
                     map.clone()
@@ -196,7 +201,9 @@ pub fn add_auth_headers(collection: &Spec, item: Items,map: &mut HeaderMap<Heade
 }
 
 
-fn insert_auth(auth: Auth, mut map: HeaderMap<HeaderValue>) -> HeaderMap<HeaderValue>{
+fn insert_auth(auth: Auth, mut map: HeaderMap<HeaderValue>, extra_fields: Option<Vec<ExtraField>>) -> HeaderMap<HeaderValue>{
+    const DEFAULT_EXTRAFIELDS: Vec<ExtraField> = vec![];
+    let extra_fields = extra_fields.unwrap_or(DEFAULT_EXTRAFIELDS);
     return match auth.auth_type {
                 AuthType::Awsv4 => {
 
@@ -253,6 +260,11 @@ fn insert_auth(auth: Auth, mut map: HeaderMap<HeaderValue>) -> HeaderMap<HeaderV
 
                 }
                 AuthType::Oauth2 => {
+                    let token = extra_fields.iter().filter(|x| x.key == "token").map(|x| x.value.clone())
+                        .collect::<Vec<String>>().first().unwrap_or(&"".to_string()).clone();
+                    let val = HeaderValue::from_str(&format!("Bearer {}", token)).unwrap();
+
+                    map.insert(HEADER_AUTHORIZATION,val);
                     map
 
                 }

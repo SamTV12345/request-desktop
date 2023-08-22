@@ -30,7 +30,6 @@ export const ParamTable = ()=> {
             return (currentItem.request.url as UrlDefinition).query as QueryParamDefinition[]||[]
         }
     },[currentItem?.request])
-    console.log("Current colleciton123,", currentCollection)
 
     const disableQueryParam = (collectionId: string, disabled: boolean, index: number)=>{
 

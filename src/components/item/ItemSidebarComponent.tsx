@@ -1,4 +1,4 @@
-import {DisplayType, ItemDefinitionExtended, useAPIStore} from "../../store/store";
+import {CollectionDefinitionExtended, DisplayType, ItemDefinitionExtended, useAPIStore} from "../../store/store";
 import {APIRequestSidebarIcon} from "./APIRequest";
 import {SidebarContextMenu} from "../bareComponents/SidebarContextMenu";
 import {ItemContextMenu} from "./ItemContextMenu";
@@ -7,21 +7,21 @@ import {ItemDefinition} from "postman-collection";
 
 type ItemSidebarComponentProps = {
     item: ItemDefinition,
-    index: number
+    index: number,
+    collection:CollectionDefinitionExtended
 }
 
-export const ItemSidebarComponent:FC<ItemSidebarComponentProps> = ({item,index})=>{
-    const currentCollection = useAPIStore(state=>state.currentCollection)
+export const ItemSidebarComponent:FC<ItemSidebarComponentProps> = ({item,index, collection})=>{
     const currentItem = useAPIStore(state=>state.currentItem)
     const setCurrentItem = useAPIStore(state=>state.setCurrentItem)
     const setCurrentCollection = useAPIStore(state=>state.setCurrentCollection)
     const isVisible = useMemo(()=>{
-        return currentCollection?.type === DisplayType.SINGLE_TYPE && currentItem?.id === item.id
+        return collection?.type === DisplayType.SINGLE_TYPE && currentItem?.id === item.id
     }, [item])
 
     const openItem = ()=>{
             setCurrentItem({...item,type: DisplayType.SINGLE_TYPE})
-            setCurrentCollection({...currentCollection!, type: DisplayType.SINGLE_TYPE})
+            setCurrentCollection({...collection!, type: DisplayType.SINGLE_TYPE})
     }
 
     const Label = ()=><span onClick={openItem}>{item.name!}</span>
