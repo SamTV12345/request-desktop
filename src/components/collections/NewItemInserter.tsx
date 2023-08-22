@@ -91,18 +91,19 @@ export const NewItemInserter = () => {
                     }}}>arrow_back</button>
                     <div className="flex gap-2">
                         <span className="material-symbols-outlined text-white" onClick={()=>goToBack()}>house</span>
-                        {parents.map(c=><div className="text-white flex gap-2"><span className="material-symbols-outlined">chevron_right</span><span onClick={()=>goBackToElement(c)}>{c.name? c.name:c.info.name}</span></div>)}
+                        {parents.map((c,i)=><div key={i} className="text-white flex gap-2"><span className="material-symbols-outlined">chevron_right</span><span onClick={()=>goBackToElement(c)}>{c.name? c.name:c.info.name}</span></div>)}
                     </div>
                 </div>
                 <div className=" overflow-auto h-80">
-                    {currentItem?currentItem.item!.map((c:any)=><CollectionItem collection={c}/>):
-                        currentCollections.map(c=>{
-                        return <CollectionItem collection={c}/>
+                    {currentItem?currentItem.item!.map((c:any, index)=><CollectionItem key={index} collection={c}/>):
+                        currentCollections.map((c,index)=>{
+                        return <CollectionItem key={index} collection={c}/>
                     })}
                 </div>
                 {
                     currentItem&&
-                    <button className="mt-5 text-center w-full rounded bg-green-700 flex justify-center pt-2 pb-2"  onClick={()=>createItem(parents[0] as CollectionDefinitionExtended, parents[parents.length-1])}>
+                    <button className="mt-5 text-center w-full rounded bg-green-700 flex justify-center pt-2 pb-2"
+                            onClick={()=>createItem(parents[0] as CollectionDefinitionExtended, parents[parents.length-1])}>
                         <span className="material-symbols-outlined">upload</span>
                         Create new request</button>
                 }

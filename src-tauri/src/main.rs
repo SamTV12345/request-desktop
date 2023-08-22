@@ -55,7 +55,7 @@ async fn get_oauth2_token(window: Window, config: OAuth2Type, app_state: tauri::
 }
 
 #[tauri::command]
-async fn do_request(item: Items, collection: Spec) -> ResponseFromCall {
+async fn do_request(item: Items, collection: Spec) -> Result<ResponseFromCall, String> {
     let mut map = HeaderMap::new();
     let client = ClientBuilder::new();
     let url = item.request.clone().unwrap();
@@ -68,7 +68,7 @@ async fn do_request(item: Items, collection: Spec) -> ResponseFromCall {
         .send()
         .await;
     let response_end_time = Instant::now();
-    let res = res_wrapped.unwrap();
+    let res = res_wrapped.map_err(|e| e.to_string())?;
     let response_duration = response_end_time.duration_since(response_start_time);
 
     let mut map = HashMap::new();
@@ -93,13 +93,13 @@ async fn do_request(item: Items, collection: Spec) -> ResponseFromCall {
         response_duration: response_duration.as_millis().to_string(),
         duration: duration.as_millis().to_string(),
     };
-    ResponseFromCall{
+    Ok(ResponseFromCall{
         status ,
         body: text,
         headers: map,
         cookies: cookie_map,
         duration: time_measures,
-    }
+    })
 }
 
 fn main() {

@@ -7,7 +7,6 @@ import {FileToUpload} from "../components/upload/FileToUpload";
 import {UploadFilePreview} from "../components/upload/UploadFilePreview";
 import ResizableBox from "../components/resizable/ResizableBox";
 import {NewItemModel} from "../components/collections/NewItemModel";
-import {SidebarContextMenu} from "../components/bareComponents/SidebarContextMenu";
 import {DirectoryToUpload} from "../components/upload/DirectoryToUpload";
 import {ImportByLink} from "../components/collections/ImportByLink";
 
@@ -59,7 +58,7 @@ export const SidebarComponent = ()=>{
                 </div>
                 <div className="sidebar-collection-list">
                 {
-                    collections.map(c => {
+                    collections.map((c,index) => {
                         return (
                                     <SidebarAccordeon key={c.id} collection={c}/>
                         )

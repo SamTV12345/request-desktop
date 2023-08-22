@@ -33,6 +33,7 @@ export const EditableTable:FC<EditableTableProps<VariableDefinition|QueryParamDe
                     <th>Action</th>
                 </tr>
                 </thead>
+                <tbody>
                 {collection&&value.map((v,i)=>{
                     return <tr key={i}>
                         <td><input type="checkbox" checked={v.disabled !== undefined ?!v.disabled: true} onChange={v=>{
@@ -53,6 +54,7 @@ export const EditableTable:FC<EditableTableProps<VariableDefinition|QueryParamDe
                         </td>
                     </tr>
                 })}
+                </tbody>
             </table>
             <div className="float-right flex flex-col gap-5">
                 <button className="bg-mustard-600 p-2 rounded float-right flex" onClick={()=>onAdd(collection.id!)}>

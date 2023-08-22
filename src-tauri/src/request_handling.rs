@@ -14,13 +14,14 @@ pub async fn handle_request(url: RequestUnion, collection: &Spec,
     let mut built_client;
 
     if let RequestUnion::RequestClass(request) = url {
-        if let HeaderUnion::HeaderArray(request) = request.header.unwrap() {
-            for header in request {
-                if header.disabled.is_some() && !header.disabled.unwrap() {
-                    map.insert(HeaderName::from_str(&header.key).unwrap(), header.value.parse().unwrap());
-                }
-                else if header.disabled.is_none(){
-                    map.insert(HeaderName::from_str(&header.key).unwrap(), header.value.parse().unwrap());
+        if let Some(header) = request.header {
+            if let HeaderUnion::HeaderArray(request) = header {
+                for header in request {
+                    if header.disabled.is_some() && !header.disabled.unwrap() {
+                        map.insert(HeaderName::from_str(&header.key).unwrap(), header.value.parse().unwrap());
+                    } else if header.disabled.is_none() {
+                        map.insert(HeaderName::from_str(&header.key).unwrap(), header.value.parse().unwrap());
+                    }
                 }
             }
         }

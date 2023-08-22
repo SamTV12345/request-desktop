@@ -47,10 +47,10 @@ export const RecursiveItemGroup:FC<RecursiveItemGroupProps> = ({items, collectio
 
     return <div>{items?.map((item, i)=>{
             if(isItemGroupDefinition(item)){
-                return <ItemGroupSidebarComponent index={i} item={item}/>
+                return <ItemGroupSidebarComponent index={i} item={item} key={i}/>
             }
             else{
-                return <ItemSidebarComponent index={i} item={item}/>
+                return <ItemSidebarComponent index={i} item={item} key={i}/>
             }
         })}</div>
 

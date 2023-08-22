@@ -20,6 +20,11 @@ pub async fn get_collections(app_handle: tauri::AppHandle) -> Vec<Spec> {
             }
         }
     }
+
+    collections.sort_by(|a,b|{
+        a.info.name.cmp(&b.info.name)
+    });
+
     collections
 }
 
