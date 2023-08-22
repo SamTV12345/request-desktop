@@ -269,7 +269,7 @@ export const OAuth2Authentication = () => {
         saveCollection()
     }
 
-    return <div>
+    return <div className="">
         <OAuth2Loader/>
         <TokenManager/>
             <div>

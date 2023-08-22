@@ -1,6 +1,8 @@
-import {Editor} from "../Editor";
 import {Tabs, TabsContent, TabsList, TabsTrigger} from "@radix-ui/react-tabs";
 import {useAPIStore} from "../../../store/store";
+import {BodyResponseEditor} from "../BodyResponseEditor";
+import {CookieResponseViewer} from "../CookieResponseViewer";
+import {HeaderResponseViewer} from "../HeaderResponseViewer";
 
 export const ResponseBar = ()=>{
     const currentRequest = useAPIStore(state => state.currentRequest)
@@ -34,9 +36,9 @@ export const ResponseBar = ()=>{
             <div>Size</div>
             <div className="text-green-400">{convertToReadableUnits(getByteSize(currentRequest?.body!))}</div>
         </TabsList>
-        <TabsContent value="body" className={"response-body-viewer"}><Editor/></TabsContent>
-        <TabsContent value="cookies">Change your password here.</TabsContent>
-        <TabsContent value="headers"><div/></TabsContent>
+        <TabsContent value="body" className={"response-body-viewer"}><BodyResponseEditor/></TabsContent>
+        <TabsContent value="cookies"><CookieResponseViewer/></TabsContent>
+        <TabsContent value="headers"><HeaderResponseViewer/></TabsContent>
         <TabsContent value="test-results"><div/></TabsContent>
     </Tabs>
 }

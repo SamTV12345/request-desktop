@@ -39,7 +39,7 @@ export const BodySelector = () => {
         if(v){
             switchBodyType(currentCollection.id!,BodyType.none)
         }
-    }} label={"Kein"}/>
+    }} label={"None"}/>
         <SelectorKnob value={selectedItem.request!.body?.mode == BodyType.raw} onChange={(v)=>{
             if(v){
                 console.log("Switching up")

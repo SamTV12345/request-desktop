@@ -20,7 +20,6 @@ const ContentModelDecider = () => {
 
 const App = () => {
     const setCollections = useAPIStore(state => state.setCollections)
-    const currentCollection = useAPIStore(state => state.currentItem)
 
     async function get_collections(): Promise<CollectionDefinitionExtended[]> {
         // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command

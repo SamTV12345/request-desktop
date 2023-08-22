@@ -2,9 +2,10 @@ use std::str::FromStr;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use reqwest::Method;
 use crate::{postman_lib, replace_vars_in_url};
-use crate::postman_lib::v2_1_0::{Auth, AuthType, HeaderUnion, Host, Items, RequestUnion, Spec, UrlPath};
+use crate::postman_lib::v2_1_0::{Auth, AuthType, HeaderUnion, Host, Items, Mode, RequestUnion, Spec, UrlPath};
 use base64::{Engine as _, engine::general_purpose::STANDARD_NO_PAD};
 use serde_json::Value;
+use url_serde::serialize;
 use crate::postman_lib::v2_1_0::PathElement::{PathClass, String as PString};
 
 pub async fn handle_request(url: RequestUnion, collection: &Spec,
@@ -14,7 +15,7 @@ pub async fn handle_request(url: RequestUnion, collection: &Spec,
     let mut built_client;
 
     if let RequestUnion::RequestClass(request) = url {
-        if let Some(header) = request.header {
+        if let Some(header) = request.header.clone() {
             if let HeaderUnion::HeaderArray(request) = header {
                 for header in request {
                     if header.disabled.is_some() && !header.disabled.unwrap() {
@@ -24,11 +25,31 @@ pub async fn handle_request(url: RequestUnion, collection: &Spec,
                     }
                 }
             }
+            match request.body.clone() {
+                Some(body)=>{
+                    match body.mode{
+                        Some(mode) => {
+                            match mode {
+                                Mode::File => {
+                                    let file = body.file.unwrap();
+                                }
+                                Mode::Formdata => {}
+                                Mode::Raw => {}
+                                Mode::Urlencoded => {}
+                            }
+                        }
+                        None => {}
+                    }
+                }
+                None => {
+
+                }
+            }
         }
 
-        match request.method {
+        match request.method.clone() {
             Some(method) => {
-                let url = request.url.unwrap();
+                let url = request.url.clone().unwrap();
 
                 let method = Method::from_str(&method).unwrap();
                 if let postman_lib::v2_1_0::Url::UrlClass(url) = url {
@@ -106,6 +127,7 @@ pub async fn handle_request(url: RequestUnion, collection: &Spec,
                         .build()
                         .unwrap()
                         .request(method, replaced_url)
+                        .body(convert_respective_body(RequestUnion::RequestClass(request.clone())).unwrap());
                 }
                 else if let postman_lib::v2_1_0::Url::String(url) = url{
                     let replaced_url  = replace_vars_in_url(url, collection.variable.clone());
@@ -242,6 +264,59 @@ fn convert_to_string(value: Value) ->String{
         },
         _ => {
             "".to_string()
+        }
+    }
+}
+
+
+fn convert_respective_body(collection:RequestUnion) ->Result<String, ()> {
+    return match collection {
+        RequestUnion::RequestClass(url) => {
+            match url.body {
+                Some(body) => {
+                    match body.mode {
+                        Some(mode) => {
+                            match mode {
+                                Mode::File => {
+                                    let file = body.file.unwrap();
+                                    Ok(file.content.unwrap())
+                                }
+                                Mode::Formdata => {
+                                    let form_data = body.formdata.unwrap();
+                                    let mut form_data_string:String = "".to_string();
+                                   form_data.iter().filter(|x|!x.disabled.unwrap_or(false))
+                                       .for_each(|x|{
+                                           form_data_string.push_str(&format!("{}={}&",x.key
+                                               .clone(),urlencoding::encode(&x.value.clone().unwrap())));
+                                   });
+                                    Ok(form_data_string)
+                                }
+                                Mode::Raw => {
+                                    Ok((body.raw.unwrap()))
+                                }
+                                Mode::Urlencoded => {
+                                    let form_data = body.urlencoded.unwrap();
+                                    let mut form_data_string:String = "".to_string();
+                                    form_data.iter().filter(|x|!x.disabled.unwrap_or(false))
+                                        .for_each(|x|{
+                                            form_data_string.push_str(&format!("{}={}&",x.key,urlencoding::encode(&x.value.clone().unwrap())));
+                                        });
+                                    Ok(form_data_string)
+                                }
+                            }
+                        }
+                        None => {
+                            return Err(())
+                        }
+                    }
+                }
+                None => {
+                    return Err(())
+                }
+            }
+        }
+        RequestUnion::String(url) => {
+            Err(())
         }
     }
 }

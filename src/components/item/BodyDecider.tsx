@@ -23,7 +23,7 @@ export const BodyDecider = () => {
         }
     }
 
-    return <div>
+    return <div className="h-52">
         <BodySelector/>
         <Body/>
     </div>
