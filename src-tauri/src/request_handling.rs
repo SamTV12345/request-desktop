@@ -1,3 +1,5 @@
+use std::fs;
+use std::io::{Read};
 use std::str::FromStr;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use reqwest::Method;
@@ -5,7 +7,6 @@ use crate::{postman_lib, replace_vars_in_url};
 use crate::postman_lib::v2_1_0::{Auth, AuthType, HeaderUnion, Host, Items, Mode, RequestUnion, Spec, UrlPath};
 use base64::{Engine as _, engine::general_purpose::STANDARD_NO_PAD};
 use serde_json::Value;
-use url_serde::serialize;
 use crate::postman_lib::v2_1_0::PathElement::{PathClass, String as PString};
 
 pub async fn handle_request(url: RequestUnion, collection: &Spec,
@@ -279,7 +280,15 @@ fn convert_respective_body(collection:RequestUnion) ->Result<String, ()> {
                             match mode {
                                 Mode::File => {
                                     let file = body.file.unwrap();
-                                    Ok(file.content.unwrap())
+
+                                    return match file.content {
+                                        Some(content) => {
+                                            Ok(content)
+                                        }
+                                        None => {
+                                             fs::read_to_string(file.src.unwrap()).map_err(|_|())
+                                        }
+                                    }
                                 }
                                 Mode::Formdata => {
                                     let form_data = body.formdata.unwrap();
