@@ -123,12 +123,22 @@ pub async fn handle_request(url: RequestUnion, collection: &Spec,
                         }
                     }
                     let replaced_url  = replace_vars_in_url(url_to_use, collection.variable.clone());
-
-                    built_client = client
-                        .build()
-                        .unwrap()
-                        .request(method, replaced_url)
-                        .body(convert_respective_body(RequestUnion::RequestClass(request.clone())).unwrap());
+                    let converted_body_res = convert_respective_body(RequestUnion::RequestClass(request.clone()));
+                    match converted_body_res{
+                        Ok(converted_body) => {
+                            built_client = client
+                                .build()
+                                .unwrap()
+                                .request(method, replaced_url)
+                                .body(converted_body);
+                        }
+                        Err(_) => {
+                            built_client = client
+                                .build()
+                                .unwrap()
+                                .request(method, replaced_url)
+                        }
+                    }
                 }
                 else if let postman_lib::v2_1_0::Url::String(url) = url{
                     let replaced_url  = replace_vars_in_url(url, collection.variable.clone());
