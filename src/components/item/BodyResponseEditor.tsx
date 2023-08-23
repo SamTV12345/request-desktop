@@ -9,8 +9,14 @@ export const BodyResponseEditor = ()=>{
         if (!candidate || candidate === 'plain') {
             return 'plain_text'
         }
+        if(candidate.includes("json")){
+            return "json"
+        }
         return candidate
     },[currentRequest])
+
+
+    console.log(mode)
 
     const prettyValue = useMemo(()=>{
         if(!currentRequest?.body){
@@ -22,7 +28,7 @@ export const BodyResponseEditor = ()=>{
         catch(e){
             return currentRequest?.body?.toString()
         }
-    },[])
+    },[currentRequest])
 
 
     return <Editor readonly={true} value={prettyValue} onChange={()=>{}} mode={mode}/>

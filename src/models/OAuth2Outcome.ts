@@ -3,7 +3,8 @@ export interface OAuth2SucessOutcome {
     expires_in: number,
     scope: string,
     token_type: string,
-    token_name:string
+    token_name:string,
+    id?:string
 }
 
 

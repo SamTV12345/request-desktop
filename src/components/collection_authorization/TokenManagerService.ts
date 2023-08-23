@@ -36,7 +36,7 @@ export const insertToken = ( token_key:string, token: string, token_name: string
         const db = dbRq.result
         const transaction = db.transaction(TOKEN_DB, "readwrite")
         const objectStore = transaction.objectStore(TOKEN_DB)
-        const request = objectStore.add({
+        const request = objectStore.put({
             access_token: token,
             token_name
         }, token_key)

@@ -1,6 +1,6 @@
 import {CollectionDefinitionExtended, useAPIStore} from "../../store/store";
 import {useForm, useWatch} from "react-hook-form";
-import {useMemo} from "react";
+import {useEffect, useMemo} from "react";
 import {VariableDefinition} from "postman-collection";
 import { emit, listen } from '@tauri-apps/api/event'
 import {invoke} from '@tauri-apps/api/tauri'
@@ -51,12 +51,6 @@ export const OAuth2Authentication = () => {
     const setOpenSuccessOAuth2 = useAPIStore(state=>state.setOAuth2Screen)
     const setPayload = useAPIStore(state=>state.setOAuth2Outcome)
     const selectedToken = useAPIStore(state=>state.selectedToken)
-
-    listen('oauth2-callback', (event)=>{
-        console.log(event)
-    })
-        .then(c=>console.log(c))
-        .catch(c=>console.log(c))
 
     const getKey:(key: string, defaultValue: string) => string = (key, defaultValue)=>{
         const filteredCollection =  currentCollection?.auth?.oauth2?.filter((v)=>v.key === key)
@@ -375,7 +369,8 @@ export const OAuth2Authentication = () => {
         <button className="bg-mustard-600 pl-2 pr-2 pt-1 pb-1 rounded" onClick={async () => {
             await doRequest()
                 .then((c)=>{
-                    setPayload({...c, token_name: getValues().tokenName!} as OAuth2SucessOutcome)
+                    let id = selectedToken?.key
+                    setPayload({...c, token_name: getValues().tokenName!,id } as OAuth2SucessOutcome)
                     setOpenSuccessOAuth2(true)
                 })
                 .catch(c=>{

@@ -12,12 +12,14 @@ export const TokenSelector = ()=>{
     const setSelectedToken = useAPIStore(state=>state.setSelectedToken)
     const selectedToken = useAPIStore(state=>state.selectedToken)
     const currentItem = useAPIStore(state=>state.currentItem)
+    const openSuccessOAuth2 = useAPIStore(state=>state.openOAuth2Screen)
 
     useEffect(() => {
-        getAllTokens().then((tokens) => {
+        getAllTokens()
+            .then((tokens) => {
             setTokens(tokens)
         })
-    }, [])
+    }, [openSuccessOAuth2])
 
     const changeSelectedToken = (token:TokenWithKey)=>{
         setSelectedToken(token)

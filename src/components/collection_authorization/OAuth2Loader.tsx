@@ -1,6 +1,6 @@
 import * as Dialog from "@radix-ui/react-dialog";
-import {useEffect, useMemo, useState} from "react";
-import {useAPIStore} from "../../store/store";
+import {useEffect, useState} from "react";
+import {DisplayType, ItemDefinitionExtended, useAPIStore} from "../../store/store";
 import {OAuth2FailureOutcome, OAuth2SucessOutcome} from "../../models/OAuth2Outcome";
 import {insertToken} from "./TokenManagerService";
 
@@ -17,6 +17,7 @@ export const OAuth2Loader = () => {
     const setOpenSuccessOAuth2 = useAPIStore(state=>state.setOAuth2Screen)
     const oauth2Playload = useAPIStore(state=>state.oauth2Outcome)
     const collection = useAPIStore(state=>state.currentCollection)
+    const currentItem = useAPIStore(state=>state.currentItem) as ItemDefinitionExtended
 
     useEffect(() => {
         if(openSuccessOAuth2 && isOAuth2Success(oauth2Playload)){
@@ -31,8 +32,8 @@ export const OAuth2Loader = () => {
     useEffect(() => {
 
         if(countDown === 0 && isOAuth2Success(oauth2Playload)){
-            // @ts-ignore
-            insertToken( crypto.randomUUID(),oauth2Playload.access_token, oauth2Playload.token_name,collection?.info._postman_id as string )
+            const newId = oauth2Playload.id? oauth2Playload.id: crypto.randomUUID()
+            insertToken( newId, oauth2Playload.access_token, oauth2Playload.token_name,collection?.type === DisplayType.COLLECTION_TYPE? collection?.info._postman_id: currentItem.id!)
             setOpenSuccessOAuth2(false)
         }
     }, [countDown]);
