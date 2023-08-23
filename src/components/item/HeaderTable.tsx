@@ -74,8 +74,8 @@ export const HeaderTable = ()=> {
 
     const onAdd = (collectionId: string)=>{
         headers.push({
-            value: 'Neuer Wert',
-            key: 'Neuer Key',
+            value: 'Neuer-Wert',
+            key: 'Neuer-Key',
             disabled: false
         })
         const item  = {
@@ -91,7 +91,6 @@ export const HeaderTable = ()=> {
     }
 
     const onDelete = (collectionId: string, index:number)=>{
-        const resultingValue = headers.splice(index,1)
         const item  = {
             ...currentItem,
             request: {

@@ -4,6 +4,7 @@ import {Token, TokenLoadResult, TokenWithKey} from "../../models/OAuth2Outcome";
 import {useAPIStore} from "../../store/store";
 import {TokenManagerDeleteDropdown} from "./TokenManagerDeleteDropdown";
 import {getAllTokens} from "./TokenManagerService";
+import {isTokenExpired} from "../../utils/utils";
 
 
 export const parseJWT = (token: TokenLoadResult): Token => {
@@ -60,9 +61,9 @@ export const TokenManager = ()=>{
     return <Dialog.Root open={openTokenManager}>
         <Dialog.Portal>
             <Dialog.Overlay className="fixed inset-0 bg-black opacity-30"/>
-            <Dialog.Content className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-basecol rounded-lg p-6">
+            <Dialog.Content className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-basecol rounded-lg p-6 min-h-[20%] max-h-[50%] overflow-auto">
                 <Dialog.Title className="text-white font-bold text-2xl uppercase">Manage Access Tokens</Dialog.Title>
-                <div className="flex gap-5">
+                <div className="grid grid-cols-[1fr_auto_3fr] gap-5">
                     <div>
                         <div className="text-white grid grid-cols-2 gap-5"><span>All tokens</span> <TokenManagerDeleteDropdown/></div>
                         <div className="flex flex-col gap-0">
@@ -70,18 +71,18 @@ export const TokenManager = ()=>{
                         tokens.map((token)=> {
                             return <button key={token.key} onClick={()=>{
                                 setSelectedToken(token)
-                            }} className="text-white text-left">{token.token_name}</button>
+                            }} className={`text-white text-left ${isTokenExpired(token) && 'line-through'}`}>{token.token_name}</button>
                         })
                         }
                         </div>
                     </div>
                     <div className="border-[1px] border-white"></div>
-                    <div>
+                    <div className="overflow-auto">
                         {
                             selectedToken?Object.entries(selectedToken).map(([key, value])=>{
                                 return <div className="grid grid-cols-2 gap-3 text-white">
                                     <div>{key}</div>
-                                    <div>{showValues(value)}</div>
+                                    <div className="break-all">{showValues(value)}</div>
                                 </div>
                             }):<span className="text-white">No tokens selected</span>
                         }

@@ -1,6 +1,7 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import {deleteToken, getAllTokens} from "./TokenManagerService";
 import {useAPIStore} from "../../store/store";
+import {isTokenExpired} from "../../utils/utils";
 
 export const TokenManagerDeleteDropdown = ()=>{
     const setTokens = useAPIStore(state=>state.setTokens)
@@ -16,7 +17,18 @@ export const TokenManagerDeleteDropdown = ()=>{
                 <DropdownMenu.ItemIndicator className="absolute left-0">
                     <span className="material-symbols-outlined align-middle !leading-none !text-xl">check</span>
                 </DropdownMenu.ItemIndicator>
-                <DropdownMenu.Label className="cursor-pointer">Expired tokens</DropdownMenu.Label>
+                <DropdownMenu.Label onClick={()=>{
+                    getAllTokens().then((tokens) => {
+                        const deletedTokensKeys:string[] = []
+                        for (const token of tokens) {
+                            if (isTokenExpired(token)) {
+                                deleteToken(token.key)
+                                deletedTokensKeys.push(token.key)
+                            }
+                        }
+                        setTokens(tokens.filter(token => !deletedTokensKeys.includes(token.key)))
+                    })
+                }} className="cursor-pointer">Expired tokens</DropdownMenu.Label>
             </DropdownMenu.Item>
             <DropdownMenu.Item>
                 <DropdownMenu.Label onClick={async () => {

@@ -15,9 +15,6 @@ export const BodyResponseEditor = ()=>{
         return candidate
     },[currentRequest])
 
-
-    console.log(mode)
-
     const prettyValue = useMemo(()=>{
         if(!currentRequest?.body){
             return ""

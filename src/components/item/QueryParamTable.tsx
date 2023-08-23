@@ -87,8 +87,8 @@ export const ParamTable = ()=> {
 
     const onAdd = (collectionId: string)=>{
         value.push({
-            value: 'Neuer Wert',
-            key: 'Neuer Key',
+            value: 'Neuer-Wert',
+            key: 'Neuer-Key',
             disabled: false
         })
         const item  = {

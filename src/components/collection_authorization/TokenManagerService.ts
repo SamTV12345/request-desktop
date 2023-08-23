@@ -1,5 +1,6 @@
 import {Token, TokenLoadResult, TokenWithKey} from "../../models/OAuth2Outcome";
 import {parseJWT} from "./TokenManager";
+import {useAPIStore} from "../../store/store";
 
 const TOKEN_DB = "tokens"
 const ITEM_TO_DB = "item-to-token"
@@ -14,7 +15,7 @@ export const deleteToken = (id: string)=>{
         const objectStore2 = transaction2.objectStore(ITEM_TO_DB)
         const objectStore = transaction.objectStore(TOKEN_DB)
         const request = objectStore.delete(id)
-        console.log("Token deleted",id)
+
         objectStore2.openCursor().onsuccess = (event:any)=>{
             const cursor = event.target.result
             if (cursor) {
@@ -25,12 +26,13 @@ export const deleteToken = (id: string)=>{
             }
         }
         request.onsuccess = ()=>{
-            console.log("Token deleted")
+            const filteredTokens = useAPIStore.getState().tokens.filter(token=>token.key !== id)
+            useAPIStore.getState().setTokens(filteredTokens)
         }
     }
 }
 
-export const insertToken = ( token_key:string, token: string, token_name: string, item_id:string)=>{
+export const insertToken = ( token_key:string, token: string, token_name: string, item_id:string, refresh_token?:string, config?:any)=>{
     const dbRq = indexedDB.open(TOKEN_DB, 1)
     dbRq.onsuccess = (event)=>{
         const db = dbRq.result
@@ -38,7 +40,9 @@ export const insertToken = ( token_key:string, token: string, token_name: string
         const objectStore = transaction.objectStore(TOKEN_DB)
         const request = objectStore.put({
             access_token: token,
-            token_name
+            token_name,
+            refresh_token,
+            config:config
         }, token_key)
         request.onsuccess = ()=>{
             setTokenToItem(token_key, item_id)

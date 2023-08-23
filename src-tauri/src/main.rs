@@ -67,7 +67,6 @@ pub struct ExtraField {
 async fn do_request(item: Items, collection: Spec, extra_fields: Vec<ExtraField>) ->
                                                                               Result<ResponseFromCall,
     String> {
-    println!("{:?}",extra_fields);
     let mut map = HeaderMap::new();
     let client = ClientBuilder::new();
     let url = item.request.clone().unwrap();

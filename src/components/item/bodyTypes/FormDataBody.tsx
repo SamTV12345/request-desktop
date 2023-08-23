@@ -93,8 +93,8 @@ export const FormDataBody = () => {
         }
 
         formdata!.push({
-            value: 'Neuer Wert',
-            key: 'Neuer Key',
+            value: 'Neuer-Wert',
+            key: 'Neuer-Key',
             disabled: false
         })
         const currentItemCloned:ItemDefinitionExtended = {

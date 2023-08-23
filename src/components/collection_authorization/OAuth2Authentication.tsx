@@ -51,7 +51,7 @@ export const OAuth2Authentication = () => {
     const setOpenSuccessOAuth2 = useAPIStore(state=>state.setOAuth2Screen)
     const setPayload = useAPIStore(state=>state.setOAuth2Outcome)
     const selectedToken = useAPIStore(state=>state.selectedToken)
-
+    let currentConfig:any;
     const getKey:(key: string, defaultValue: string) => string = (key, defaultValue)=>{
         const filteredCollection =  currentCollection?.auth?.oauth2?.filter((v)=>v.key === key)
         if(filteredCollection === undefined|| !filteredCollection[0]){
@@ -97,7 +97,7 @@ export const OAuth2Authentication = () => {
                     clientSecret: val.clientSecret,
                     tokenName: val.tokenName
                 }
-
+                currentConfig = config1
                 return invoke<OAuth2SucessOutcome>('get_oauth2_token', {
                     config: config1
                 })
@@ -117,6 +117,7 @@ export const OAuth2Authentication = () => {
                     codeChallenge: val.challengeAlgorithm,
                     tokenName: val.tokenName
                 }
+                currentConfig = config2
                 return invoke<OAuth2SucessOutcome>('get_oauth2_token', {
                     config: config2
                 })
@@ -130,6 +131,7 @@ export const OAuth2Authentication = () => {
                     callbackUrl: val.redirect_uri,
                     tokenName: val.tokenName
                 }
+                currentConfig = config3
                 return invoke<OAuth2SucessOutcome>('get_oauth2_token', {
                     config: config3
                 })
@@ -145,12 +147,11 @@ export const OAuth2Authentication = () => {
                     accessTokenUrl: val.accessTokenUrl,
                     tokenName: val.tokenName
                 }
-                console.log("Authorization Code", config4)
+                currentConfig = config4
                 return invoke<OAuth2SucessOutcome>('get_oauth2_token', {
                     config: config4
                 })
             case OAuth2Flow.PASSWORD_CREDENTIALS:
-                console.log("password credentials")
                 let config5: PasswordCredentialsFlow = {
                     state: "",
                     clientAuthentication: val.client_authentication as "header" | "body",
@@ -162,7 +163,7 @@ export const OAuth2Authentication = () => {
                     password: val.password,
                     username: val.username
                 }
-                console.log(config5)
+                currentConfig = config5
                 return invoke<OAuth2SucessOutcome>('get_oauth2_token', {
                     config: config5
                 })
@@ -294,7 +295,7 @@ export const OAuth2Authentication = () => {
                 </div>
             </div>
         <h2 className="font-bold mt-5">Configure New Token</h2>
-        <form onSubmit={handleSubmit(populateOAuth2Auth)} className="grid grid-cols-2 gap-5 text-white mb-2">
+        <form onBlur={handleSubmit(populateOAuth2Auth)} className="grid grid-cols-2 gap-5 text-white mb-2">
                 <label>Token Name:</label>
                 <input {...register('tokenName')} className="bg-basecol p-1"/>
                 <label>Grant Type:</label>
@@ -364,13 +365,12 @@ export const OAuth2Authentication = () => {
                 <option value="header">Send as Basic Auth header</option>
                 <option value="body">Send as POST body parameter</option>
             </select>
-            <button type="submit" className="bg-mustard-600">Save</button>
     </form>
         <button className="bg-mustard-600 pl-2 pr-2 pt-1 pb-1 rounded" onClick={async () => {
             await doRequest()
                 .then((c)=>{
                     let id = selectedToken?.key
-                    setPayload({...c, token_name: getValues().tokenName!,id } as OAuth2SucessOutcome)
+                    setPayload({...c, token_name: getValues().tokenName!,id, config:currentConfig} as OAuth2SucessOutcome)
                     setOpenSuccessOAuth2(true)
                 })
                 .catch(c=>{

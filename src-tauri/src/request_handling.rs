@@ -23,9 +23,7 @@ pub async fn handle_request(url: RequestUnion, collection: &Spec,
         if let Some(header) = request.header.clone() {
             if let HeaderUnion::HeaderArray(request) = header {
                 for header in request {
-                    if header.disabled.is_some() && !header.disabled.unwrap() {
-                        map.insert(HeaderName::from_str(&header.key).unwrap(), header.value.parse().unwrap());
-                    } else if header.disabled.is_none() {
+                    if (header.disabled.is_some() && !header.disabled.unwrap()) || header.disabled.is_none() {
                         map.insert(HeaderName::from_str(&header.key).unwrap(), header.value.parse().unwrap());
                     }
                 }
@@ -204,7 +202,6 @@ pub fn add_auth_headers(collection: &Spec, item: Items, map: &mut HeaderMap<Head
 fn insert_auth(auth: Auth, mut map: HeaderMap<HeaderValue>, extra_fields: Vec<ExtraField>) -> HeaderMap<HeaderValue>{
     return match auth.auth_type {
                 AuthType::Awsv4 => {
-
                     map
                 }
                 AuthType::Apikey => {

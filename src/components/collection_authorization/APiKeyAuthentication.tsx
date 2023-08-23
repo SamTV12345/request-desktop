@@ -52,7 +52,8 @@ export const APiKeyAuthentication = ()=> {
             value: getKey('value', "", respectiveElement!),
             key: getKey('key', "", respectiveElement!),
             header: getKey('in', "header", respectiveElement!) as "header" | "query"
-        }
+        },
+        mode: "onBlur"
     })
 
 
@@ -121,7 +122,7 @@ export const APiKeyAuthentication = ()=> {
         }
     }
 
-    return <form className="grid grid-cols-2 gap-5 text-white" onSubmit={handleSubmit(populateApiKeyAuth)}>
+    return <form className="grid grid-cols-2 gap-5 text-white" onBlur={handleSubmit(populateApiKeyAuth)}>
         <label>Key</label>
         <div><input className="bg-basecol p-1" {...register('key')}/></div>
 
@@ -133,6 +134,5 @@ export const APiKeyAuthentication = ()=> {
             <option value="header">Header</option>
             <option value="query">Query Params</option>
         </select>
-        <button type="submit">Add</button>
     </form>
 }

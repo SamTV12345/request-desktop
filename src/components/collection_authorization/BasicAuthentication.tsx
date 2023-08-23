@@ -23,7 +23,8 @@ export const BasicAuthentication = ()=>{
         defaultValues: {
             password: getKey('password', ""),
             username: getKey('username', "")
-        }
+        },
+        mode: "onBlur"
     })
 
     const populateBasicAuth = (data: BasicAuthenticationData)=>{
@@ -53,11 +54,10 @@ export const BasicAuthentication = ()=>{
 
     }
 
-    return <form className="grid grid-cols-2 gap-5 text-white" onSubmit={handleSubmit(populateBasicAuth)}>
+    return <form className="grid grid-cols-2 gap-5 text-white" onBlur={handleSubmit(populateBasicAuth)}>
         <label>Username:</label>
         <input {...register('username')} className="bg-basecol p-1"/>
         <label>Password:</label>
         <input {...register('password')} className="bg-basecol p-1"/>
-        <button type="submit">Save</button>
     </form>
 }

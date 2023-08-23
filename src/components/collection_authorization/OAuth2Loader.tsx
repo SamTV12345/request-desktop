@@ -33,7 +33,9 @@ export const OAuth2Loader = () => {
 
         if(countDown === 0 && isOAuth2Success(oauth2Playload)){
             const newId = oauth2Playload.id? oauth2Playload.id: crypto.randomUUID()
-            insertToken( newId, oauth2Playload.access_token, oauth2Playload.token_name,collection?.type === DisplayType.COLLECTION_TYPE? collection?.info._postman_id: currentItem.id!)
+            insertToken( newId, oauth2Playload.access_token, oauth2Playload.token_name,
+                collection?.type === DisplayType.COLLECTION_TYPE? collection?.info._postman_id: currentItem.id!, oauth2Playload.refresh_token,
+                oauth2Playload.config)
             setOpenSuccessOAuth2(false)
         }
     }, [countDown]);
@@ -48,8 +50,8 @@ export const OAuth2Loader = () => {
                     <div className="flex justify-center mt-5">
                         <span className="material-symbols-outlined rounded-full bg-green-700 text-white text-center">check</span>
                     </div>
-
                         <Dialog.Description className="text-white mt-2">You will be redirected to the token manager in {countDown}</Dialog.Description>
+                        <button className="bg-mustard-600 p-1 rounded float-right mt-5 text-white" onClick={()=>setCountDown(0)}>Proceed</button>
                 </div>
                     :<div>
 

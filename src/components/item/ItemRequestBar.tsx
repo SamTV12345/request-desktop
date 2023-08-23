@@ -8,6 +8,8 @@ import {replaceItem} from "../../utils/CollectionReplaceUtils";
 import {useDebounce} from "../../hooks/useDebounce";
 import {ExtraField} from "../../models/ExtraField";
 import {getToken, getTokenByCollectionId} from "../collection_authorization/TokenManagerService";
+import {isTokenExpired} from "../../utils/utils";
+import {OAuth2SucessOutcome} from "../../models/OAuth2Outcome";
 
 export const ItemRequestBar = ()=>{
     const setCurrentRequest = useAPIStore(state => state.setCurrentRequest)
@@ -59,6 +61,35 @@ export const ItemRequestBar = ()=>{
            }))
    }
 
+
+   const handleRequest = async ()=>{
+       const extra_fields: ExtraField[] = []
+       if (currentItem.request?.auth?.type === "oauth2") {
+           await getTokenByCollectionId(currentItem.id!)
+               .then((token) => {
+                   if(isTokenExpired(token) && token.refresh_token){
+                       console.log("token expired")
+                       invoke<OAuth2SucessOutcome>("get_oauth2_token", {refreshToken: token.refresh_token, ...token.config})
+                           .then(c=>{
+                               extra_fields.push({key: "token", value: c.access_token})
+                               performInternalRequest(extra_fields)
+                           })
+                           .catch(c=>{
+                               console.log(c)
+                           })
+                   }
+                   else{
+                       extra_fields.push({key: "token", value: token.access_token})
+                       performInternalRequest(extra_fields)
+                   }
+
+               })
+       }
+       else {
+           performInternalRequest(extra_fields)
+       }
+   }
+
     return  <div className="request-url-section">
         <div className="border-2 border-mustard-600 p-3 rounded">
             <div className="outline-2 outline-gray-600 bg-transparent">
@@ -69,20 +100,10 @@ export const ItemRequestBar = ()=>{
             }} onBlur={saveCollection}/>
         </div>
         <button onClick={async () => {
-            const extra_fields: ExtraField[] = []
-            if (currentItem.request?.auth?.type === "oauth2") {
-                await getTokenByCollectionId(currentItem.id!)
-                    .then((token) => {
-                        extra_fields.push({key: "token", value: token.access_token})
-                        performInternalRequest(extra_fields)
-                    })
-            }
-            else {
-                performInternalRequest(extra_fields)
-            }
 
+            await handleRequest()
         }} className="bg-mustard-600 p-2 w-28 text-white hover:bg-mustard-500 leading-none px-4 py-3 rounded-lg shadow-[0_4px_16px_rgba(0,0,0,0.2)] hover:shadow-[0_4px_16px_theme(colors.mustard.500)] text-sm transition disabled:opacity-50 disabled:shadow-none disabled:hover:bg-mustard-600">
-            Senden
+            Send
         </button>
     </div>
 }

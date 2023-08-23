@@ -1,10 +1,12 @@
 export interface OAuth2SucessOutcome {
     access_token: string,
+    refresh_token?: string,
     expires_in: number,
     scope: string,
     token_type: string,
     token_name:string,
-    id?:string
+    id?:string,
+    config?: any
 }
 
 
@@ -20,7 +22,7 @@ export interface OAuth2FailureOutcome {
 
 export interface Token extends OAuth2SucessOutcome {
     token_name: string,
-    expires_at: number,
+    exp: number,
     scope: string,
     jti: string,
     iss: string,

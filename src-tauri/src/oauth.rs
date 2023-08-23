@@ -10,6 +10,7 @@ use oauth2::reqwest::async_http_client;
 use crate::oauth2_error::OAuth2Error;
 use crate::oauth::OAuth2Type::RefreshToken;
 use oauth2::reqwest::http_client;
+use crate::ExtraField;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct OAuth2Response {
@@ -22,7 +23,6 @@ struct OAuth2Response {
 }
 
 pub async fn handle_oauth(_window: &Window, config: OAuth2Type, app_state: AppHandle) ->Result<BasicTokenResponse, OAuth2Error>{
-    println!("Config: {:?}", config);
     return match config {
         OAuth2Type::Implicit(_s) => {
             let client =
@@ -70,11 +70,9 @@ pub async fn handle_oauth(_window: &Window, config: OAuth2Type, app_state: AppHa
 
                         tx.send(code.clone()).expect("Failed to send code to channel");
                     }
-
                     !is_callback_url
                 })
                 .build().unwrap();
-
             // Wait for code from authentication window
 
             let obtained_code = rx.recv().unwrap().expect("Got no code");
@@ -169,14 +167,17 @@ pub async fn handle_oauth(_window: &Window, config: OAuth2Type, app_state: AppHa
         }
         RefreshToken(a) => {
             use oauth2::RefreshToken;
+
+            println!("{:?}",a);
+
             let client =
                 BasicClient::new(
-                    ClientId::new("client_id".to_string()),
-                    Some(ClientSecret::new("client_secret".to_string())),
-                    AuthUrl::new("http://authorize".to_string()).unwrap(),
-                    Some(TokenUrl::new("http://token".to_string()).unwrap()),
+                    a.client_id,
+                    a.client_secret,
+                    AuthUrl::new(a.auth_url).unwrap(),
+                    Some(TokenUrl::new(a.access_token_url).unwrap()),
                 );
-            client.exchange_refresh_token(&RefreshToken::new(a.token_name))
+            client.exchange_refresh_token(&RefreshToken::new(a.refresh_token))
                 .request_async(async_http_client)
                 .await
                 .map_err(|e| {
@@ -215,7 +216,6 @@ pub async fn handle_oauth(_window: &Window, config: OAuth2Type, app_state: AppHa
                     .map_err(|e| {
                         OAuth2Error::from_basic_error(e)
                     })?)
-
         }
     }
 }
@@ -302,5 +302,9 @@ pub struct PasswordFlow {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct RefreshTokenFlow {
-    token_name: String
+    refresh_token: String,
+    access_token_url: String,
+    auth_url: String,
+    client_id: ClientId,
+    client_secret: Option<ClientSecret>
 }

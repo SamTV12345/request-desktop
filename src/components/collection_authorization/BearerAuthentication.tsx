@@ -24,10 +24,12 @@ export const BearerAuthentication = ()=>{
     } = useForm<BearerData>({
         defaultValues: {
             token: getKey('token', "")
-        }
+        },
+        mode: "onBlur"
     });
 
     const populateBearerKeyAuth = (data: BearerData)=>{
+        console.log("submitting")
         const newAuth = [{
             key: "token",
             type: "string",
@@ -48,9 +50,8 @@ export const BearerAuthentication = ()=>{
     }
 
 
-    return <form onSubmit={handleSubmit(populateBearerKeyAuth)} className="grid grid-cols-2 gap-5 text-white">
+    return <form onBlur={handleSubmit(populateBearerKeyAuth)} className="grid grid-cols-2 gap-5 text-white">
         <label>Token:</label>
         <input {...register('token')} className="bg-basecol p-1"/>
-        <button type="submit">Save</button>
     </form>
 }
