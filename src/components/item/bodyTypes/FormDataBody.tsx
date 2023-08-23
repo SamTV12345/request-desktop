@@ -17,7 +17,7 @@ export const FormDataBody = () => {
                 ...currentItem.request,
                 body: {
                     ...currentItem.request?.body,
-                    formdata: currentItem.request?.body?.formdata?.map((item, i) => {
+                    formdata: (currentItem.request?.body?.formdata as FormParamDefinition[])?.map((item, i) => {
                         if (i === index) {
                             item.disabled = disabled
                         }
@@ -35,7 +35,7 @@ export const FormDataBody = () => {
                 ...currentItem.request,
                 body: {
                     ...currentItem.request?.body,
-                    formdata: currentItem.request?.body?.formdata?.map((item, i)=>{
+                    formdata: (currentItem.request?.body?.formdata as FormParamDefinition[])?.map((item, i)=>{
                         if(i===index){
                             item.key = newKey
                         }
@@ -74,7 +74,7 @@ export const FormDataBody = () => {
                 ...currentItem.request,
                 body:{
                 ...currentItem.request?.body,
-                    formdata: currentItem.request?.body?.formdata?.map((item, i)=>{
+                    formdata: (currentItem.request?.body?.formdata as FormParamDefinition[])?.map((item, i)=>{
                         if(i===index){
                             item.description = newDescription
                         }
@@ -87,7 +87,7 @@ export const FormDataBody = () => {
     }
 
     const onAdd = (collectionId: string)=>{
-        let formdata:FormParamDefinition[] | PropertyList<FormParam> | undefined = currentItem.request?.body?.formdata
+        let formdata:FormParamDefinition[] | undefined = currentItem.request?.body?.formdata as FormParamDefinition[]
         if(!formdata){
             formdata = []
         }
@@ -130,7 +130,7 @@ export const FormDataBody = () => {
         updateCurrentItem(currentItemCloned)
     }
 
-    return  <EditableTable value={currentItem.request?.body?.formdata == undefined?[]: currentItem.request.body.formdata}
+    return  <EditableTable value={currentItem.request?.body?.formdata == undefined?[]: currentItem.request.body.formdata as FormParamDefinition[]}
                            onDisabled={disableQueryParam} onKeyChange={onKeyChange} disabled={true}
                            onValueChange={onValueChange} onDescriptionChange={onDescriptionChange}
                            onAdd={onAdd} onSave={saveCollectionToDB} onDelete={onDelete}/>
