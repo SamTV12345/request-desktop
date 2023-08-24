@@ -4,12 +4,12 @@ import ResizableBox from "../resizable/ResizableBox";
 import {ResponseBar} from "./responseBarItems/ResponseBar";
 import {ItemRequestBar} from "./ItemRequestBar";
 import {ItemNameAdapter} from "./ItemNameAdapter";
+import {useState} from "react";
 
 
 export const ContentModel = () => {
     const currentItem = useAPIStore(state => state.currentItem) as ItemDefinitionExtended
-    const currentRequest = useAPIStore(state => state.currentRequest)
-
+    const responseExtended = useAPIStore(state => state.responseExtended)
 
     return (
         <div className="request-view">
@@ -17,10 +17,11 @@ export const ContentModel = () => {
                 <ItemNameAdapter/>
                 <ItemRequestBar/>
                 <QueryParam/>
-                {currentRequest &&
-                    <ResizableBox direction={"top"} initialSize={300} className="response-section border-t-2 border-gray-500">
+                {
+                    <ResizableBox direction={"top"} initialSize={50} className={`response-section border-t-2 border-gray-500 ${!responseExtended&& '!h-10'}`}>
                         <ResponseBar/>
-                    </ResizableBox>}
+                    </ResizableBox>
+                }
             </>}
         </div>
     )

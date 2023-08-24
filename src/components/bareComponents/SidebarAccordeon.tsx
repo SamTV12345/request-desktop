@@ -25,10 +25,11 @@ export const SidebarAccordeon:FC<SidebarAccordeonProps> = ({collection}) => {
     const setCurrentItem = useAPIStore(state=>state.setCurrentItem)
     const currentCollection = useAPIStore(state=>state.currentCollection)
 
-        return  <Accordion type="single" collapsible  key={collection.name+"name"} className={`border-none ${currentCollection?.type === DisplayType.COLLECTION_TYPE && currentCollection.info._postman_id === collection.info._postman_id&& 'bg-background_tertiary'}` }>
-            <AccordionItem value="item-1" key={collection.name+"item"} className="cursor-pointer border-none">
+        return  <Accordion type="single" collapsible  key={collection.info._postman_id+"name"}
+                           className={`border-none ${currentCollection?.type === DisplayType.COLLECTION_TYPE
+                           && currentCollection.info._postman_id === collection.info._postman_id&& 'bg-background_tertiary'}` }>
+            <AccordionItem value="item-1" key={collection.info._postman_id+"item"} className="cursor-pointer border-none">
                     <AccordionTrigger><span onClick={()=>{
-                        // @ts-ignore
                         setCurrentCollection({...collection, type: DisplayType.COLLECTION_TYPE})
                         setCurrentItem(undefined)
                     }}><SidebarContextMenu triggerLabel={collection.info?.name as string} children={<CollectionContextMenu collection={collection}/>}/></span></AccordionTrigger>
@@ -47,10 +48,10 @@ export const RecursiveItemGroup:FC<RecursiveItemGroupProps> = ({items, collectio
 
     return <div>{items?.map((item, i)=>{
             if(isItemGroupDefinition(item)){
-                return <ItemGroupSidebarComponent index={i} item={item} key={i} collection={collection}/>
+                return <ItemGroupSidebarComponent index={i} item={item} key={item.id} collection={collection}/>
             }
             else{
-                return <ItemSidebarComponent index={i} item={item} key={i} collection={collection}/>
+                return <ItemSidebarComponent index={i} item={item} key={item.id} collection={collection}/>
             }
         })}</div>
 

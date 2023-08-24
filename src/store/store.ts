@@ -57,7 +57,9 @@ interface APIState {
     setOpenNewCollectionModal: (by: boolean)=>void,
     insertNewCollection: (collection: CollectionDefinitionExtended)=>void,
     newItemInserterOpen: boolean,
-    setNewItemInserterOpen: (by: boolean)=>void
+    setNewItemInserterOpen: (by: boolean)=>void,
+    responseExtended: boolean,
+    setResponseExtended: (by: boolean)=>void
 }
 
 export const useAPIStore = create<APIState>()((set,getState) => ({
@@ -140,5 +142,7 @@ export const useAPIStore = create<APIState>()((set,getState) => ({
         })
         set({collections: updatedCollections})
         invoke("update_collection", {collection: collection})
-    }
+    },
+    responseExtended: false,
+    setResponseExtended: (responseExtended: boolean)=>set({responseExtended})
 }))

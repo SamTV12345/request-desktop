@@ -7,14 +7,15 @@ type EditorProps = {
     readonly: boolean
     value: string
     onChange: (value: string|undefined)=>void
-    mode: string
+    mode: string,
 }
 
 export const Editor:FC<EditorProps> = ({readonly,mode,value,onChange}) => {
 
     return <MonacoEditor
         onChange={onChange}
-        defaultLanguage={mode} value={value || ""} theme="vs-dark" options={{
+        defaultLanguage={mode} value={value}
+        theme="vs-dark" options={{
             minimap :{
                 enabled: false
             },

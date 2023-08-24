@@ -7,17 +7,18 @@ type ResizableBoxProps = {
     direction: ResizeDirection,
     initialSize: number,
     className?: string,
-    style?: CSSProperties
+    style?: CSSProperties,
+    intialSize?: number
 }
 
-const ResizableBox: FC<PropsWithChildren<ResizableBoxProps>> = ({children, style, className, direction}) => {
+const ResizableBox: FC<PropsWithChildren<ResizableBoxProps>> = ({children, style,initialSize, className, direction}) => {
     const appliedStyle: CSSProperties = {
         position: "relative",
         ...style
     }
 
     return (
-        <ResizableContext<HTMLDivElement> direction={direction} initialSize={200} render={(size, targetRef) => (
+        <ResizableContext<HTMLDivElement> direction={direction} initialSize={initialSize} render={(size, targetRef) => (
             <div style={{
                 ...appliedStyle,
                 ...((direction === "top" || direction === "bottom") ? {height: size} : {width: size})

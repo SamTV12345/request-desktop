@@ -711,7 +711,7 @@ body, #root {
 }
 
 .response-section {
-    min-height: 100px;
+    min-height: 50px;
     flex-shrink: 0;
 }
 
