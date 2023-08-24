@@ -85,7 +85,6 @@ export const OAuth2Authentication = () => {
 
     const doRequest: ()=>Promise<OAuth2SucessOutcome|undefined> = async ()=>{
         let val = getValues()
-        console.log(val)
             switch (grant_type_selection[0]){
             case OAuth2Flow.CLIENT_CREDENTIALS:
                 let config1: ClientCredentialsFlow = {

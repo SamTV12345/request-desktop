@@ -5,6 +5,7 @@ import {FileUpload} from "../models/FileUpload";
 import {cloneElement} from "react";
 import {invoke} from '@tauri-apps/api/tauri'
 import {OAuth2FailureOutcome, OAuth2SucessOutcome, TokenWithKey} from "../models/OAuth2Outcome";
+import {MetaData} from "../models/MetaData";
 export enum DisplayType {
     SINGLE_TYPE,
     COLLECTION_TYPE
@@ -59,7 +60,9 @@ interface APIState {
     newItemInserterOpen: boolean,
     setNewItemInserterOpen: (by: boolean)=>void,
     responseExtended: boolean,
-    setResponseExtended: (by: boolean)=>void
+    setResponseExtended: (by: boolean)=>void,
+    metadata: Map<string, MetaData>,
+    setMetadata: (by: Map<string, MetaData>)=>void
 }
 
 export const useAPIStore = create<APIState>()((set,getState) => ({
@@ -144,5 +147,7 @@ export const useAPIStore = create<APIState>()((set,getState) => ({
         invoke("update_collection", {collection: collection})
     },
     responseExtended: false,
-    setResponseExtended: (responseExtended: boolean)=>set({responseExtended})
+    setResponseExtended: (responseExtended: boolean)=>set({responseExtended}),
+    metadata: new Map<string, MetaData>(),
+    setMetadata: (metadata: Map<string, MetaData>)=>set({metadata})
 }))

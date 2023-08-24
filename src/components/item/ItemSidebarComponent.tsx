@@ -2,7 +2,7 @@ import {CollectionDefinitionExtended, DisplayType, ItemDefinitionExtended, useAP
 import {APIRequestSidebarIcon} from "./APIRequest";
 import {SidebarContextMenu} from "../bareComponents/SidebarContextMenu";
 import {ItemContextMenu} from "./ItemContextMenu";
-import {FC, useMemo} from "react";
+import {FC, useEffect, useMemo} from "react";
 import {ItemDefinition} from "postman-collection";
 
 type ItemSidebarComponentProps = {
@@ -18,11 +18,35 @@ export const ItemSidebarComponent:FC<ItemSidebarComponentProps> = ({item,index, 
     const isVisible = useMemo(()=>{
         return collection?.type === DisplayType.SINGLE_TYPE && currentItem?.id === item.id
     }, [item])
+    const metadata = useAPIStore(state=>state.metadata)
 
     const openItem = ()=>{
+            if(currentItem) {
+                const valInMap = metadata.get(currentItem.id!)
+                if(valInMap){
+                    metadata.set(currentItem.id!, {...valInMap, selected: false, id: item.id!})
+                }
+            }
             setCurrentItem({...item,type: DisplayType.SINGLE_TYPE})
             setCurrentCollection({...collection!, type: DisplayType.SINGLE_TYPE})
+            const valInMap = metadata.get(item.id!)
+            if(valInMap){
+                metadata.set(item.id!, {...valInMap, selected: true, id: item.id!})
+            }
+            else{
+                metadata.set(item.id!, {selected: true, id: item.id!})
+            }
     }
+
+    useEffect(() => {
+        if(metadata.has(item.id!)){
+            const valInMap = metadata.get(item.id!)
+            if(valInMap?.selected){
+                setCurrentItem({...item,type: DisplayType.SINGLE_TYPE})
+                setCurrentCollection({...collection!, type: DisplayType.SINGLE_TYPE})
+            }
+        }
+    }, []);
 
     const Label = ()=><span onClick={openItem}>{item.name!}</span>
     return <div key={index} style={{marginLeft: `2em`}}

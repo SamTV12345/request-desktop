@@ -1,6 +1,7 @@
 import {Token, TokenLoadResult, TokenWithKey} from "../../models/OAuth2Outcome";
 import {parseJWT} from "./TokenManager";
 import {useAPIStore} from "../../store/store";
+import {MetaData} from "../../models/MetaData";
 
 const TOKEN_DB = "tokens"
 const ITEM_TO_DB = "item-to-token"
@@ -143,5 +144,57 @@ export const getAllTokens = (): Promise<TokenWithKey[]>=>{
                 reject(event)
             }
         }
+    })
+}
+
+
+export const getMetaData = (): Promise<MetaData[]>=>{
+    return new Promise(async (resolve, reject)=> {
+        const dbRq = indexedDB.open("meta", 1)
+        const tokens: MetaData[] = []
+        dbRq.onsuccess = (event) => {
+            const db = dbRq.result
+            const transaction = db.transaction("meta", "readwrite")
+            const objectStore = transaction.objectStore("meta")
+            objectStore.openCursor().onsuccess = (event: any) => {
+                const cursor = event.target.result
+                if (cursor) {
+                    tokens.push(cursor.value)
+                    cursor.continue()
+                }
+                else{
+                    resolve(tokens)
+                }
+            }
+            objectStore.openCursor().onerror = (event: any) => {
+                reject(event)
+            }
+        }
+        dbRq.onupgradeneeded = (event)=>{
+            const db = dbRq.result
+            db.createObjectStore("meta", {keyPath: "id", autoIncrement: true})
+        }
+    })
+}
+
+export const setMetaData = (meta: MetaData[])=>{
+    return new Promise<void>(async (resolve, reject)=> {
+    const dbRq = indexedDB.open("meta", 1)
+    dbRq.onsuccess = (event)=>{
+        const db = dbRq.result
+        const transaction = db.transaction("meta", "readwrite")
+        const objectStore = transaction.objectStore("meta")
+        objectStore.clear()
+        meta.forEach(m=>{
+            const request = objectStore.put(m)
+            request.onsuccess = ()=>{
+                console.log("Meta updated")
+            }
+        })
+        resolve()
+    }
+    dbRq.onerror = (event)=>{
+        reject(event)
+    }
     })
 }

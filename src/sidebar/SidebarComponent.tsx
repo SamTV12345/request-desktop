@@ -58,7 +58,7 @@ export const SidebarComponent = ()=>{
                 </div>
                 <div className="sidebar-collection-list">
                 {
-                    collections.map((c,index) => {
+                    collections.map((c) => {
                         return (
                                     <SidebarAccordeon key={c.id} collection={c}/>
                         )

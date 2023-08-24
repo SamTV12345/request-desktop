@@ -19,7 +19,11 @@
         "open": true
       },
       "dialog": {
+        "confirm": true,
         "open": true
+      },
+      "window": {
+        "close": true
       }
     },
     "bundle": {
