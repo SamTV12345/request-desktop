@@ -62,7 +62,8 @@ interface APIState {
     responseExtended: boolean,
     setResponseExtended: (by: boolean)=>void,
     metadata: Map<string, MetaData>,
-    setMetadata: (by: Map<string, MetaData>)=>void
+    setMetadata: (by: Map<string, MetaData>)=>void,
+    deleteCollection: (collectionId: string)=>void,
 }
 
 export const useAPIStore = create<APIState>()((set,getState) => ({
@@ -149,5 +150,15 @@ export const useAPIStore = create<APIState>()((set,getState) => ({
     responseExtended: false,
     setResponseExtended: (responseExtended: boolean)=>set({responseExtended}),
     metadata: new Map<string, MetaData>(),
-    setMetadata: (metadata: Map<string, MetaData>)=>set({metadata})
+    setMetadata: (metadata: Map<string, MetaData>)=>set({metadata}),
+    deleteCollection: (collectionId: string)=>{
+        const newCollections = getState().collections
+            .filter((collection)=>collection.info._postman_id !== collectionId)
+        if (getState().currentCollection?.info._postman_id === collectionId){
+            set({currentCollection: undefined})
+            set({currentItem: undefined})
+        }
+        set({collections: newCollections})
+        invoke("delete_collection_by_id", {id: collectionId})
+    }
 }))

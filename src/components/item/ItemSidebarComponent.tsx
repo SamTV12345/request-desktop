@@ -52,6 +52,6 @@ export const ItemSidebarComponent:FC<ItemSidebarComponentProps> = ({item,index, 
     return <div key={index} style={{marginLeft: `2em`}}
          onClick={openItem} className={`sidebar-request border-none ${isVisible && 'bg-background_tertiary'}`}>
         <APIRequestSidebarIcon type={item.request?.method as string}/>
-        <SidebarContextMenu triggerLabel={<Label/>} children={<ItemContextMenu/>}/>
+        <SidebarContextMenu triggerLabel={<Label/>} children={<ItemContextMenu item={item} collection={collection}/>}/>
     </div>
 }

@@ -59,7 +59,7 @@ export const ItemGroupSidebarComponent:FC<ItemSidebarComponentProps> = ({item,in
 
     return <Accordion type="single" collapsible style={{marginLeft: `2em`}} key={item.name} value={open} onValueChange={(v)=>changeOpen(v)}>
         <AccordionItem value={item.id!} className={`border-none ${collection?.type === DisplayType.SINGLE_TYPE && item.id === currentItem?.id&& 'bg-background_tertiary'}` }>
-            <AccordionTrigger  onClick={openItemGroup}><SidebarContextMenu triggerLabel={<Label/>} children={<FolderContextMenu collection={item}/>}/></AccordionTrigger>
+            <AccordionTrigger  onClick={openItemGroup}><SidebarContextMenu triggerLabel={<Label/>} children={<FolderContextMenu collection={collection} item={item}/>}/></AccordionTrigger>
             <AccordionContent className="recursive-item border-none">
                 <RecursiveItemGroup key={item.id} items={item.item} collection={collection!}/>
             </AccordionContent>

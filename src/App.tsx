@@ -18,14 +18,12 @@ const ContentModelDecider = () => {
     }
 }
 
-const unlisten = await appWindow.onCloseRequested(async e => {
+appWindow.onCloseRequested(async e => {
     const metadata = [...useAPIStore.getState().metadata.values()]
     await setMetaData(metadata)
-    const confirmed = await confirm("Do you want to close the app?")
-    if (!confirmed) {
-        e.preventDefault();
-    }
 })
+    .then(() => console.log("close requested"))
+    .catch(e => console.log(e))
 
 const App = () => {
     const setCollections = useAPIStore(state => state.setCollections)

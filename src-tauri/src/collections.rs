@@ -108,3 +108,12 @@ pub async fn download_from_url(url: String) -> Result<Value, String> {
 
     Ok(serde_json::from_str(&response).unwrap())
 }
+
+#[tauri::command]
+pub async fn delete_collection_by_id(id: String, app_handle: tauri::AppHandle) -> Result<(), ()> {
+    let mut db = get_database(app_handle);
+    let mut collection_string = COLLECTION_PREFIX.clone().to_string();
+    collection_string.push_str(&id);
+    db.rem(&collection_string).unwrap();
+    Ok(())
+}
