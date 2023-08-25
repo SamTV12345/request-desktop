@@ -1,6 +1,8 @@
 import {useForm} from "react-hook-form";
-import {CollectionDefinitionExtended, useAPIStore} from "../../store/store";
-import {VariableDefinition} from "postman-collection";
+import {CollectionDefinitionExtended, DisplayType, ItemDefinitionExtended, useAPIStore} from "../../store/store";
+import {ItemDefinition, ItemGroupDefinition, VariableDefinition} from "postman-collection";
+import {isItemGroupDefinition} from "../bareComponents/SidebarAccordeon";
+import {replaceItem} from "../../utils/CollectionReplaceUtils";
 
 
 type BearerData = {
@@ -8,15 +10,35 @@ type BearerData = {
 }
 
 export const BearerAuthentication = ()=>{
-    const currentCollection = useAPIStore(state=>state.currentCollection)
+    const currentCollection = useAPIStore(state=>state.currentCollection) as CollectionDefinitionExtended
     const updateCollection = useAPIStore(state=>state.setCurrentCollection)
     const saveCollection = useAPIStore(state=>state.saveCollection)
+    const currentItem = useAPIStore(state=>state.currentItem)
+    const updateCurrentItem = useAPIStore(state=>state.setCurrentItem)
+    const AUTH_TYPE = "bearer"
     const getKey:(key: string, defaultValue: string) => string = (key, defaultValue)=>{
-        const filteredCollection =  currentCollection?.auth?.bearer?.filter((v)=>v.key === key)
-        if(filteredCollection === undefined|| !filteredCollection[0]){
-            return defaultValue
+        if (currentCollection?.type === DisplayType.COLLECTION_TYPE) {
+            const filteredCollection = currentCollection?.auth?.bearer?.filter((v) => v.key === key)
+            if (filteredCollection === undefined || !filteredCollection[0]) {
+                return defaultValue
+            }
+            return filteredCollection[0].value
         }
-        return filteredCollection[0].value
+        else if (isItemGroupDefinition(currentItem)) {
+            const filteredCollection =  currentItem!.auth?.bearer?.filter((v)=>v.key === key)
+            if (filteredCollection === undefined || !filteredCollection[0]) {
+                return defaultValue
+            }
+            return filteredCollection[0].value
+        }
+        else if (currentItem!==undefined) {
+            const filteredCollection =  currentItem!.request?.auth?.bearer?.filter((v)=>v.key === key)
+            if (filteredCollection === undefined || !filteredCollection[0]) {
+                return defaultValue
+            }
+            return filteredCollection[0].value
+        }
+        return defaultValue
     }
 
 
@@ -29,7 +51,6 @@ export const BearerAuthentication = ()=>{
     });
 
     const populateBearerKeyAuth = (data: BearerData)=>{
-        console.log("submitting")
         const newAuth = [{
             key: "token",
             type: "string",
@@ -37,16 +58,53 @@ export const BearerAuthentication = ()=>{
         }
         ] as VariableDefinition[]
 
-        const clonedCollection:CollectionDefinitionExtended = {
-            ...currentCollection!,
-            auth: {
-                ...currentCollection?.auth,
-                type: "bearer",
-                bearer: newAuth
+        if(currentCollection?.type === DisplayType.COLLECTION_TYPE){
+            const clonedCollection:CollectionDefinitionExtended = {
+                ...currentCollection!,
+                auth: {
+                    ...currentCollection?.auth,
+                    type: AUTH_TYPE,
+                    bearer: newAuth
+                }
             }
+            updateCollection(clonedCollection)
+            saveCollection()
+            return
         }
-        updateCollection(clonedCollection!)
-        saveCollection()
+        else if(isItemGroupDefinition(currentItem)){
+            const clonedItem:ItemGroupDefinition = {
+                ...currentItem!,
+                auth: {
+                    ...currentItem?.auth!,
+                    type: AUTH_TYPE,
+                    bearer: newAuth
+                }
+            }
+            const updatedCollection = replaceItem(currentCollection,clonedItem) as CollectionDefinitionExtended
+            updateCurrentItem(clonedItem)
+            updateCollection(updatedCollection)
+            saveCollection()
+            return
+        }
+        else if (currentItem) {
+            console.log("currentItem", currentItem, newAuth)
+            const clonedItem: ItemDefinition = {
+                ...currentItem!,
+                request: {
+                    ...currentItem?.request!,
+                    auth: {
+                        ...currentItem?.request?.auth,
+                        type: AUTH_TYPE,
+                        bearer: newAuth
+                    }
+                }
+            }
+            const updatedCollection = replaceItem(currentCollection, clonedItem) as CollectionDefinitionExtended
+            updateCurrentItem(clonedItem)
+            updateCollection(updatedCollection)
+            saveCollection()
+            return
+        }
     }
 
 

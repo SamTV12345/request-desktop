@@ -1,7 +1,7 @@
-import {CollectionDefinitionExtended, useAPIStore} from "../../store/store";
+import {CollectionDefinitionExtended, DisplayType, useAPIStore} from "../../store/store";
 import {useForm, useWatch} from "react-hook-form";
 import {useEffect, useMemo} from "react";
-import {VariableDefinition} from "postman-collection";
+import {ItemDefinition, ItemGroupDefinition, VariableDefinition} from "postman-collection";
 import { emit, listen } from '@tauri-apps/api/event'
 import {invoke} from '@tauri-apps/api/tauri'
 import {
@@ -15,6 +15,8 @@ import {OAuth2SucessOutcome} from "../../models/OAuth2Outcome";
 import {TokenManager} from "./TokenManager";
 import {TokenSelector} from "./TokenSelector";
 import {copyToClipboard} from "../../utils/utils";
+import {isItemGroupDefinition} from "../bareComponents/SidebarAccordeon";
+import {replaceItem} from "../../utils/CollectionReplaceUtils";
 
 type OAuth2Data = {
     tokenName: string,
@@ -45,19 +47,39 @@ export enum OAuth2Flow {
 
 
 export const OAuth2Authentication = () => {
-    const currentCollection = useAPIStore(state=>state.currentCollection)
+    const currentCollection = useAPIStore(state=>state.currentCollection) as CollectionDefinitionExtended
     const updateCollection = useAPIStore(state=>state.setCurrentCollection)
+    const currentItem = useAPIStore(state=>state.currentItem)
     const saveCollection = useAPIStore(state=>state.saveCollection)
     const setOpenSuccessOAuth2 = useAPIStore(state=>state.setOAuth2Screen)
     const setPayload = useAPIStore(state=>state.setOAuth2Outcome)
     const selectedToken = useAPIStore(state=>state.selectedToken)
     let currentConfig:any;
+    const setCurrentItem = useAPIStore(state=>state.setCurrentItem)
+
     const getKey:(key: string, defaultValue: string) => string = (key, defaultValue)=>{
-        const filteredCollection =  currentCollection?.auth?.oauth2?.filter((v)=>v.key === key)
-        if(filteredCollection === undefined|| !filteredCollection[0]){
-            return defaultValue
+        if (currentCollection?.type === DisplayType.COLLECTION_TYPE) {
+            const filteredCollection = currentCollection?.auth?.oauth2?.filter((v) => v.key === key)
+            if (filteredCollection === undefined || !filteredCollection[0]) {
+                return defaultValue
+            }
+            return filteredCollection[0].value
         }
-        return filteredCollection[0].value
+        else if (isItemGroupDefinition(currentItem)) {
+            const filteredCollection =  currentItem!.auth?.oauth2?.filter((v)=>v.key === key)
+            if (filteredCollection === undefined || !filteredCollection[0]) {
+                return defaultValue
+            }
+            return filteredCollection[0].value
+        }
+        else if (currentItem!==undefined) {
+            const filteredCollection =  currentItem!.request?.auth?.oauth2?.filter((v)=>v.key === key)
+            if (filteredCollection === undefined || !filteredCollection[0]) {
+                return defaultValue
+            }
+            return filteredCollection[0].value
+        }
+            return defaultValue
     }
 
     const { register, getValues, handleSubmit, watch,
@@ -251,16 +273,50 @@ export const OAuth2Authentication = () => {
             }
         ] as VariableDefinition[]
 
-        const clonedCollection:CollectionDefinitionExtended = {
-            ...currentCollection!,
-            auth: {
-                ...currentCollection?.auth,
-                type: "oauth2",
-                oauth2: newAuth
+        if(currentCollection?.type === DisplayType.COLLECTION_TYPE){
+            const clonedCollection:CollectionDefinitionExtended = {
+                ...currentCollection!,
+                auth: {
+                    ...currentCollection?.auth,
+                    type: "oauth2",
+                    oauth2: newAuth
+                }
+            }
+            updateCollection(clonedCollection)
+            saveCollection()
+            return
+        }
+        else if(isItemGroupDefinition(currentItem)){
+            const clonedItem:ItemGroupDefinition = {
+                ...currentItem!,
+                auth: {
+                    ...currentItem?.auth,
+                    type: "oauth2",
+                    oauth2: newAuth
+                }
+            }
+            const updatedCollection = replaceItem(currentCollection,clonedItem) as CollectionDefinitionExtended
+            updateCollection(updatedCollection)
+            setCurrentItem(clonedItem)
+            saveCollection()
+            return
+        }
+        const clonedItem:ItemDefinition = {
+            ...currentItem!,
+            request:{
+                ...currentItem?.request!,
+                auth: {
+                    ...currentItem?.request?.auth,
+                    type: "oauth2",
+                    oauth2: newAuth
+                }
             }
         }
-        updateCollection(clonedCollection)
+        const updatedCollection = replaceItem(currentCollection,clonedItem) as CollectionDefinitionExtended
+        updateCollection(updatedCollection)
+        setCurrentItem(clonedItem)
         saveCollection()
+        return
     }
 
     return <div className="">

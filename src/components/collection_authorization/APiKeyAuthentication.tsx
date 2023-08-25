@@ -14,8 +14,15 @@ type APIKeyData = {
 export const APiKeyAuthentication = ()=> {
 
     const getKey:(key: string, defaultValue: string, item: CollectionDefinitionExtended|ItemGroupDefinition|ItemDefinitionExtended) => string = (key, defaultValue)=>{
-        if (currentCollection?.type === DisplayType.COLLECTION_TYPE || (isItemsGroupDefinition(currentItem))) {
+        if (currentCollection?.type === DisplayType.COLLECTION_TYPE) {
             const filteredCollection =  currentCollection?.auth?.apikey?.filter((v)=>v.key === key)
+            if(filteredCollection === undefined|| !filteredCollection[0]){
+                return defaultValue
+            }
+            return filteredCollection[0].value
+        }
+        else if (isItemsGroupDefinition(currentItem)) {
+            const filteredCollection =  currentItem?.auth?.apikey?.filter((v)=>v.key === key)
             if(filteredCollection === undefined|| !filteredCollection[0]){
                 return defaultValue
             }
@@ -28,8 +35,8 @@ export const APiKeyAuthentication = ()=> {
             }
             return filteredCollection[0].value
         }
-
     }
+
     const currentCollection = useAPIStore(state=>state.currentCollection)
     const updateCollection = useAPIStore(state=>state.setCurrentCollection)
     const saveCollection = useAPIStore(state=>state.saveCollection)
