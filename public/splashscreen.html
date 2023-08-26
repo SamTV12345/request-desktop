@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Splashscreen</title>
+    <style>
+        :root{
+            --main-theme: #c07c03
+        }
+        html {
+            border-radius: 20%;
+        }
+        body{
+            margin: 0;
+            padding: 0;
+            font-family: sans-serif;
+            background-color: var(--main-theme);
+        }
+        body{
+            display: grid;
+            place-items: center;
+            height: 100vh;
+        }
+        .logo{
+            display: flex;
+            gap: 0.5rem;
+            flex-direction: column;
+        }
+
+        .logo img{
+            align-self: center;
+            width: 5rem;
+        }
+
+        .logo span {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: white;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="logo">
+            <img src="rocket.svg" alt="Rocket icon as logo"/>
+        <span>
+            Requests made simple
+        </span>
+    </div>
+</body>
+</html>

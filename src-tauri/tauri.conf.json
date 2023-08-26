@@ -45,12 +45,22 @@
       {
         "fullscreen": false,
         "resizable": true,
+        "visible": false,
         "title": "request-pilot",
         "fileDropEnabled": false,
         "width": 800,
         "height": 600,
         "minWidth": 800,
         "minHeight": 600
+      },
+      {
+        "width": 400,
+         "height": 200,
+         "center": true,
+         "transparent": true,
+         "decorations": false,
+         "url": "splashscreen.html",
+         "label": "splashscreen"
       }
     ]
   }

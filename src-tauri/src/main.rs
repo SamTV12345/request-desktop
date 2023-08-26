@@ -13,7 +13,7 @@ use reqwest::{ClientBuilder};
 use reqwest::header::{HeaderMap,};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tauri::Window;
+use tauri::{Manager, Window};
 use crate::models::response_from_call::ResponseFromCall;
 use uuid::Uuid;
 use crate::models::postman_collection::PostmanCollection;
