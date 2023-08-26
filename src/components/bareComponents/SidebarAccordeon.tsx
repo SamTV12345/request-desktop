@@ -1,16 +1,11 @@
-import {FC, useMemo, useState} from "react";
-import {CollectionDefinition, ItemDefinition, ItemGroupDefinition} from "postman-collection";
+import {FC, useState} from "react";
+import {ItemDefinition, ItemGroupDefinition} from "postman-collection";
 import {Accordion, AccordionContent, AccordionItem, AccordionTrigger,} from "./Accordeon"
 import {CollectionDefinitionExtended, DisplayType, useAPIStore} from "../../store/store";
-import {APIRequestSidebarIcon} from "../item/APIRequest";
 import {SidebarContextMenu} from "./SidebarContextMenu";
 import {CollectionContextMenu} from "../collections/CollectionContextMenu";
-import {FolderContextMenu} from "../collections/FolderContextMenu";
-import {ItemContextMenu} from "../item/ItemContextMenu";
-import {isItemsGroupDefinition} from "../../utils/utils";
 import {ItemSidebarComponent} from "../item/ItemSidebarComponent";
 import {ItemGroupSidebarComponent} from "../item/ItemGroupSidebarComponent";
-import {setMetaData} from "../collection_authorization/TokenManagerService";
 
 
 type SidebarAccordeonProps = {

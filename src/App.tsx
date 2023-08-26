@@ -7,7 +7,6 @@ import {ContentModel} from "./components/item/ContentModel";
 import {CollectionViewer} from "./components/collections/CollectionViewer";
 import {getMetaData, setMetaData} from "./components/collection_authorization/TokenManagerService";
 import { appWindow } from "@tauri-apps/api/window";
-import { confirm } from '@tauri-apps/api/dialog';
 const ContentModelDecider = () => {
     const currentCollection = useAPIStore(state => state.currentCollection)
 
@@ -53,11 +52,16 @@ const App = () => {
         getMetadata()
     }, [])
 
+    useEffect(()=>{
+        if(!loading) {
+            invoke('close_splashscreen')
+        }
+    }, [loading])
+
     if(loading){
-        return <div className="loading-screen">
-            <h1 className="loading-screen-heading">Loading...</h1>
-        </div>
+        return <div></div>
     }
+
     return (
         <>
 

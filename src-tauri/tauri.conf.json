@@ -45,6 +45,7 @@
       {
         "fullscreen": false,
         "resizable": true,
+        "center": true,
         "visible": false,
         "title": "request-pilot",
         "fileDropEnabled": false,

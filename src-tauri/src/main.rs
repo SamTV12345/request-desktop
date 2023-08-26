@@ -113,9 +113,19 @@ async fn do_request(item: Items, collection: Spec, extra_fields: Vec<ExtraField>
     })
 }
 
+#[tauri::command]
+async fn close_splashscreen(window: tauri::Window) {
+    // Close splashscreen
+    if let Some(splashscreen) = window.get_window("splashscreen") {
+        splashscreen.close().unwrap();
+    }
+    // Show main window
+    window.get_window("main").unwrap().show().unwrap();
+}
+
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![get_collections, do_request, insert_collection, delete_collection_by_id,
+        .invoke_handler(tauri::generate_handler![get_collections, do_request, insert_collection, delete_collection_by_id,close_splashscreen,
             update_collection, check_parser, get_oauth2_token, get_postman_files_from_dir, update_collection_in_backend, download_from_url])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
