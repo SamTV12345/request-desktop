@@ -4,6 +4,7 @@ import {SidebarContextMenu} from "../bareComponents/SidebarContextMenu";
 import {ItemContextMenu} from "./ItemContextMenu";
 import {FC, useEffect, useMemo} from "react";
 import {ItemDefinition} from "postman-collection";
+import {useNavigate} from "react-router-dom";
 
 type ItemSidebarComponentProps = {
     item: ItemDefinition,
@@ -15,6 +16,7 @@ export const ItemSidebarComponent:FC<ItemSidebarComponentProps> = ({item,index, 
     const currentItem = useAPIStore(state=>state.currentItem)
     const setCurrentItem = useAPIStore(state=>state.setCurrentItem)
     const setCurrentCollection = useAPIStore(state=>state.setCurrentCollection)
+    const navigate = useNavigate()
     const isVisible = useMemo(()=>{
         return collection?.type === DisplayType.SINGLE_TYPE && currentItem?.id === item.id
     }, [item])
@@ -36,6 +38,7 @@ export const ItemSidebarComponent:FC<ItemSidebarComponentProps> = ({item,index, 
             else{
                 metadata.set(item.id!, {selected: true, id: item.id!})
             }
+        navigate("/item")
     }
 
     useEffect(() => {

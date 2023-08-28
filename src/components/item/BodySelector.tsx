@@ -2,6 +2,8 @@ import {SelectorKnob} from "../bareComponents/SelectorKnob";
 import {CollectionDefinitionExtended, DisplayType, ItemDefinitionExtended, useAPIStore} from "../../store/store";
 import {replaceItem} from "../../utils/CollectionReplaceUtils";
 import {CollectionDefinition} from "postman-collection";
+import {useLocation, useNavigate} from "react-router-dom";
+import {useEffect} from "react";
 
 
 export enum BodyType {
@@ -16,6 +18,7 @@ export const BodySelector = () => {
     const currentCollection = useAPIStore(state => state.currentCollection!)
     const updateCurrentCollection = useAPIStore(state => state.setCurrentCollection)
     const saveCollection = useAPIStore(state => state.saveCollection)
+    const navigate = useNavigate()
     const switchBodyType = (collectionId: string, mode: string)=>{
         const item:ItemDefinitionExtended  = {
             ...selectedItem,
@@ -33,9 +36,25 @@ export const BodySelector = () => {
         const newCollectionExtended = {...newCollection,type: DisplayType.SINGLE_TYPE} as CollectionDefinitionExtended
         updateCurrentCollection(newCollectionExtended)
         saveCollection()
+        navigate(mode)
     }
 
-    return <div className="flex gap-6"><SelectorKnob value={selectedItem.request!.body == undefined||selectedItem.request?.body?.mode === BodyType.none} onChange={(v)=>{
+    useEffect(() => {
+        if(selectedItem.request?.body?.mode === BodyType.none){
+            navigate("none")
+        }else if(selectedItem.request?.body?.mode === BodyType.raw){
+            navigate("raw")
+        }else if(selectedItem.request?.body?.mode === BodyType.formdata){
+            navigate("formdata")
+        }else if(selectedItem.request?.body?.mode === BodyType.urlencoded){
+            navigate("urlencoded")
+        }else if(selectedItem.request?.body?.mode === BodyType.file){
+            navigate("file")
+        }
+    }, []);
+
+    return <div className="flex gap-6">
+        <SelectorKnob value={selectedItem.request!.body == undefined||selectedItem.request?.body?.mode === BodyType.none} onChange={(v)=>{
         if(v){
             switchBodyType(currentCollection.id!,BodyType.none)
         }

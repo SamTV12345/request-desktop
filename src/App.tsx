@@ -7,16 +7,9 @@ import {ContentModel} from "./components/item/ContentModel";
 import {CollectionViewer} from "./components/collections/CollectionViewer";
 import {getMetaData, setMetaData} from "./components/collection_authorization/TokenManagerService";
 import { appWindow } from "@tauri-apps/api/window";
-const ContentModelDecider = () => {
-    const currentCollection = useAPIStore(state => state.currentCollection)
-
-    if (currentCollection?.type === DisplayType.COLLECTION_TYPE) {
-        return <CollectionViewer/>
-    } else {
-        return <ContentModel/>
-    }
-}
-
+import {
+    Outlet
+} from "react-router-dom";
 appWindow.onCloseRequested(async e => {
     const metadata = [...useAPIStore.getState().metadata.values()]
     await setMetaData(metadata)
@@ -93,10 +86,11 @@ const App = () => {
 
             <SidebarComponent/>
             <div className="main-panel">
-                <ContentModelDecider/>
+               <Outlet/>
             </div>
         </>
     )
 }
+
 
 export default App;

@@ -6,6 +6,7 @@ import {SidebarContextMenu} from "./SidebarContextMenu";
 import {CollectionContextMenu} from "../collections/CollectionContextMenu";
 import {ItemSidebarComponent} from "../item/ItemSidebarComponent";
 import {ItemGroupSidebarComponent} from "../item/ItemGroupSidebarComponent";
+import {useNavigate} from "react-router-dom";
 
 
 type SidebarAccordeonProps = {
@@ -21,6 +22,7 @@ export const SidebarAccordeon:FC<SidebarAccordeonProps> = ({collection}) => {
     const setCurrentItem = useAPIStore(state=>state.setCurrentItem)
     const currentCollection = useAPIStore(state=>state.currentCollection)
     const metadata = useAPIStore(state=>state.metadata)
+    const navigate = useNavigate()
     const isOpen = ()=>{
         if(metadata.has(collection.info._postman_id)){
             return metadata.get(collection.info._postman_id)?.open? collection.info._postman_id: undefined
@@ -50,6 +52,7 @@ export const SidebarAccordeon:FC<SidebarAccordeonProps> = ({collection}) => {
                     <AccordionTrigger><span onClick={()=>{
                         setCurrentCollection({...collection, type: DisplayType.COLLECTION_TYPE})
                         setCurrentItem(undefined)
+                        navigate("/collection")
                     }}><SidebarContextMenu triggerLabel={collection.info?.name as string} children={<CollectionContextMenu collection={collection}/>}/></span></AccordionTrigger>
                         <AccordionContent className="">
                             <RecursiveItemGroup items={collection.item} collection={collection}/>
