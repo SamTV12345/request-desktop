@@ -17,12 +17,14 @@ export const replaceItem = (collections: ItemGroupDefinition|CollectionDefinitio
 }
 
 
-export const addNewItem = (collections: ItemGroupDefinition|CollectionDefinition, idOfParent:string, itemToAdd: ItemDefinition | ItemGroupDefinition): CollectionDefinitionExtended|ItemDefinition => {
+export const addNewItem = (collections: ItemGroupDefinition|CollectionDefinitionExtended, idOfParent:string, itemToAdd: ItemDefinition | ItemGroupDefinition): CollectionDefinitionExtended|ItemDefinition => {
 
-    if(isCollectionDefinition(collections)){
-        return {
-            ...collections,
-            item: [...collections.item?collections.item:[], itemToAdd]
+    if(isCollectionDefinition(collections)) {
+        if (collections.info._postman_id === idOfParent) {
+            return {
+                ...collections,
+                item: [...collections.item ? collections.item : [], itemToAdd]
+            }
         }
     }
 
@@ -54,6 +56,6 @@ const isItemsGroupDefinition = (item: ItemDefinition|ItemGroupDefinition): item 
     return (item as ItemGroupDefinition).item !== undefined
 }
 
-const isCollectionDefinition = (item: ItemDefinition|CollectionDefinition): item is CollectionDefinition => {
+const isCollectionDefinition = (item: ItemDefinition|CollectionDefinition): item is CollectionDefinitionExtended => {
     return "info" in item && item.info !== undefined
 }

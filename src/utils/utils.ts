@@ -1,6 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
-import {ItemGroupDefinition} from "postman-collection";
+import {ItemGroupDefinition, QueryParamDefinition} from "postman-collection";
 import {TokenWithKey} from "../models/OAuth2Outcome";
 
 export function cn(...inputs: ClassValue[]) {
@@ -21,4 +21,8 @@ export const isItemsGroupDefinition = (item: any): item is ItemGroupDefinition =
 
 export const isTokenExpired = (token:TokenWithKey)=>{
     return token.exp*1000 < Date.now()
+}
+
+export const isQueryParamList = (param: any): param is QueryParamDefinition[] => {
+    return param && Array.isArray(param)
 }

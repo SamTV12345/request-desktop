@@ -2,21 +2,18 @@ import {useEffect, useState} from "react";
 import {invoke} from "@tauri-apps/api/tauri";
 import "./App.css";
 import {SidebarComponent} from "./sidebar/SidebarComponent";
-import {CollectionDefinitionExtended, DisplayType, useAPIStore} from "./store/store";
-import {ContentModel} from "./components/item/ContentModel";
-import {CollectionViewer} from "./components/collections/CollectionViewer";
-import {getMetaData, setMetaData} from "./components/collection_authorization/TokenManagerService";
+import {CollectionDefinitionExtended, useAPIStore} from "./store/store";
+import {
+    getMetaData, ITEM_TO_DB, META_DB,
+    setMetaData,
+    TOKEN_DB,
+    TOKEN_DB_VERSION
+} from "./components/collection_authorization/TokenManagerService";
 import { appWindow } from "@tauri-apps/api/window";
-const ContentModelDecider = () => {
-    const currentCollection = useAPIStore(state => state.currentCollection)
-
-    if (currentCollection?.type === DisplayType.COLLECTION_TYPE) {
-        return <CollectionViewer/>
-    } else {
-        return <ContentModel/>
-    }
-}
-
+import {
+    Outlet
+} from "react-router-dom";
+import {MetaData} from "./models/MetaData";
 appWindow.onCloseRequested(async e => {
     const metadata = [...useAPIStore.getState().metadata.values()]
     await setMetaData(metadata)
@@ -32,6 +29,26 @@ const App = () => {
         // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
          return await invoke("get_collections")
     }
+
+
+    useEffect(() => {
+        // DB migration
+        const dbRq = indexedDB.open(TOKEN_DB, TOKEN_DB_VERSION)
+        dbRq.onupgradeneeded = (event) => {
+            const db = (event.target as any).result
+            db.createObjectStore(TOKEN_DB, {
+                autoIncrement: true
+            })
+            db.createObjectStore(ITEM_TO_DB, {
+                autoIncrement: true
+            })
+        }
+        const dbRq2 = indexedDB.open(META_DB, TOKEN_DB_VERSION)
+        dbRq2.onupgradeneeded = (event)=>{
+            const db = dbRq.result
+            db.createObjectStore(META_DB, {keyPath: "id", autoIncrement: true})
+        }
+    }, []);
 
     const getMetadata = async () => {
         getMetaData()
@@ -93,10 +110,11 @@ const App = () => {
 
             <SidebarComponent/>
             <div className="main-panel">
-                <ContentModelDecider/>
+               <Outlet/>
             </div>
         </>
     )
 }
+
 
 export default App;

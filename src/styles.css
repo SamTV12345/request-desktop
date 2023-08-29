@@ -444,7 +444,7 @@ html {
 }
 
 [data-state="open"] > h3> button> .chevron-animation {
-    transform: rotate(180deg);
+    transform: rotate(360deg);
 }
 
 body, #root {
@@ -633,7 +633,7 @@ body, #root {
     font-size: var(--text-size-xl);
 }
 
-.selector > div >button[aria-selected=true],.import-tabs > div >button[aria-selected=true] {
+.active, .import-tabs > div >button[aria-selected=true] {
     text-decoration: underline;
     text-decoration-color: var(--brand-primary);
     text-underline-offset: 10px;

@@ -1,29 +1,25 @@
 import {Tabs, TabsContent, TabsList, TabsTrigger} from "../bareComponents/Tabs";
-import {ParamTable} from "./QueryParamTable";
-import {HeaderTable} from "./HeaderTable";
-import {BodyDecider} from "./BodyDecider";
-import {AuthorizationContent} from "../collection_authorization/AuthorizationContent";
-import {CollectionAuthorization} from "../collections/CollectionAuthorization";
+import {NavLink, Outlet, useLocation, useNavigate} from "react-router-dom";
+import {useEffect, useState} from "react";
 
 export const QueryParam = () => {
+    const navigate = useNavigate()
+    const [param, setParam] = useState<string>("params")
 
 
-    return <Tabs defaultValue="params" className="request-details-section selector text-white">
+    return <Tabs value={param} onValueChange={v=>{
+        setParam(v)
+        navigate(v)
+    }} className="request-details-section selector text-white">
         <TabsList className="query-param-list">
-            <TabsTrigger value="params" className="">Params</TabsTrigger>
-            <TabsTrigger value="authorization">Authorization</TabsTrigger>
-            <TabsTrigger value="headers">Headers</TabsTrigger>
-            <TabsTrigger value="body">Body</TabsTrigger>
-            <TabsTrigger value="prerequest">Pre-request Script</TabsTrigger>
-            <TabsTrigger value="tests">Tests</TabsTrigger>
-            <TabsTrigger value="settings">Settings</TabsTrigger>
+            <TabsTrigger value="params" className=""><NavLink to="params">Params</NavLink></TabsTrigger>
+            <TabsTrigger value="authorization"><NavLink to="authorization">Authorization</NavLink></TabsTrigger>
+            <TabsTrigger value="headers"><NavLink to="headers">Headers</NavLink></TabsTrigger>
+            <TabsTrigger value="body" ><NavLink to="body">Body</NavLink></TabsTrigger>
+            <TabsTrigger value="prerequest"><NavLink to="prerequest">Prerequest</NavLink></TabsTrigger>
+            <TabsTrigger value="tests"><NavLink to="tests">Tests</NavLink></TabsTrigger>
+            <TabsTrigger value="settings"><NavLink to="settings"></NavLink></TabsTrigger>
         </TabsList>
-        <TabsContent value="params"><ParamTable/></TabsContent>
-        <TabsContent value="authorization"><CollectionAuthorization/></TabsContent>
-        <TabsContent value="headers"><HeaderTable/></TabsContent>
-        <TabsContent value="body"><BodyDecider/></TabsContent>
-        <TabsContent value="prerequest">Pre-request Script</TabsContent>
-        <TabsContent value="tests">Change your password here.</TabsContent>
-        <TabsContent value="settings">Change your password here.</TabsContent>
+            <Outlet/>
     </Tabs>
 }

@@ -1,14 +1,14 @@
 import {RequestMethod} from "./RequestMethod";
 import {invoke} from "@tauri-apps/api/tauri";
 import {ResponseFromCall} from "../../models/ResponseFromCall";
-import {useMemo} from "react";
-import {CollectionDefinition, RequestAuth, Url as URLParser} from "postman-collection";
+import {useEffect, useMemo, useState} from "react";
+import {QueryParamDefinition, Url as URLParser, UrlDefinition} from "postman-collection";
 import {CollectionDefinitionExtended, DisplayType, ItemDefinitionExtended, useAPIStore} from "../../store/store";
 import {replaceItem} from "../../utils/CollectionReplaceUtils";
 import {useDebounce} from "../../hooks/useDebounce";
 import {ExtraField} from "../../models/ExtraField";
 import {getToken, getTokenByCollectionId} from "../collection_authorization/TokenManagerService";
-import {isTokenExpired} from "../../utils/utils";
+import {isQueryParamList, isTokenExpired} from "../../utils/utils";
 import {OAuth2SucessOutcome} from "../../models/OAuth2Outcome";
 
 export const ItemRequestBar = ()=>{
@@ -18,20 +18,34 @@ export const ItemRequestBar = ()=>{
     const setCurrentItem = useAPIStore(state => state.setCurrentItem)
     const saveCollection = useAPIStore(state => state.saveCollection)
     const currentItem = useAPIStore(state => state.currentItem) as ItemDefinitionExtended
-
-    useDebounce(()=>{
-        saveCollection()
-    },5000, [currentItem?.request?.url])
-
     const url = useMemo(() => {
         if (!currentItem?.request) {
             return ""
         }
-        return new URLParser(currentItem.request.url).toString(true)
+        const activeURLs = currentItem.request.url
+        if (typeof activeURLs === "string") {
+            return activeURLs
+        } else {
+            let activeQueries = activeURLs.query as QueryParamDefinition[] || []
+            activeQueries = activeQueries.filter(c => c.disabled === false|| c.disabled === undefined)
+            return new URLParser({
+                ...activeURLs,
+                query: activeQueries
+            } satisfies UrlDefinition).toString(true)
+        }
     }, [currentItem?.request])
 
+
     const changeUrl = (url: string) => {
+        console.log(url)
         const urlDef = URLParser.parse(url)
+        if (typeof currentItem.request!.url !== "string" && isQueryParamList(currentItem.request!.url.query)) {
+            isQueryParamList(currentItem.request!.url.query) && currentItem.request!.url.query.filter(c => c.disabled)
+                .forEach((q: QueryParamDefinition) => {
+                    isQueryParamList(urlDef.query) && urlDef.query.push(q)
+                })
+        }
+
         const item:ItemDefinitionExtended  = {
             ...currentItem,
             request: {
@@ -44,6 +58,7 @@ export const ItemRequestBar = ()=>{
         const newCollection = replaceItem(currentCollection as CollectionDefinitionExtended, item)
         const newCollectionExtended = {...newCollection,type: DisplayType.SINGLE_TYPE} as CollectionDefinitionExtended
         updateCurrentCollection(newCollectionExtended)
+        saveCollection()
         setCurrentItem(item)
     }
 
@@ -57,10 +72,8 @@ export const ItemRequestBar = ()=>{
                    duration: "0",
                    response_duration: "0",
                }, headers: {}, status: ""
-
            }))
    }
-
 
    const handleRequest = async ()=>{
        const extra_fields: ExtraField[] = []
@@ -95,9 +108,7 @@ export const ItemRequestBar = ()=>{
             <div className="outline-2 outline-gray-600 bg-transparent">
                 <RequestMethod value={currentItem!}/>
             </div>
-            <input value={url} className="bg-transparent text-white" onChange={(v) => {
-                changeUrl(v.target.value)
-            }} onBlur={saveCollection}/>
+            <input value={url} onChange={v=>changeUrl(v.target.value)} className="bg-transparent text-white"/>
         </div>
         <button onClick={async () => {
 

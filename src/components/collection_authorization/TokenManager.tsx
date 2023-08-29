@@ -3,7 +3,7 @@ import {useEffect, useState} from "react";
 import {Token, TokenLoadResult, TokenWithKey} from "../../models/OAuth2Outcome";
 import {useAPIStore} from "../../store/store";
 import {TokenManagerDeleteDropdown} from "./TokenManagerDeleteDropdown";
-import {getAllTokens} from "./TokenManagerService";
+import {getAllTokens, ITEM_TO_DB, TOKEN_DB, TOKEN_DB_VERSION} from "./TokenManagerService";
 import {isTokenExpired} from "../../utils/utils";
 
 
@@ -30,13 +30,13 @@ export const TokenManager = ()=>{
 
     useEffect(() => {
         if (openTokenManager) {
-            const dbRq = indexedDB.open("tokens", 1)
+            const dbRq = indexedDB.open(TOKEN_DB, TOKEN_DB_VERSION)
             dbRq.onupgradeneeded = (event) => {
                 db = (event.target as any).result
-                db.createObjectStore("tokens", {
+                db.createObjectStore(TOKEN_DB, {
                     autoIncrement: true
                 })
-                db.createObjectStore("item-to-token", {
+                db.createObjectStore(ITEM_TO_DB, {
                     autoIncrement: true
                 })
             }

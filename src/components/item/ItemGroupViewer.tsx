@@ -1,14 +1,12 @@
-import {Tabs, TabsContent, TabsList, TabsTrigger} from "../bareComponents/Tabs";
-import {VariableViewer} from "./VariableViewer";
-import {CollectionAuthorization} from "./CollectionAuthorization";
+import {Tabs, TabsList, TabsTrigger} from "../bareComponents/Tabs";
 import {NavLink, Outlet, useNavigate} from "react-router-dom";
-import {useEffect, useState} from "react";
+import {useState} from "react";
 
-export const CollectionViewer = ()=>{
-    const navigate = useNavigate()
+export const ItemGroupViewer = ()=>{
     const [params,setParams] = useState<string>('authorization')
-    return (
-    <Tabs value={params} onValueChange={v=>{
+    const navigate = useNavigate()
+
+    return <Tabs value={params} onValueChange={v=>{
         setParams(v)
         navigate(v)}} className="selector text-white p-2">
         <TabsList className="query-param-list">
@@ -19,14 +17,4 @@ export const CollectionViewer = ()=>{
         </TabsList>
         <Outlet/>
     </Tabs>
-    )
 }
-
-/*
-
-
-        <TabsContent value="authorization"><CollectionAuthorization/></TabsContent>
-        <TabsContent value="pre-request-script">Change your password here.</TabsContent>
-        <TabsContent value="tests"><div/></TabsContent>
-        <TabsContent value="variables"><VariableViewer/></TabsContent>
- */

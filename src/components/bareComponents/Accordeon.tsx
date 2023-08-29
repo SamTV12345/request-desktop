@@ -29,7 +29,7 @@ const AccordionTrigger = React.forwardRef<
             ref={ref}
             {...props}
         >
-            <ChevronDown className="chevron-animation duration-200" />
+            <ChevronDown className=" -rotate-90 chevron-animation duration-200" />
         </AccordionPrimitive.Trigger>
         {children}
     </AccordionPrimitive.Header>

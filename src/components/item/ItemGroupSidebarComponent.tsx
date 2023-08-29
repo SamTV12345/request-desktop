@@ -6,6 +6,7 @@ import {ItemGroupDefinition} from "postman-collection";
 import {FC, useState} from "react";
 import {RecursiveItemGroup} from "../bareComponents/SidebarAccordeon";
 import {setMetaData} from "../collection_authorization/TokenManagerService";
+import {useNavigate} from "react-router-dom";
 
 type ItemSidebarComponentProps = {
     item: ItemGroupDefinition,
@@ -16,7 +17,7 @@ export const ItemGroupSidebarComponent:FC<ItemSidebarComponentProps> = ({item,in
     const currentItem = useAPIStore(state=>state.currentItem)
     const setCurrentItem = useAPIStore(state=>state.setCurrentItem)
     const setCurrentCollection = useAPIStore(state=>state.setCurrentCollection)
-
+    const navigate = useNavigate()
     const metadata = useAPIStore(state=>state.metadata)
     const isOpen = ()=>{
         if(metadata.has(item!.id!)){
@@ -53,6 +54,7 @@ export const ItemGroupSidebarComponent:FC<ItemSidebarComponentProps> = ({item,in
             if(valInMap){
                 metadata.set(item.id!, {...valInMap, selected: false, id: item.id!})
             }
+        navigate("/group")
     }
 
     const Label = ()=><span onClick={openItemGroup}>{item.name!}</span>
