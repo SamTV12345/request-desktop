@@ -37,9 +37,6 @@ export const ItemRequestBar = ()=>{
 
 
     const changeUrl = (url: string) => {
-        if(url.endsWith("?")){
-            url += "test=1"
-        }
         console.log(url)
         const urlDef = URLParser.parse(url)
         if (typeof currentItem.request!.url !== "string" && isQueryParamList(currentItem.request!.url.query)) {
@@ -75,7 +72,6 @@ export const ItemRequestBar = ()=>{
                    duration: "0",
                    response_duration: "0",
                }, headers: {}, status: ""
-
            }))
    }
 
