@@ -18,6 +18,7 @@ export const ParamTable = ()=> {
     const currentCollection = useAPIStore(state => state.currentCollection)
     const saveCollection = useAPIStore(state => state.saveCollection)
     const updateCurrentCollection = useAPIStore(state => state.setCurrentCollection)
+    const updateCurrentItem = useAPIStore(state => state.setCurrentItem)
 
     const value = useMemo(()=>{
         if(!currentItem?.request){
@@ -44,6 +45,7 @@ export const ParamTable = ()=> {
                 }
             }
         }
+        updateCurrentItem(item)
         const newCollection = replaceItem(currentCollection as CollectionDefinition, item)
         const newCollectionExtended = {...newCollection,type: DisplayType.SINGLE_TYPE} as CollectionDefinitionExtended
         updateCurrentCollection(newCollectionExtended)
@@ -62,6 +64,7 @@ export const ParamTable = ()=> {
                 }
             }
         }
+        updateCurrentItem(item)
         const newCollection = replaceItem(currentCollection as CollectionDefinition, item)
         const newCollectionExtended = {...newCollection,type: DisplayType.SINGLE_TYPE} as CollectionDefinitionExtended
         updateCurrentCollection(newCollectionExtended)
@@ -70,7 +73,7 @@ export const ParamTable = ()=> {
 
     const onValueChange = (collectionId: string, newVal: string, index: number)=>{
         value[index].value = newVal
-        const item  = {
+        const item:ItemDefinition  = {
             ...currentItem,
             request: {
                 ...currentItem?.request,
@@ -80,6 +83,8 @@ export const ParamTable = ()=> {
                 }
             }
         }
+        updateCurrentItem(item)
+
         const newCollection = replaceItem(currentCollection as CollectionDefinition, item)
         const newCollectionExtended = {...newCollection,type: DisplayType.SINGLE_TYPE} as CollectionDefinitionExtended
         updateCurrentCollection(newCollectionExtended)
@@ -101,6 +106,7 @@ export const ParamTable = ()=> {
                 }
             }
         }
+        updateCurrentItem(item)
         const newCollection = replaceItem(currentCollection as CollectionDefinition, item)
         const newCollectionExtended = {...newCollection,type: DisplayType.SINGLE_TYPE} as CollectionDefinitionExtended
         updateCurrentCollection(newCollectionExtended)
@@ -118,6 +124,7 @@ export const ParamTable = ()=> {
                 }
             }
         }
+        updateCurrentItem(item)
         const newCollection = replaceItem(currentCollection as CollectionDefinition, item)
         const newCollectionExtended = {...newCollection,type: DisplayType.SINGLE_TYPE} as CollectionDefinitionExtended
         updateCurrentCollection(newCollectionExtended)
@@ -135,6 +142,7 @@ export const ParamTable = ()=> {
                 }
             }
         }
+        updateCurrentItem(item)
         const newCollection = replaceItem(currentCollection as CollectionDefinition, item)
         const newCollectionExtended = {...newCollection,type: DisplayType.SINGLE_TYPE} as CollectionDefinitionExtended
         updateCurrentCollection(newCollectionExtended)

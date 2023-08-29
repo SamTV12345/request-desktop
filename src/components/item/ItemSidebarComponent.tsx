@@ -47,6 +47,7 @@ export const ItemSidebarComponent:FC<ItemSidebarComponentProps> = ({item,index, 
             if(valInMap?.selected){
                 setCurrentItem({...item,type: DisplayType.SINGLE_TYPE})
                 setCurrentCollection({...collection!, type: DisplayType.SINGLE_TYPE})
+                navigate("/item")
             }
         }
     }, []);

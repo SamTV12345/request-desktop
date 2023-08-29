@@ -444,7 +444,7 @@ html {
 }
 
 [data-state="open"] > h3> button> .chevron-animation {
-    transform: rotate(180deg);
+    transform: rotate(360deg);
 }
 
 body, #root {

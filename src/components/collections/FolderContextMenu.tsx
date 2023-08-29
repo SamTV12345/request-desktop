@@ -30,6 +30,7 @@ export const FolderContextMenu:FC<CollectionContextMenuProps> = ({collection, it
     }
 
     const createFolder = (collection:CollectionDefinitionExtended, parentId: string)=>{
+        console.log("create folder", collection, parentId)
         const itemToInsert = getDefaultFolder()
         const collectionChanged = addNewItem(collection, parentId, itemToInsert)
         saveCollection(collectionChanged as CollectionDefinitionExtended)

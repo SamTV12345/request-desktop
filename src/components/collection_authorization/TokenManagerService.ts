@@ -3,12 +3,15 @@ import {parseJWT} from "./TokenManager";
 import {useAPIStore} from "../../store/store";
 import {MetaData} from "../../models/MetaData";
 
-const TOKEN_DB = "tokens"
-const ITEM_TO_DB = "item-to-token"
+export const TOKEN_DB = "tokens"
+export const ITEM_TO_DB = "item-to-token"
+export const META_DB = "meta"
 
+
+export const TOKEN_DB_VERSION = 2
 
 export const deleteToken = (id: string)=>{
-    const dbRq = indexedDB.open(TOKEN_DB, 1)
+    const dbRq = indexedDB.open(TOKEN_DB, TOKEN_DB_VERSION)
     dbRq.onsuccess = (event)=>{
         const db = dbRq.result
         const transaction = db.transaction(TOKEN_DB, "readwrite")
@@ -34,7 +37,7 @@ export const deleteToken = (id: string)=>{
 }
 
 export const insertToken = ( token_key:string, token: string, token_name: string, item_id:string, refresh_token?:string, config?:any)=>{
-    const dbRq = indexedDB.open(TOKEN_DB, 1)
+    const dbRq = indexedDB.open(TOKEN_DB, TOKEN_DB_VERSION)
     dbRq.onsuccess = (event)=>{
         const db = dbRq.result
         const transaction = db.transaction(TOKEN_DB, "readwrite")
@@ -49,11 +52,14 @@ export const insertToken = ( token_key:string, token: string, token_name: string
             setTokenToItem(token_key, item_id)
         }
     }
+    dbRq.onerror = (event)=>{
+        console.log(event)
+    }
 }
 
 
 export const setTokenToItem = (token_key:string, item_id:string)=>{
-    const dbRq = indexedDB.open(TOKEN_DB, 1)
+    const dbRq = indexedDB.open(TOKEN_DB, TOKEN_DB_VERSION)
     dbRq.onsuccess = (event)=> {
         const db = dbRq.result
         const transaction = db.transaction(ITEM_TO_DB, "readwrite")
@@ -65,7 +71,7 @@ export const setTokenToItem = (token_key:string, item_id:string)=>{
 
 export const getToken = (id: string): Promise<Token>=>{
     return new Promise((resolve, reject)=>{
-        const dbRq = indexedDB.open(TOKEN_DB, 1)
+        const dbRq = indexedDB.open(TOKEN_DB, TOKEN_DB_VERSION)
         dbRq.onsuccess = (event)=>{
             const db = dbRq.result
             const transaction = db.transaction(TOKEN_DB, "readwrite")
@@ -83,7 +89,7 @@ export const getToken = (id: string): Promise<Token>=>{
 
 export const getTokenByCollectionId = (postman_id: string): Promise<TokenWithKey>=>{
     return new Promise((resolve, reject)=>{
-        const dbRq = indexedDB.open(TOKEN_DB, 1)
+        const dbRq = indexedDB.open(TOKEN_DB, TOKEN_DB_VERSION)
         dbRq.onsuccess = (event)=>{
             const db = dbRq.result
             const transaction = db.transaction(ITEM_TO_DB, "readwrite")
@@ -109,7 +115,7 @@ export const getTokenByCollectionId = (postman_id: string): Promise<TokenWithKey
 }
 
 export const updateToken = (token: Token, key:string)=>{
-    const dbRq = indexedDB.open("tokens", 1)
+    const dbRq = indexedDB.open("tokens", TOKEN_DB_VERSION)
     dbRq.onsuccess = (event)=>{
         const db = dbRq.result
         const transaction = db.transaction("tokens", "readwrite")
@@ -123,7 +129,7 @@ export const updateToken = (token: Token, key:string)=>{
 
 export const getAllTokens = (): Promise<TokenWithKey[]>=>{
     return new Promise(async (resolve, reject)=> {
-        const dbRq = indexedDB.open(TOKEN_DB, 1)
+        const dbRq = indexedDB.open(TOKEN_DB, TOKEN_DB_VERSION)
         const tokens: TokenWithKey[] = []
         dbRq.onsuccess = (event) => {
             const db = dbRq.result
@@ -150,12 +156,12 @@ export const getAllTokens = (): Promise<TokenWithKey[]>=>{
 
 export const getMetaData = (): Promise<MetaData[]>=>{
     return new Promise(async (resolve, reject)=> {
-        const dbRq = indexedDB.open("meta", 1)
+        const dbRq = indexedDB.open(META_DB, TOKEN_DB_VERSION)
         const tokens: MetaData[] = []
         dbRq.onsuccess = (event) => {
             const db = dbRq.result
-            const transaction = db.transaction("meta", "readwrite")
-            const objectStore = transaction.objectStore("meta")
+            const transaction = db.transaction(META_DB, "readwrite")
+            const objectStore = transaction.objectStore(META_DB)
             objectStore.openCursor().onsuccess = (event: any) => {
                 const cursor = event.target.result
                 if (cursor) {
@@ -172,14 +178,14 @@ export const getMetaData = (): Promise<MetaData[]>=>{
         }
         dbRq.onupgradeneeded = (event)=>{
             const db = dbRq.result
-            db.createObjectStore("meta", {keyPath: "id", autoIncrement: true})
+            db.createObjectStore(META_DB, {keyPath: "id", autoIncrement: true})
         }
     })
 }
 
 export const setMetaData = (meta: MetaData[])=>{
     return new Promise<void>(async (resolve, reject)=> {
-    const dbRq = indexedDB.open("meta", 1)
+    const dbRq = indexedDB.open(META_DB, TOKEN_DB_VERSION)
     dbRq.onsuccess = (event)=>{
         const db = dbRq.result
         const transaction = db.transaction("meta", "readwrite")
@@ -196,5 +202,9 @@ export const setMetaData = (meta: MetaData[])=>{
     dbRq.onerror = (event)=>{
         reject(event)
     }
+        dbRq.onupgradeneeded = (event)=>{
+            const db = dbRq.result
+            db.createObjectStore(META_DB, {keyPath: "id", autoIncrement: true})
+        }
     })
 }
