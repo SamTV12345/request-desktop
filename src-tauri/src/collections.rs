@@ -3,8 +3,9 @@ use serde_json::Value;
 use uuid::Uuid;
 use crate::{COLLECTION_PREFIX, get_database};
 use crate::postman_lib::lib::from_reader;
-use crate::postman_lib::v2_1_0::{Items, Spec};
-
+use crate::postman_lib::v2_1_0::{Items, RequestUnion, Spec};
+use crate::postman_lib::v2_1_0::Url::{String as UString, UrlClass};
+use std::string::String;
 #[tauri::command]
 pub async fn get_collections(app_handle: tauri::AppHandle) -> Vec<Spec> {
     let mut collections = vec![];
@@ -39,7 +40,7 @@ pub async fn insert_collection(mut collection: Spec, app_handle: tauri::AppHandl
     collection.item.iter_mut().for_each(|item|{
         let id = Uuid::new_v4().to_string();
         item.id = Some(id);
-        if item.item.is_some(){
+        if item.item.clone().is_some(){
             item.item = Some(assign_id_to_every_item(item));
         }
     });
@@ -74,7 +75,6 @@ pub async fn insert_collection_from_openapi(collection: String,  app_handle: tau
     let mut db = get_database(app_handle);
     let value = serde_json::to_string(&collection).unwrap();
     db.set("test", &value).unwrap();
-    println!("Value {}",db.get::<String>("test").unwrap());
 }
 
 

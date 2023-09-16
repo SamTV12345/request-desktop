@@ -181,9 +181,37 @@ pub async fn handle_request(url: RequestUnion, collection: &Spec,
 
 pub fn add_auth_headers(collection: &Spec, item: Items, map: &mut HeaderMap<HeaderValue>,
                         extra_fields: Vec<ExtraField>) -> HeaderMap<HeaderValue>{
-    match item.auth {
-        Some(auth) => {
-            insert_auth(auth, map.clone(), extra_fields)
+    match item.request {
+        Some(req) => {
+            match req {
+                RequestUnion::RequestClass(url) => {
+                    match url.auth {
+                        Some(auth) => {
+                            insert_auth(auth, map.clone(), extra_fields)
+                        }
+                        None => {
+                            match collection.auth.clone() {
+                                Some(auth) => {
+                                    insert_auth(auth, map.clone(), extra_fields)
+                                }
+                                None => {
+                                    map.clone()
+                                }
+                            }
+                        }
+                    }
+                }
+                RequestUnion::String(url) => {
+                    match collection.auth.clone() {
+                        Some(auth) => {
+                            insert_auth(auth, map.clone(), extra_fields)
+                        }
+                        None => {
+                            map.clone()
+                        }
+                    }
+                }
+            }
         }
         None => {
             match collection.auth.clone() {

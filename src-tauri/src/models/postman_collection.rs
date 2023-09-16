@@ -36,13 +36,3 @@ pub struct ProtocolProfileBehavior{
     #[serde(rename = "disableBodyPruning")]
     pub disable_body_pruning: Option<bool>,
 }
-
-
-impl PostmanCollection {
-    pub async fn save(collection: Spec) -> Result<(), Box<dyn std::error::Error>> {
-        let file = std::fs::File::create("./migrations/".to_owned()+&collection.info.postman_id.clone()
-            .unwrap())?;
-        serde_json::to_writer_pretty(file, &collection)?;
-        Ok(())
-    }
-}

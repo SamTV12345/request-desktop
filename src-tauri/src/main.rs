@@ -126,7 +126,8 @@ async fn close_splashscreen(window: tauri::Window) {
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![get_collections, do_request, insert_collection, delete_collection_by_id,close_splashscreen,
-            update_collection, check_parser, get_oauth2_token, get_postman_files_from_dir, update_collection_in_backend, download_from_url])
+            update_collection, check_parser, get_oauth2_token,insert_collection_from_openapi,
+            get_postman_files_from_dir, update_collection_in_backend, download_from_url])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
