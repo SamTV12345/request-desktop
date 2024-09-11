@@ -57,16 +57,16 @@ pub enum PostmanCollection {
 
 /// Deserialize a Postman Collection from a path
 pub fn from_path<P>(path: P) -> errors::Result<PostmanCollection>
-    where
-        P: AsRef<Path>,
+where
+    P: AsRef<Path>,
 {
     from_reader(File::open(path)?)
 }
 
 /// Deserialize a Postman Collection from type which implements Read
 pub fn from_reader<R>(read: R) -> errors::Result<PostmanCollection>
-    where
-        R: Read,
+where
+    R: Read,
 {
     Ok(serde_yaml::from_reader::<R, PostmanCollection>(read)?)
 }
@@ -92,8 +92,8 @@ mod tests {
 
     /// Helper function for reading a file to string.
     fn read_file<P>(path: P) -> String
-        where
-            P: AsRef<Path>,
+    where
+        P: AsRef<Path>,
     {
         let mut f = File::open(path).unwrap();
         let mut content = String::new();
@@ -103,8 +103,8 @@ mod tests {
 
     /// Helper function to write string to file.
     fn write_to_file<P>(path: P, filename: &str, data: &str)
-        where
-            P: AsRef<Path> + std::fmt::Debug,
+    where
+        P: AsRef<Path> + std::fmt::Debug,
     {
         println!("    Saving string to {:?}...", path);
         std::fs::create_dir_all(&path).unwrap();

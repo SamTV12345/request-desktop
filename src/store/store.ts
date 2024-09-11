@@ -6,6 +6,8 @@ import {cloneElement} from "react";
 import {invoke} from '@tauri-apps/api/tauri'
 import {OAuth2FailureOutcome, OAuth2SucessOutcome, TokenWithKey} from "../models/OAuth2Outcome";
 import {MetaData} from "../models/MetaData";
+import {EnvironmentWrapper} from "../components/environment/EnvironmentType";
+
 export enum DisplayType {
     SINGLE_TYPE,
     COLLECTION_TYPE
@@ -64,6 +66,12 @@ interface APIState {
     metadata: Map<string, MetaData>,
     setMetadata: (by: Map<string, MetaData>)=>void,
     deleteCollection: (collectionId: string)=>void,
+    selectedEnvironment: EnvironmentWrapper & {
+        index: number
+    }|null,
+    setSelectedEnvironment: (env: EnvironmentWrapper, index: number)=>void,
+    allEnvs: EnvironmentWrapper[],
+    setAllEnvs: (envs: EnvironmentWrapper[])=>void
 }
 
 export const useAPIStore = create<APIState>()((set,getState) => ({
@@ -160,5 +168,12 @@ export const useAPIStore = create<APIState>()((set,getState) => ({
         }
         set({collections: newCollections})
         invoke("delete_collection_by_id", {id: collectionId})
-    }
+    },
+    selectedEnvironment: null,
+    setSelectedEnvironment: (s,i)=>set({selectedEnvironment: {
+        ...s,
+            index: i
+        }}),
+    allEnvs: [],
+    setAllEnvs: (s)=>set({allEnvs: s})
 }))

@@ -27,6 +27,7 @@ import {Prerequest} from "./components/bareComponents/Prerequest";
 import {Tests} from "./components/bareComponents/Tests";
 import {Settings} from "./components/bareComponents/Settings";
 import {ItemGroupViewer} from "./components/item/ItemGroupViewer";
+import {Environment} from "./components/environment/Environment";
 
 const ErrorFallback = ({error}:any) => {
     const navigate = useNavigate()
@@ -72,6 +73,9 @@ const router = createBrowserRouter(createRoutesFromElements(
                 <Route path="headers" element={<HeaderTable/>}  errorElement={<ErrorFallback/>}/>
                 <Route path="prerequest" element={<Prerequest/>}  errorElement={<ErrorFallback/>}/>
                 <Route path="tests" element={<Tests/>}  errorElement={<ErrorFallback/>}/>
+            </Route>
+            <Route path="environments">
+                <Route index element={<Environment/>}/>
             </Route>
             <Route path="*" element={<Navigate to="/collection"/>} errorElement={<ErrorFallback/>}/>
         </Route>

@@ -15,13 +15,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{Manager, Window};
 use crate::models::response_from_call::ResponseFromCall;
-use uuid::Uuid;
-use crate::models::postman_collection::PostmanCollection;
 use crate::oauth::{handle_oauth, OAuth2Type};
 use crate::oauth2_error::OAuth2Error;
 use crate::postman_lib::v2_1_0::{Items, Spec};
 use crate::request_handling::handle_request;
 use crate::collections::*;
+use crate::environments::{get_environments, update_environments};
+
 mod postman_lib;
 
 
@@ -31,9 +31,12 @@ mod oauth;
 mod oauth2_error;
 mod collections;
 mod constants;
+mod environments;
 
 static COLLECTION_PREFIX: &str = "collection_";
 static TOKEN_PREFIX: &str = "token_";
+static ENVIRONMENT_PREFIX: &str = "environment_";
+
 
 #[tauri::command]
 async fn check_parser(collection: Value){
@@ -127,7 +130,7 @@ fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![get_collections, do_request, insert_collection, delete_collection_by_id,close_splashscreen,
             update_collection, check_parser, get_oauth2_token,insert_collection_from_openapi,
-            get_postman_files_from_dir, update_collection_in_backend, download_from_url])
+            get_postman_files_from_dir, update_collection_in_backend, download_from_url, get_environments,update_environments])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

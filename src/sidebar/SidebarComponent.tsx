@@ -16,12 +16,12 @@ export const SidebarComponent = ()=>{
     const setNewCollectionOpen = useAPIStore(state=>state.setOpenNewCollectionModal)
 
     return (
-            <ResizableBox direction={"right"} initialSize={400} className={"sidebar"}>
+            <ResizableBox direction={"right"} initialSize={200} className={"sidebar"}>
                 <NewItemModel/>
-                <div className="sidebar-import-buttons">
-                    <button onClick={()=>setNewCollectionOpen(true)}>New</button>
-                    <Dialog.Root>
-                        <Dialog.Trigger>
+    <div className="sidebar-import-buttons">
+        <button onClick={() => setNewCollectionOpen(true)}>New</button>
+        <Dialog.Root>
+            <Dialog.Trigger>
                             <button className="sidebar-button"  onClick={()=>{}}>Import</button>
                         </Dialog.Trigger>
                         <Dialog.Portal className="">

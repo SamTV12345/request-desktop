@@ -25,8 +25,6 @@ export const CollectionAuthorization = ()=>{
             else if (currentItem!==undefined) {
                 return currentItem?.request?.auth?.type
             }
-            else if (authType === undefined)
-                return undefined
         }
     ,[currentItem,currentCollection])
     const updateAuthorization = (authChange: AuthorizationTypes)=>{

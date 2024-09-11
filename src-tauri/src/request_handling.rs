@@ -1,6 +1,4 @@
-use std::fmt::format;
 use std::fs;
-use std::io::{Read};
 use std::str::FromStr;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use reqwest::Method;
@@ -28,24 +26,16 @@ pub async fn handle_request(url: RequestUnion, collection: &Spec,
                     }
                 }
             }
-            match request.body.clone() {
-                Some(body)=>{
-                    match body.mode{
-                        Some(mode) => {
-                            match mode {
-                                Mode::File => {
-                                    let file = body.file.unwrap();
-                                }
-                                Mode::Formdata => {}
-                                Mode::Raw => {}
-                                Mode::Urlencoded => {}
-                            }
+            if let Some(body) = request.body.clone() {
+                if let Some(mode) = body.mode {
+                    match mode {
+                        Mode::File => {
+                            let file = body.file.unwrap();
                         }
-                        None => {}
+                        Mode::Formdata => {}
+                        Mode::Raw => {}
+                        Mode::Urlencoded => {}
                     }
-                }
-                None => {
-
                 }
             }
         }
@@ -346,7 +336,7 @@ fn convert_respective_body(collection:RequestUnion) ->Result<String, ()> {
                                     Ok(form_data_string)
                                 }
                                 Mode::Raw => {
-                                    Ok((body.raw.unwrap()))
+                                    Ok(body.raw.unwrap())
                                 }
                                 Mode::Urlencoded => {
                                     let form_data = body.urlencoded.unwrap();

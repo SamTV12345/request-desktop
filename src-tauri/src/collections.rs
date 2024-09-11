@@ -1,10 +1,7 @@
-use std::io::{BufReader, Error};
 use serde_json::Value;
 use uuid::Uuid;
 use crate::{COLLECTION_PREFIX, get_database};
-use crate::postman_lib::lib::from_reader;
-use crate::postman_lib::v2_1_0::{Items, RequestUnion, Spec};
-use crate::postman_lib::v2_1_0::Url::{String as UString, UrlClass};
+use crate::postman_lib::v2_1_0::{Items, Spec};
 use std::string::String;
 #[tauri::command]
 pub async fn get_collections(app_handle: tauri::AppHandle) -> Vec<Spec> {
@@ -45,7 +42,7 @@ pub async fn insert_collection(mut collection: Spec, app_handle: tauri::AppHandl
         }
     });
 
-    let mut collection_string = COLLECTION_PREFIX.clone().to_string();
+    let mut collection_string = COLLECTION_PREFIX.to_string();
     collection_string.push_str(&collection.info.postman_id.clone().unwrap());
     let value = serde_json::to_string(&collection).unwrap();
     db.set(&collection_string, &value).unwrap();
@@ -82,7 +79,7 @@ pub async fn insert_collection_from_openapi(collection: String,  app_handle: tau
 #[tauri::command]
 pub async fn update_collection(collection: Spec, app_handle: tauri::AppHandle){
     let mut db = get_database(app_handle);
-    let mut collection_string = COLLECTION_PREFIX.clone().to_string();
+    let mut collection_string = COLLECTION_PREFIX.to_string();
     collection_string.push_str(&collection.info.postman_id.clone().unwrap());
     let value = serde_json::to_string(&collection).unwrap();
     db.set(&collection_string, &value).unwrap();
@@ -92,7 +89,7 @@ pub async fn update_collection(collection: Spec, app_handle: tauri::AppHandle){
 #[tauri::command]
 pub async fn update_collection_in_backend(collection: Spec,  app_handle: tauri::AppHandle){
     let mut db = get_database(app_handle);
-    let mut collection_string = COLLECTION_PREFIX.clone().to_string();
+    let mut collection_string = COLLECTION_PREFIX.to_string();
     collection_string.push_str(&collection.info.postman_id.clone().unwrap());
     let value = serde_json::to_string(&collection).unwrap();
     db.set(&collection_string, &value).unwrap();
@@ -112,7 +109,7 @@ pub async fn download_from_url(url: String) -> Result<Value, String> {
 #[tauri::command]
 pub async fn delete_collection_by_id(id: String, app_handle: tauri::AppHandle) -> Result<(), ()> {
     let mut db = get_database(app_handle);
-    let mut collection_string = COLLECTION_PREFIX.clone().to_string();
+    let mut collection_string = COLLECTION_PREFIX.to_string();
     collection_string.push_str(&id);
     db.rem(&collection_string).unwrap();
     Ok(())

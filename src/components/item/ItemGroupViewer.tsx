@@ -1,12 +1,14 @@
 import {Tabs, TabsList, TabsTrigger} from "../bareComponents/Tabs";
 import {NavLink, Outlet, useNavigate} from "react-router-dom";
 import {useState} from "react";
+import {SidebarComponent} from "../../sidebar/SidebarComponent";
 
 export const ItemGroupViewer = ()=>{
     const [params,setParams] = useState<string>('authorization')
     const navigate = useNavigate()
 
-    return <Tabs value={params} onValueChange={v=>{
+    return <><SidebarComponent/>
+        <div className="main-panel"><Tabs value={params} onValueChange={v=>{
         setParams(v)
         navigate(v)}} className="selector text-white p-2">
         <TabsList className="query-param-list">
@@ -17,4 +19,6 @@ export const ItemGroupViewer = ()=>{
         </TabsList>
         <Outlet/>
     </Tabs>
+        </div>
+        </>
 }

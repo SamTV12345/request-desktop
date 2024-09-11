@@ -1,4 +1,3 @@
-use crate::postman_lib::v2_1_0::Spec;
 use serde::{Deserialize, Serialize};
 use crate::models::auth::Auth;
 use crate::models::folder::Folder;

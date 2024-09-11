@@ -14,6 +14,7 @@ import {
     Outlet
 } from "react-router-dom";
 import {MetaData} from "./models/MetaData";
+import {RootSidebar} from "./sidebar/RootSidebar";
 appWindow.onCloseRequested(async e => {
     const metadata = [...useAPIStore.getState().metadata.values()]
     await setMetaData(metadata)
@@ -107,11 +108,8 @@ const App = () => {
             )} />*/}
 
             {/*<ResizableBox direction={"top"} initialSize={100} style={{height: "100px", background: "#AFA", minWidth: "100px"}}/>*/}
-
-            <SidebarComponent/>
-            <div className="main-panel">
-               <Outlet/>
-            </div>
+            <RootSidebar/>
+            <Outlet/>
         </>
     )
 }

@@ -24,7 +24,7 @@
     "buffer": "^6.0.3",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.0.0",
-    "lucide-react": "^0.263.1",
+    "lucide-react": "^0.439.0",
     "material-symbols": "^0.10.4",
     "openapi2postman-unofficial": "^4.16.0",
     "postman-collection": "^4.1.7",

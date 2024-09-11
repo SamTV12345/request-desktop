@@ -557,6 +557,10 @@ body, #root {
     background-color: var(--scrollbar-thumb-background-color);
 }
 
+.root-dialog {
+    background-color: #333333;
+}
+
 .dialog-centered{
     background-color: #333333;
     border-radius: 2%;
