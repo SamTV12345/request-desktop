@@ -6,7 +6,7 @@ use crate::models::variable::Variable;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
-pub struct Item{
+pub struct Item {
     pub id: Option<String>,
     pub name: Option<String>,
     pub description: Option<String>,

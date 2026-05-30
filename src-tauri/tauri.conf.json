@@ -2,45 +2,27 @@
   "build": {
     "beforeDevCommand": "pnpm dev",
     "beforeBuildCommand": "pnpm build",
-    "devPath": "http://localhost:1420",
-    "distDir": "../dist",
-    "withGlobalTauri": false
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420"
   },
-  "package": {
-    "productName": "request-pilot",
-    "version": "0.0.0"
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
   },
-
-  "tauri": {
-    "allowlist": {
-      "all": false,
-      "shell": {
-        "all": false,
-        "open": true
-      },
-      "dialog": {
-        "confirm": true,
-        "open": true
-      },
-      "window": {
-        "close": true
-      }
-    },
-    "bundle": {
-      "active": true,
-      "targets": "all",
-      "identifier": "com.samtv12345.dev",
-      "icon": [
-        "icons/32x32.png",
-        "icons/128x128.png",
-        "icons/128x128@2x.png",
-        "icons/icon.icns",
-        "icons/icon.ico"
-      ]
-    },
-    "security": {
-      "csp": null
-    },
+  "productName": "request-pilot",
+  "mainBinaryName": "request-pilot",
+  "version": "0.0.0",
+  "identifier": "com.samtv12345.dev",
+  "plugins": {},
+  "app": {
+    "withGlobalTauri": false,
     "windows": [
       {
         "fullscreen": false,
@@ -48,21 +30,26 @@
         "center": true,
         "visible": false,
         "title": "request-pilot",
-        "fileDropEnabled": false,
+        "dragDropEnabled": false,
         "width": 800,
         "height": 600,
         "minWidth": 800,
-        "minHeight": 600
+        "minHeight": 600,
+        "useHttpsScheme": true
       },
       {
         "width": 400,
-         "height": 200,
-         "center": true,
-         "transparent": true,
-         "decorations": false,
-         "url": "splashscreen.html",
-         "label": "splashscreen"
+        "height": 200,
+        "center": true,
+        "transparent": true,
+        "decorations": false,
+        "url": "splashscreen.html",
+        "label": "splashscreen",
+        "useHttpsScheme": true
       }
-    ]
+    ],
+    "security": {
+      "csp": null
+    }
   }
 }

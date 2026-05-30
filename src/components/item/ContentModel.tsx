@@ -19,7 +19,7 @@ export const ContentModel = () => {
                         <ItemRequestBar/>
                         <QueryParam/>
                         {<ResizableBox direction={"top"} initialSize={50}
-                                       className={`response-section border-t-2 border-gray-500 ${!responseExtended && '!h-10'}`}>
+                                       className={`response-section border-t-2 border-gray-500 ${!responseExtended && 'h-10!'}`}>
                             <ResponseBar/>
                         </ResizableBox>}
                     </>}

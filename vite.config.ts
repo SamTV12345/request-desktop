@@ -1,24 +1,17 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import {NodeGlobalsPolyfillPlugin} from "@esbuild-plugins/node-globals-polyfill";
+import { nodePolyfills } from "vite-plugin-node-polyfills";
 
-// https://vitejs.dev/config/
+// https://vite.dev/config/
 export default defineConfig(async () => ({
-  plugins: [react()],
-  optimizeDeps: {
-    esbuildOptions: {
-      define: {
-        global: "globalThis",
-      },
-      plugins: [
-        NodeGlobalsPolyfillPlugin({
-          process: true,
-          buffer: true,
-          crypto: true,
-        }),
-      ],
-    },
-  },
+  plugins: [
+    react(),
+    // Provides Node.js globals (process, Buffer, global) and built-in module
+    // shims required by the postman/openapi libraries that run in the webview.
+    nodePolyfills({
+      globals: { process: true, Buffer: true, global: true },
+    }),
+  ],
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   // prevent vite from obscuring rust errors
   clearScreen: false,
@@ -27,15 +20,15 @@ export default defineConfig(async () => ({
     port: 1420,
     strictPort: true,
   },
-  // to make use of `TAURI_DEBUG` and other env variables
-  // https://tauri.studio/v1/api/config#buildconfig.beforedevcommand
-  envPrefix: ["VITE_", "TAURI_"],
+  // to make use of `TAURI_ENV_DEBUG` and other Tauri v2 env variables
+  // https://v2.tauri.app/reference/environment-variables/
+  envPrefix: ["VITE_", "TAURI_ENV_"],
   build: {
-    // Tauri supports es2021
-    target: process.env.TAURI_PLATFORM == "windows" ? "chrome105" : "safari13",
+    // Tauri uses Chromium on Windows and WebKit on macOS/Linux
+    target: process.env.TAURI_ENV_PLATFORM == "windows" ? "chrome105" : "safari13",
     // don't minify for debug builds
-    minify: !process.env.TAURI_DEBUG ? "esbuild" : false,
+    minify: !process.env.TAURI_ENV_DEBUG,
     // produce sourcemaps for debug builds
-    sourcemap: !!process.env.TAURI_DEBUG,
+    sourcemap: !!process.env.TAURI_ENV_DEBUG,
   },
 }));

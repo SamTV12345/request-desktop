@@ -1,6 +1,6 @@
 import React, {useState} from "react";
 import {CollectionDefinitionExtended, useAPIStore} from "../../store/store";
-import {invoke} from "@tauri-apps/api/tauri";
+import {invoke} from "@tauri-apps/api/core";
 import {VERSIONS} from "../../constants";
 // @ts-ignore
 import converter from 'openapi2postman-unofficial'
@@ -71,11 +71,11 @@ export const ImportByLink = () => {
     return <>
         {postmanCollection ? <ImportPreview/> : <>
             <h2 className="text-white">Enter a URL</h2><input type="text"
-                                                              className="border-[2px] border-border_strong bg-background_tertiary hover:bg- p-1 rounded text-white w-full placeholder-gray-500"
+                                                              className="border-2 border-border_strong bg-background_tertiary hover:bg- p-1 rounded-sm text-white w-full placeholder-gray-500"
                                                               placeholder="e.g. https://petstore.swagger.io/v2/swagger.json"
                                                               value={importLink}
                                                               onChange={v => setImportLink(v.target.value)}/><br/>
-            <button className="bg-mustard-600 pl-2 pr-2 pt-1 pb-1 rounded mt-2 text-white"
+            <button className="bg-mustard-600 pl-2 pr-2 pt-1 pb-1 rounded-sm mt-2 text-white"
                     onClick={() => importCollectionFromURL(importLink)}>Continue
             </button>
         </>

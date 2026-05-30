@@ -24,7 +24,7 @@ export const SidebarComponent = ()=>{
             <Dialog.Trigger>
                             <button className="sidebar-button"  onClick={()=>{}}>Import</button>
                         </Dialog.Trigger>
-                        <Dialog.Portal className="">
+                        <Dialog.Portal>
                             <Dialog.Content className="dialog-centered">
                                 <h2 className="import-heading">Import collection</h2>
                                 <Tabs defaultValue="file" className="import-tabs">

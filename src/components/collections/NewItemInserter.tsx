@@ -26,7 +26,7 @@ export const NewItemInserter = () => {
     const CollectionItem = ({collection}:{collection: CollectionDefinition})=>{
         const isItemGroup = isItemGroupDefinition(collection)
 
-        return <div className="bg-mustard-600 flex gap-5 p-2 border-[1px] border-black cursor-pointer" onClick={()=>{
+        return <div className="bg-mustard-600 flex gap-5 p-2 border border-black cursor-pointer" onClick={()=>{
             isItemGroup&& changeToSubDirectory(collection)
         }}>
             {isItemGroup?
@@ -34,7 +34,7 @@ export const NewItemInserter = () => {
                 :<span className="material-symbols-outlined self-center">sync_alt</span>
             }
             <span>{collection.info?collection.info?.name:collection.name}</span>
-            <span className="flex-grow"></span>
+            <span className="grow"></span>
             {isItemGroup&&<span className="material-symbols-outlined">chevron_right</span>}
         </div>
     }
@@ -73,7 +73,7 @@ export const NewItemInserter = () => {
             <Dialog.Content className="dialog-centered">
                 <Dialog.Title className="text-white font-bold text-2xl">Collectionbrowser</Dialog.Title>
                 <div className="flex gap-5 mb-5 mt-2">
-                    <button className={`${!currentItem && '!hidden'} material-symbols-outlined text-white `} onClick={()=>{
+                    <button className={`${!currentItem && 'hidden!'} material-symbols-outlined text-white `} onClick={()=>{
                         if(parents.length === 1){
                             // Must be a collection
                             setCurrentItem(undefined)
@@ -102,7 +102,7 @@ export const NewItemInserter = () => {
                 </div>
                 {
                     currentItem&&
-                    <button className="mt-5 text-center w-full rounded bg-green-700 flex justify-center pt-2 pb-2"
+                    <button className="mt-5 text-center w-full rounded-sm bg-green-700 flex justify-center pt-2 pb-2"
                             onClick={()=>createItem(parents[0] as CollectionDefinitionExtended, parents[parents.length-1])}>
                         <span className="material-symbols-outlined">upload</span>
                         Create new request</button>

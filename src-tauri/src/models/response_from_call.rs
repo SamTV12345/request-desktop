@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
@@ -13,7 +12,7 @@ pub struct ResponseFromCall {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct TimeMeasures{
+pub struct TimeMeasures {
     pub response_duration: String,
     pub duration: String,
 }

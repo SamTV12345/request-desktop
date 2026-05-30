@@ -31,7 +31,7 @@ export const ResponseBar = ()=>{
     return <>
     {!currentRequest&&<div className="text-tertiary flex">
             <span className="mt-5">Response</span>
-            <span className="flex-grow"></span>
+            <span className="grow"></span>
             <button onClick={()=>setResponseExtended(!responseExtended)} className={`${responseExtended&&'rotate-180'} material-symbols-outlined`}>expand_less</button>
         </div>
     }
@@ -45,7 +45,7 @@ export const ResponseBar = ()=>{
             <TabsTrigger value="cookies">Cookies</TabsTrigger>
             <TabsTrigger value="headers">Headers</TabsTrigger>
             <TabsTrigger value="test-results">Test Results</TabsTrigger>
-            <div className="flex-grow"></div>
+            <div className="grow"></div>
             <div>Status</div>
             <div className="text-green-400">{currentRequest?.status}</div>
             <div>Time</div>

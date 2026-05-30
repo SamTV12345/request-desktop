@@ -1,5 +1,5 @@
 import {CollectionDefinitionExtended, ItemDefinitionExtended, useAPIStore} from "../../../store/store";
-import {open} from '@tauri-apps/api/dialog'
+import {open} from '@tauri-apps/plugin-dialog'
 import {replaceItem} from "../../../utils/CollectionReplaceUtils";
 export const FileBody = () => {
     const currentItem = useAPIStore(state => state.currentItem) as ItemDefinitionExtended

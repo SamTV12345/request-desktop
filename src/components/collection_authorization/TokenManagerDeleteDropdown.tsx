@@ -13,9 +13,9 @@ export const TokenManagerDeleteDropdown = ()=>{
         </DropdownMenu.Trigger>
         <DropdownMenu.Content className="overflow-hidden rounded-lg shadow-[0_4px_16px_rgba(0,0,0,0.2)]
          z-30 bg-basecol">
-            <DropdownMenu.Item className="relative pl-6 pr-4 py-1.5 rounded text-sm text-stone-500 hover:bg-stone-500" >
+            <DropdownMenu.Item className="relative pl-6 pr-4 py-1.5 rounded-sm text-sm text-stone-500 hover:bg-stone-500" >
                 <DropdownMenu.ItemIndicator className="absolute left-0">
-                    <span className="material-symbols-outlined align-middle !leading-none !text-xl">check</span>
+                    <span className="material-symbols-outlined align-middle leading-none! text-xl!">check</span>
                 </DropdownMenu.ItemIndicator>
                 <DropdownMenu.Label onClick={()=>{
                     getAllTokens().then((tokens) => {
@@ -37,7 +37,7 @@ export const TokenManagerDeleteDropdown = ()=>{
                         deleteToken(token.key)
                         setTokens([])
                 }
-                }} className="relative pl-6 pr-4 py-1.5 rounded text-sm hover:text-white hover:bg-stone-500 cursor-pointer">
+                }} className="relative pl-6 pr-4 py-1.5 rounded-sm text-sm hover:text-white hover:bg-stone-500 cursor-pointer">
                     All tokens</DropdownMenu.Label>
             </DropdownMenu.Item>
         </DropdownMenu.Content>

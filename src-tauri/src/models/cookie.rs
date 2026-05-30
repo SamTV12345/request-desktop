@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
-pub struct Cookie{
+pub struct Cookie {
     pub domain: Option<String>,
     pub expires: Option<String>,
     #[serde(rename = "httpOnly")]

@@ -10,10 +10,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [build-dependencies]
-tauri-build = { version = "1.4", features = [] }
+tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "1.4.1", features = [ "window-close", "dialog-confirm", "dialog-open", "shell-open", "devtools"] }
+tauri = { version = "2", features = [ "devtools"] }
 serde = { version = "1.0.178", features = ["derive"] }
 pickledb= {version = "0.5.1", features = ["json"] }
 serde_json = {version="1.0", features = ["raw_value"] }
@@ -27,10 +27,13 @@ semver = "1.0"
 serde_path_to_error = "0.1.14"
 base64 = "0.21.2"
 oauth2 = "4.4.1"
+tauri-plugin-dialog = "2"
+tauri-plugin-shell = "2"
 
 [dependencies.uuid]
 version = "1.4.1"
 features = [
+    "v4",                # Generate random (v4) UUIDs
     "fast-rng",          # Use a faster (but still sufficiently random) RNG
     "macro-diagnostics", # Enable better diagnostics for compile-time UUIDs
 ]
