@@ -1,8 +1,8 @@
 import {CollectionDefinitionExtended, useAPIStore} from "../../store/store";
 import {useDropzone} from "react-dropzone";
 import React, {useEffect, useState} from "react";
-import {open } from "@tauri-apps/api/dialog";
-import {invoke} from "@tauri-apps/api/tauri";
+import {open } from "@tauri-apps/plugin-dialog";
+import {invoke} from "@tauri-apps/api/core";
 import {CollectionDefinition} from "postman-collection";
 import {VERSIONS} from "../../constants";
 import {FileUpload} from "../../models/FileUpload";
@@ -67,7 +67,7 @@ export const DirectoryToUpload = ()=>{
 
     return (
         uploadedCollections?<DirectoryToUpload/>:<div className="dropzone">
-            <button className="bg-gray-500 p-2 rounded hover:bg-gray-400" onClick={importFolder}>Click here to add your folder</button>
+            <button className="bg-gray-500 p-2 rounded-sm hover:bg-gray-400" onClick={importFolder}>Click here to add your folder</button>
         </div>
     )
 }

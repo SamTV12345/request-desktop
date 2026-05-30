@@ -1,6 +1,6 @@
 import {useAPIStore} from "../../store/store";
 import {EnvironmentType, EnvironmentWrapper} from "../environment/EnvironmentType";
-import {invoke} from "@tauri-apps/api/tauri";
+import {invoke} from "@tauri-apps/api/core";
 
 export const EnvTable = ()=>{
     const env_table = useAPIStore(state=>state.selectedEnvironment)
@@ -131,9 +131,9 @@ export const EnvTable = ()=>{
             </tbody>
         </table>
         <div className="float-right flex flex-col gap-5">
-            <button className="bg-mustard-600 p-2 rounded float-right flex" onClick={() => onAdd(env_table!.name!)}>
+            <button className="bg-mustard-600 p-2 rounded-sm float-right flex" onClick={() => onAdd(env_table!.name!)}>
                 <span className="material-symbols-outlined self-center">add</span>Hinzufügen</button>
-            <button className="bg-mustard-600 p-2 rounded float-right flex" onClick={()=>onSave()}>
+            <button className="bg-mustard-600 p-2 rounded-sm float-right flex" onClick={()=>onSave()}>
                 <span className="material-symbols-outlined self-center">save</span>
                 Speichern</button>
         </div>

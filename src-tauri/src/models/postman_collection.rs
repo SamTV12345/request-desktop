@@ -1,15 +1,15 @@
-use serde::{Deserialize, Serialize};
 use crate::models::auth::Auth;
 use crate::models::folder::Folder;
 use crate::models::info::Info;
 use crate::models::postman_item::Item;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 pub struct PostmanCollection {
     pub info: Info,
     pub item: Vec<FolderOrItem>,
     pub auth: Option<Auth>,
-    pub variable: Vec<Variable>
+    pub variable: Vec<Variable>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -23,15 +23,13 @@ pub struct Variable {
 
 #[derive(Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum FolderOrItem{
+pub enum FolderOrItem {
     Folder(Folder),
     Item(Item),
 }
 
-
-
 #[derive(Serialize, Deserialize)]
-pub struct ProtocolProfileBehavior{
+pub struct ProtocolProfileBehavior {
     #[serde(rename = "disableBodyPruning")]
     pub disable_body_pruning: Option<bool>,
 }

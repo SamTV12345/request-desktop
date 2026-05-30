@@ -76,7 +76,7 @@ export const TokenManager = ()=>{
                         }
                         </div>
                     </div>
-                    <div className="border-[1px] border-white"></div>
+                    <div className="border border-white"></div>
                     <div className="overflow-auto">
                         {
                             selectedToken?Object.entries(selectedToken).map(([key, value])=>{

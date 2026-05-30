@@ -3,7 +3,7 @@ import {useForm, useWatch} from "react-hook-form";
 import {useEffect, useMemo} from "react";
 import {ItemDefinition, ItemGroupDefinition, VariableDefinition} from "postman-collection";
 import { emit, listen } from '@tauri-apps/api/event'
-import {invoke} from '@tauri-apps/api/tauri'
+import {invoke} from '@tauri-apps/api/core'
 import {
     AuthorizationCodeFlow,
     AuthorizationCodeFlowPKCE,
@@ -421,7 +421,7 @@ export const OAuth2Authentication = () => {
                 <option value="body">Send as POST body parameter</option>
             </select>
     </form>
-        <button className="bg-mustard-600 pl-2 pr-2 pt-1 pb-1 rounded" onClick={async () => {
+        <button className="bg-mustard-600 pl-2 pr-2 pt-1 pb-1 rounded-sm" onClick={async () => {
             await doRequest()
                 .then((c)=>{
                     let id = selectedToken?.key

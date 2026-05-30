@@ -2,7 +2,7 @@ import ResizableBox from "../resizable/ResizableBox";
 import {Input} from "../bareComponents/Input";
 import {CheckCircle, EllipsisVertical, PlusIcon} from "lucide-react";
 import {useEffect, useState} from "react";
-import {invoke} from "@tauri-apps/api/tauri";
+import {invoke} from "@tauri-apps/api/core";
 import {useAPIStore} from "../../store/store";
 import {EnvironmentWrapper} from "./EnvironmentType";
 import {EnvironmentPanel} from "./EnvironmentPanel";
@@ -33,7 +33,7 @@ export const Environment = ()=>{
         <ol className="mt-5  w-full">
             <li className="flex w-full group/list-item cursor-pointer">
                 <span>Globals</span>
-                <span className="flex-grow"></span>
+                <span className="grow"></span>
                 <span className="flex group-hover/list-item:visible invisible">
                     <CheckCircle className=""/>
                     <EllipsisVertical/>

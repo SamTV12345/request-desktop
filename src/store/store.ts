@@ -3,7 +3,7 @@ import {CollectionDefinition, ItemDefinition, ItemGroupDefinition, VariableDefin
 import {ResponseFromCall} from "../models/ResponseFromCall";
 import {FileUpload} from "../models/FileUpload";
 import {cloneElement} from "react";
-import {invoke} from '@tauri-apps/api/tauri'
+import {invoke} from '@tauri-apps/api/core'
 import {OAuth2FailureOutcome, OAuth2SucessOutcome, TokenWithKey} from "../models/OAuth2Outcome";
 import {MetaData} from "../models/MetaData";
 import {EnvironmentWrapper} from "../components/environment/EnvironmentType";

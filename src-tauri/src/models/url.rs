@@ -1,9 +1,9 @@
-use serde::{Deserialize, Serialize};
 use crate::models::query_param::QueryParam;
 use crate::models::variable::Variable;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
-pub struct Url{
+pub struct Url {
     pub raw: String,
     pub protocol: Option<String>,
     pub host: Vec<String>,

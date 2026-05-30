@@ -1,7 +1,7 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import {CollectionDefinitionExtended, useAPIStore} from "../../store/store";
 import {Collection, CollectionDefinition} from "postman-collection";
-import {invoke} from "@tauri-apps/api/tauri";
+import {invoke} from "@tauri-apps/api/core";
 import {NewItemInserter} from "./NewItemInserter";
 
 export const NewItemModel = ()=>{
@@ -12,7 +12,7 @@ export const NewItemModel = ()=>{
 
     return                         <Dialog.Root open={openNewCollectionModel}>
         <NewItemInserter/>
-        <Dialog.Portal className="">
+        <Dialog.Portal>
             <Dialog.Content className="dialog-centered">
                 <Dialog.Title className="text-white font-bold text-2xl">Create new</Dialog.Title>
                 <Dialog.Close  className="absolute top-0 right-0 p-2 text-white">

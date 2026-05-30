@@ -1,6 +1,5 @@
-
-use serde::{Deserialize, Serialize};
 use crate::models::description::PostmanDescription;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 pub struct Variable {

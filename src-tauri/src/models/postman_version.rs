@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
-pub struct PostmanVersion{
+pub struct PostmanVersion {
     pub major: i32,
     pub minor: i32,
     pub patch: i32,

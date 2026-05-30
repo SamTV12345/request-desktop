@@ -1,5 +1,5 @@
 import {useEffect, useState} from "react";
-import {invoke} from "@tauri-apps/api/tauri";
+import {invoke} from "@tauri-apps/api/core";
 import "./App.css";
 import {SidebarComponent} from "./sidebar/SidebarComponent";
 import {CollectionDefinitionExtended, useAPIStore} from "./store/store";
@@ -9,12 +9,13 @@ import {
     TOKEN_DB,
     TOKEN_DB_VERSION
 } from "./components/collection_authorization/TokenManagerService";
-import { appWindow } from "@tauri-apps/api/window";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import {
     Outlet
 } from "react-router-dom";
 import {MetaData} from "./models/MetaData";
 import {RootSidebar} from "./sidebar/RootSidebar";
+const appWindow = getCurrentWebviewWindow()
 appWindow.onCloseRequested(async e => {
     const metadata = [...useAPIStore.getState().metadata.values()]
     await setMetaData(metadata)

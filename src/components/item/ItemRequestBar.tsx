@@ -1,5 +1,5 @@
 import {RequestMethod} from "./RequestMethod";
-import {invoke} from "@tauri-apps/api/tauri";
+import {invoke} from "@tauri-apps/api/core";
 import {ResponseFromCall} from "../../models/ResponseFromCall";
 import {useEffect, useMemo, useState} from "react";
 import {QueryParamDefinition, Url as URLParser, UrlDefinition} from "postman-collection";
@@ -104,7 +104,7 @@ export const ItemRequestBar = ()=>{
    }
 
     return  <div className="request-url-section">
-        <div className="border-2 border-mustard-600 p-3 rounded">
+        <div className="border-2 border-mustard-600 p-3 rounded-sm">
             <div className="outline-2 outline-gray-600 bg-transparent">
                 <RequestMethod value={currentItem!}/>
             </div>
@@ -113,7 +113,7 @@ export const ItemRequestBar = ()=>{
         <button onClick={async () => {
 
             await handleRequest()
-        }} className="bg-mustard-600 p-2 w-28 text-white hover:bg-mustard-500 leading-none px-4 py-3 rounded-lg shadow-[0_4px_16px_rgba(0,0,0,0.2)] hover:shadow-[0_4px_16px_theme(colors.mustard.500)] text-sm transition disabled:opacity-50 disabled:shadow-none disabled:hover:bg-mustard-600">
+        }} className="bg-mustard-600 p-2 w-28 text-white hover:bg-mustard-500 leading-none px-4 py-3 rounded-lg shadow-[0_4px_16px_rgba(0,0,0,0.2)] hover:shadow-[0_4px_16px_var(--color-mustard-500)] text-sm transition disabled:opacity-50 disabled:shadow-none disabled:hover:bg-mustard-600">
             Send
         </button>
     </div>

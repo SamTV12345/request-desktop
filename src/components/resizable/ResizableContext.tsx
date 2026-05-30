@@ -12,7 +12,7 @@ import {ResizeDirection, startDrag} from "./ResizableEnvironment";
 
 type ResizableContextProps<T> = {
     direction: ResizeDirection,
-    render: (size: number, targetRef: RefObject<T>) => ReactElement,
+    render: (size: number, targetRef: RefObject<T | null>) => ReactElement,
     initialSize: number
 }
 

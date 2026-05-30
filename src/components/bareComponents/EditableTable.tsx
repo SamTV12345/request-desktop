@@ -52,16 +52,16 @@ export const EditableTable:FC<EditableTableProps<VariableDefinition|QueryParamDe
                                 onDescriptionChange(collection?.id!,val.target.value, i)}/>
                         </td>
                         <td>
-                            <button className="bg-red-500 p-1 rounded" onClick={()=>onDelete(collection.id!, i)}>Löschen</button>
+                            <button className="bg-red-500 p-1 rounded-sm" onClick={()=>onDelete(collection.id!, i)}>Löschen</button>
                         </td>
                     </tr>
                 })}
                 </tbody>
             </table>
             <div className="float-right flex flex-col gap-5">
-                <button className="bg-mustard-600 p-2 rounded float-right flex" onClick={()=>onAdd(collection.id!)}>
+                <button className="bg-mustard-600 p-2 rounded-sm float-right flex" onClick={()=>onAdd(collection.id!)}>
                     <span className="material-symbols-outlined self-center">add</span>Hinzufügen</button>
-                <button className="bg-mustard-600 p-2 rounded float-right flex" onClick={()=>onSave()}>
+                <button className="bg-mustard-600 p-2 rounded-sm float-right flex" onClick={()=>onSave()}>
                     <span className="material-symbols-outlined self-center">save</span>
                     Speichern</button>
             </div>

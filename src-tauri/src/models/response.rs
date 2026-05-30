@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 
-pub struct PostmanResponse{
+pub struct PostmanResponse {
     pub id: Option<String>,
     #[serde(rename = "originalRequest")]
     pub original_request: Option<Request>,

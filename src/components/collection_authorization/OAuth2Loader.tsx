@@ -51,7 +51,7 @@ export const OAuth2Loader = () => {
                         <span className="material-symbols-outlined rounded-full bg-green-700 text-white text-center">check</span>
                     </div>
                         <Dialog.Description className="text-white mt-2">You will be redirected to the token manager in {countDown}</Dialog.Description>
-                        <button className="bg-mustard-600 p-1 rounded float-right mt-5 text-white" onClick={()=>setCountDown(0)}>Proceed</button>
+                        <button className="bg-mustard-600 p-1 rounded-sm float-right mt-5 text-white" onClick={()=>setCountDown(0)}>Proceed</button>
                 </div>
                     :<div>
 

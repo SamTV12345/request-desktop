@@ -1,16 +1,15 @@
 use std::{fs::File, io::Read, path::Path};
 
-use serde::{Deserialize, Serialize};
 use crate::postman_lib::{v1_0_0, v2_0_0, v2_1_0};
-
+use serde::{Deserialize, Serialize};
 
 pub const MINIMUM_POSTMAN_COLLECTION_VERSION: &str = ">= 1.0.0";
 
 /// Errors that Postman Collection functions may return
 /// Errors that Postman Collection functions may return
 pub mod errors {
-    use error_chain::error_chain;
     use crate::postman_lib::lib::MINIMUM_POSTMAN_COLLECTION_VERSION;
+    use error_chain::error_chain;
     error_chain! {
         foreign_links {
             Io(::std::io::Error);

@@ -42,7 +42,7 @@ export const TokenSelector = ()=>{
     }, []);
 
     return   <Select.Root>
-        <Select.Trigger placeholder="Available Tokens" className={`flex items-center pl-6 pr-2 py-2 text-sm bg-basecol w-full text-white`}>
+        <Select.Trigger className={`flex items-center pl-6 pr-2 py-2 text-sm bg-basecol w-full text-white`}>
 
             {selectedToken ? selectedToken.token_name: "Select Token"}
         </Select.Trigger>
@@ -51,18 +51,18 @@ export const TokenSelector = ()=>{
 
 
                     {tokens.map((token) =>
-                        <Select.Item key={token.key} onClick={()=>changeSelectedToken(token)} className="relative pl-6 pr-4 py-1.5 rounded text-white text-sm hover:bg-mustard-600 hover:text-white">
+                        <Select.Item key={token.key} onClick={()=>changeSelectedToken(token)} className="relative pl-6 pr-4 py-1.5 rounded-sm text-white text-sm hover:bg-mustard-600 hover:text-white">
                             <Select.ItemIndicator className="absolute left-0" onClick={()=>{
 
                             }}>
-                                <span className="material-symbols-outlined align-middle !leading-none !text-xl">check</span>
+                                <span className="material-symbols-outlined align-middle leading-none! text-xl!">check</span>
                             </Select.ItemIndicator>
 
                             <Select.Label>{token.token_name}</Select.Label>
                         </Select.Item>)}
-                <Select.Separator className="border-[1px] border-white"></Select.Separator>
+                <Select.Separator className="border border-white"></Select.Separator>
                         <Select.Item onClick={()=>{setOpenManager(true)}}
-                                     className="relative pl-6 pr-4 py-1.5 rounded text-white text-sm hover:bg-mustard-600 hover:text-white">Manage tokens</Select.Item>
+                                     className="relative pl-6 pr-4 py-1.5 rounded-sm text-white text-sm hover:bg-mustard-600 hover:text-white">Manage tokens</Select.Item>
             </Select.Content>
     </Select.Root>
 }

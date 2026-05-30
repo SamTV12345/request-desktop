@@ -6,5 +6,5 @@ pub struct OAuth2Response {
     token_type: String,
     expires_in: u32,
     scope: String,
-    token_name:String
+    token_name: String,
 }

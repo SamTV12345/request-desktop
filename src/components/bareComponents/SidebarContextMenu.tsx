@@ -14,7 +14,7 @@ export const SidebarContextMenu:FC<SidebarContextMenuProps> = ({children,trigger
         <ContextMenu.Trigger >{triggerLabel}</ContextMenu.Trigger>
 
         <ContextMenu.Portal>
-            <ContextMenu.Content className="bg-basecol p-2 rounded text-sm"  onClick={(e)=>e.stopPropagation()}>
+            <ContextMenu.Content className="bg-basecol p-2 rounded-sm text-sm"  onClick={(e)=>e.stopPropagation()}>
                 {children}
 
                 <ContextMenu.Separator />

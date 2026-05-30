@@ -1,6 +1,6 @@
 import {CollectionDefinitionExtended, useAPIStore} from "../../store/store";
 import {VERSIONS} from "../../constants";
-import {invoke} from "@tauri-apps/api/tauri";
+import {invoke} from "@tauri-apps/api/core";
 import {Collection} from "postman-collection";
 
 

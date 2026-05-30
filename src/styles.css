@@ -1,6 +1,40 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+@theme {
+  --color-border_strong: var(--color-border-strong);
+  --color-background_tertiary: var(--background-color-tertiary);
+  --color-basecol: #262626;
+
+  --color-mustard-100: #fae5c0;
+  --color-mustard-200: #fad490;
+  --color-mustard-300: #fac463;
+  --color-mustard-400: #f3ae34;
+  --color-mustard-500: #e69a13;
+  --color-mustard-600: #c07c03;
+  --color-mustard-700: #855602;
+  --color-mustard-800: #4e3201;
+  --color-mustard-900: #271901;
+
+  --color-tertiary: #6b6b6b;
+}
+
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+}
 
 html {
     font-family: sans-serif;
