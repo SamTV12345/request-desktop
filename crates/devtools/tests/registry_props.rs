@@ -540,3 +540,112 @@ fn ids_are_kebab_case_and_pinned() {
     );
     fail.assert_empty();
 }
+
+/// Copying a value must not copy its label. `section` puts the label *in* the
+/// text, so the UI splits it back out with `split_sections`.
+///
+/// The invariant is coverage, not reassembly: every byte of a tool's output must
+/// land inside exactly one section, in order. That is what makes a mistaken
+/// header harmless — the text is still all there — and it is what caught the
+/// first version of the parser silently dropping everything before the first
+/// header on `crontab-generator`, `url-parser` and `regex-memo`.
+#[test]
+fn split_sections_loses_nothing_for_every_tool() {
+    let mut broken = Vec::new();
+    for tool in rp_devtools::all() {
+        if tool.kind == rp_devtools::Kind::Custom {
+            continue;
+        }
+        let Ok(output) = (tool.run)(&rp_devtools::Args::new()) else {
+            continue;
+        };
+        let parts = rp_devtools::split_sections(&output);
+        assert!(!parts.is_empty(), "{}: split produced nothing", tool.id);
+
+        // Walk the slices and require them to tile the input exactly: each
+        // value must start where the previous section ended, allowing only the
+        // header line the parser consumed in between.
+        let base = output.as_ptr() as usize;
+        let mut cursor = 0usize;
+        for (label, value) in &parts {
+            let start = value.as_ptr() as usize - base;
+            let header = if label.is_empty() { 0 } else { label.len() + 2 };
+            if start != cursor + header {
+                broken.push(format!(
+                    "{}: gap before section {label:?} — expected {} got {start}",
+                    tool.id,
+                    cursor + header
+                ));
+            }
+            cursor = start + value.len();
+        }
+        if cursor != output.len() {
+            broken.push(format!(
+                "{}: {} byte(s) past the last section were dropped",
+                tool.id,
+                output.len() - cursor
+            ));
+        }
+    }
+    assert!(
+        broken.is_empty(),
+        "{} problem(s):
+{}",
+        broken.len(),
+        broken.join(
+            "
+"
+        )
+    );
+}
+
+/// The reported bug, pinned: pressing Copy on the base64 tool handed back
+/// "Base64 of string:\nSGVsbG8=" instead of the value.
+#[test]
+fn a_labelled_value_yields_the_value_alone() {
+    let out = rp_devtools::section("Base64 of string", Ok("SGVsbG8=".into()));
+    let parts = rp_devtools::split_sections(&out);
+    assert_eq!(parts.len(), 1);
+    assert_eq!(parts[0].0, "Base64 of string");
+    // The parser cuts but never trims, so the caller trims — which is what the
+    // copy button does. What matters is that the label is gone from the value.
+    assert_eq!(parts[0].1.trim_end(), "SGVsbG8=");
+
+    // Several panels, the shape every multi-panel tool produces.
+    let joined = [
+        rp_devtools::section("Base64 of string", Ok("SGVsbG8=".into())),
+        rp_devtools::section("String from base64", Ok("Hello".into())),
+    ]
+    .join("\n\n");
+    let parts = rp_devtools::split_sections(&joined);
+    let seen: Vec<(&str, String)> = parts
+        .iter()
+        .map(|(l, v)| (*l, v.trim_end().to_string()))
+        .collect();
+    assert_eq!(
+        seen,
+        [
+            ("Base64 of string", "SGVsbG8=".to_string()),
+            ("String from base64", "Hello".to_string())
+        ]
+    );
+
+    // A multi-line value keeps its interior newlines but not the separator.
+    let multi = rp_devtools::section("Rows", Ok("a\nb\nc".into()));
+    assert_eq!(rp_devtools::split_sections(&multi), [("Rows", "a\nb\nc")]);
+
+    // Unlabelled output is one section with an empty label, so a single-value
+    // tool needs no special case at the call site.
+    assert_eq!(
+        rp_devtools::split_sections("just a value"),
+        [("", "just a value")]
+    );
+    assert_eq!(rp_devtools::split_sections(""), [("", "")]);
+
+    // A body line ending in ':' that does *not* follow a blank line is content.
+    let tricky = rp_devtools::section("Head", Ok("nested:\nvalue".into()));
+    assert_eq!(
+        rp_devtools::split_sections(&tricky),
+        [("Head", "nested:\nvalue")]
+    );
+}

@@ -7,13 +7,13 @@
 //! dropped. Keep the diff against upstream small so it stays easy to re-sync.
 use std::ops::Range;
 
-use crate::theme;
+use crate::theme::{self, control, radius, space, text};
 use gpui::{
     App, Bounds, ClipboardItem, Context, CursorStyle, ElementId, ElementInputHandler, Entity,
     EntityInputHandler, FocusHandle, Focusable, GlobalElementId, KeyBinding, LayoutId, MouseButton,
     MouseDownEvent, MouseMoveEvent, MouseUpEvent, PaintQuad, Pixels, Point, ShapedLine,
-    SharedString, Style, TextRun, UTF16Selection, UnderlineStyle, Window, actions, div, fill, hsla,
-    point, prelude::*, px, relative, rgba, size,
+    SharedString, Style, TextRun, UTF16Selection, UnderlineStyle, Window, actions, div, fill,
+    point, prelude::*, px, relative, size,
 };
 use unicode_segmentation::*;
 
@@ -72,6 +72,8 @@ pub struct TextInput {
     focus_handle: FocusHandle,
     content: SharedString,
     placeholder: SharedString,
+    /// Optional leading icon, drawn inside the frame before the text.
+    icon: Option<&'static str>,
     selected_range: Range<usize>,
     selection_reversed: bool,
     marked_range: Option<Range<usize>>,
@@ -86,6 +88,7 @@ impl TextInput {
             focus_handle: cx.focus_handle(),
             content: SharedString::default(),
             placeholder: placeholder.into(),
+            icon: None,
             selected_range: 0..0,
             selection_reversed: false,
             marked_range: None,
@@ -93,6 +96,17 @@ impl TextInput {
             last_bounds: None,
             is_selecting: false,
         }
+    }
+
+    /// Draw `assets/icons/<name>.svg` inside the frame, before the text — e.g.
+    /// `TextInput::new(cx, "Search tasks…").with_icon("search")`.
+    ///
+    /// `allow(dead_code)` until the search and date fields are moved onto it;
+    /// they currently sit an icon *beside* the frame because this did not exist.
+    #[allow(dead_code)]
+    pub fn with_icon(mut self, name: &'static str) -> Self {
+        self.icon = Some(name);
+        self
     }
 
     pub fn text(&self) -> &str {
@@ -503,6 +517,7 @@ impl Element for TextElement {
         window: &mut Window,
         cx: &mut App,
     ) -> Self::PrepaintState {
+        let t = theme::theme(cx);
         let input = self.input.read(cx);
         let content = input.content.clone();
         let selected_range = input.selected_range.clone();
@@ -510,7 +525,7 @@ impl Element for TextElement {
         let style = window.text_style();
 
         let (display_text, text_color) = if content.is_empty() {
-            (input.placeholder.clone(), hsla(0., 0., 0., 0.2))
+            (input.placeholder.clone(), t.text_muted().into())
         } else {
             (content, style.color)
         };
@@ -564,7 +579,7 @@ impl Element for TextElement {
                         point(bounds.left() + cursor_pos, bounds.top()),
                         size(px(2.), bounds.bottom() - bounds.top()),
                     ),
-                    gpui::blue(),
+                    t.accent,
                 )),
             )
         } else {
@@ -580,7 +595,7 @@ impl Element for TextElement {
                             bounds.bottom(),
                         ),
                     ),
-                    rgba(0x3311ff30),
+                    t.selection(),
                 )),
                 None,
             )
@@ -629,7 +644,43 @@ impl Element for TextElement {
 }
 
 impl Render for TextInput {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let t = theme::theme(cx);
+        let focused = self.focus_handle.is_focused(window);
+
+        // `.input` is a 36-px pill: one text line plus `S1` above and below and
+        // the 1-px border. The line height is derived from those so the shaped
+        // line always fills the frame it is painted in — mouse-to-offset maps
+        // off the element's own bounds, so a hand-picked value here would move
+        // the clickable band away from the visible text.
+        let line_height = control::MD - space::S1 * 2. - px(2.);
+
+        let mut frame = div()
+            .flex()
+            .items_center()
+            .gap(space::S2)
+            .h(control::MD)
+            // `flex_none`, or a crowded flex column shrinks the field and the
+            // bottom of the pill's border ends up outside its own box — the
+            // border is drawn at the box edge, so losing a pixel of height
+            // loses the whole bottom edge.
+            .flex_none()
+            .w_full()
+            .px(space::S3)
+            .py(space::S1)
+            .bg(t.surface)
+            .border_1()
+            // Focus is an accent border; hover is ink at 45%. Focus wins, so the
+            // hover refinement is only attached when the field is not focused.
+            .border_color(if focused { t.focus() } else { t.divider })
+            .rounded(radius::PILL);
+        if !focused {
+            frame = frame.hover(|s| s.border_color(t.border_hover()));
+        }
+        if let Some(name) = self.icon {
+            frame = frame.child(theme::icon(name).text_color(t.text_muted()));
+        }
+
         div()
             .flex()
             .key_context("TextInput")
@@ -653,19 +704,22 @@ impl Render for TextInput {
             .on_mouse_up_out(MouseButton::Left, cx.listener(Self::on_mouse_up))
             .on_mouse_move(cx.listener(Self::on_mouse_move))
             .w_full()
-            .line_height(px(20.))
-            .text_size(px(13.))
+            // The resolved face, not `FONT_BODY` by name: gpui substitutes a
+            // missing family without a word, so asking for it directly would
+            // silently shape in something else.
+            .font_family(crate::fonts(cx).body)
+            .text_size(text::CONTROL)
+            .line_height(line_height)
+            .text_color(t.text)
             .child(
-                div()
-                    .h(px(28.))
-                    .w_full()
-                    .px(px(6.))
-                    .py(px(4.))
-                    .bg(theme::BG)
-                    .border_1()
-                    .border_color(theme::BORDER)
-                    .rounded_md()
-                    .child(TextElement { input: cx.entity() }),
+                frame.child(
+                    // The element asks for `relative(1.)` width, so it needs a box of
+                    // its own to be relative to once an icon shares the row.
+                    div()
+                        .flex_1()
+                        .overflow_hidden()
+                        .child(TextElement { input: cx.entity() }),
+                ),
             )
     }
 }

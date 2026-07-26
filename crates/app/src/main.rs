@@ -11,8 +11,8 @@ mod track;
 
 use gpui::{
     App, Application, Bounds, Context, Entity, Global, IntoElement, ParentElement,
-    PathPromptOptions, Pixels, Render, Rgba, SharedString, Styled, WeakEntity, Window,
-    WindowBounds, WindowOptions, div, prelude::*, px, size,
+    PathPromptOptions, Render, SharedString, Styled, WeakEntity, Window, WindowBounds,
+    WindowOptions, div, prelude::*, px, size,
 };
 use request_pane::RequestPane;
 use rp_core::interp::Vars;
@@ -24,16 +24,181 @@ use tabs::{Content, Restore, Tab, TabKey, Tabs};
 use text_input::TextInput;
 use tool_pane::ToolPane;
 
-// Fixed widths the shell needs. A panel width is a layout decision, not a gap,
-// so it is not in `theme::space` — but every one of them is a multiple of the
-// 4-px grid, so the columns still line up with the padding inside them.
-const RAIL_W: Pixels = px(160.);
-const SIDEBAR_W: Pixels = px(260.);
-/// Method badge width: wide enough for `OPTIONS` at `text::SMALL`, so the
-/// request names line up into a column instead of stepping in and out.
-const METHOD_W: Pixels = px(56.);
-/// The name column in the variables panel.
-const VAR_NAME_W: Pixels = px(96.);
+/// Shell geometry the mockups fix and `theme` does not carry yet.
+///
+/// Every one of these belongs in `theme::size`; they are local only because
+/// `theme.rs` has another owner. `size::RAIL` is 176, which is the *old* rail —
+/// the design's is 104 — so using the token here would be wrong, not merely
+/// untidy.
+mod shell {
+    use gpui::{Pixels, px};
+    /// The rail. `theme::size::RAIL` (176) contradicts the mockups.
+    pub const RAIL: Pixels = px(104.);
+    /// A rail entry: a 76×74 tile, not a full-width row.
+    pub const TILE_W: Pixels = px(76.);
+    pub const TILE_H: Pixels = px(74.);
+    pub const TILE_RADIUS: Pixels = px(24.);
+    /// The rail icon, a step above `text::H4`.
+    pub const RAIL_ICON: Pixels = px(22.);
+    /// The title bar and the app mark inside it.
+    pub const TITLEBAR: Pixels = px(52.);
+    pub const MARK: Pixels = px(22.);
+    /// The 1×20 rule between the mark and what follows it.
+    pub const RULE: Pixels = px(20.);
+    /// A title-bar icon button: 40×32, pill. The gear.
+    pub const CONTROL_W: Pixels = px(40.);
+    pub const CONTROL_H: Pixels = px(32.);
+    /// `--space-5`. `theme::space` jumps S4 → S6 and skips it, but the mockups
+    /// use it: 22 is exactly 5 × 4.4, the title bar's left inset.
+    pub const S5: Pixels = px(22.);
+}
+
+/// The name in the title bar, from the mockups.
+const APP_NAME: &str = "Toolbench";
+
+/// The maker's mark at the right end of the title bar, where the mockups had
+/// window controls the OS already draws.
+const SIGNATURE: &str = "Designed by Samuel, excellence and innovation";
+
+/// The kv key holding the ground the user picked.
+const THEME_KEY: &str = "theme.dark";
+
+/// Read the stored ground.
+///
+/// Dark when nothing was stored, when the value is junk, or when there is no
+/// database at all — that is what the app shipped with, and a theme is never
+/// worth failing a launch over.
+fn stored_dark(store: Option<&Store>) -> bool {
+    let Some(store) = store else { return true };
+    match store.get(THEME_KEY) {
+        Ok(value) => value.as_deref() != Some("light"),
+        Err(e) => {
+            eprintln!("request-pilot: cannot read the stored theme: {e:#}");
+            true
+        }
+    }
+}
+
+fn save_dark(store: Option<&Store>, dark: bool) {
+    if let Some(store) = store
+        && let Err(e) = store.set(THEME_KEY, if dark { "dark" } else { "light" })
+    {
+        eprintln!("request-pilot: cannot store the theme: {e:#}");
+    }
+}
+
+/// Switch the ground and remember it.
+///
+/// Every view reads `theme::theme(cx)` in `render`, so one refresh repaints all
+/// windows — including detached ones, which is the point of a global.
+fn set_ground(dark: bool, cx: &mut App) {
+    theme::set_theme(dark, cx);
+    save_dark(
+        cx.try_global::<Persist>().and_then(|p| p.store.as_ref()),
+        dark,
+    );
+    cx.refresh_windows();
+}
+
+/// The three faces the design names, resolved against what is installed.
+///
+/// gpui falls back silently when a family is missing, so asking for
+/// "Caprasimo" on a machine that does not have it renders something else while
+/// the code still claims Caprasimo. Resolve once at startup and say what was
+/// actually picked.
+#[derive(Clone)]
+struct Fonts {
+    heading: SharedString,
+    body: SharedString,
+    mono: SharedString,
+    /// The handwriting for the signature. Falls back to the resolved heading
+    /// face, never to the default sans — a "handwritten" mark rendered in body
+    /// text reads as a bug, not as a signature.
+    script: SharedString,
+}
+
+impl Global for Fonts {}
+
+/// Substitutes per role, closest first, ending in a face Windows always has.
+/// Nothing is downloaded and no dependency is added: the design's own face wins
+/// when it is installed, otherwise the nearest shape in the same category —
+/// a slab for the display face, a humanist sans for body, a mono for mono.
+const HEADING_FACES: &[&str] = &[
+    theme::FONT_HEADING,
+    "Rockwell",
+    "Bookman Old Style",
+    "Georgia",
+];
+const BODY_FACES: &[&str] = &[theme::FONT_BODY, "Corbel", "Candara", "Segoe UI"];
+const MONO_FACES: &[&str] = &[theme::FONT_MONO, "Cascadia Mono", "Consolas", "Courier New"];
+/// Genuine handwriting faces that ship with Windows, best first. No generic
+/// fallback here on purpose: `resolve_fonts` ends the chain with the heading
+/// face, so a machine with none of these gets something deliberate.
+const SCRIPT_FACES: &[&str] = &["Segoe Script", "Ink Free", "Gabriola", "Brush Script MT"];
+
+fn pick_face(installed: &[String], wanted: &[&str]) -> SharedString {
+    wanted
+        .iter()
+        .find(|w| installed.iter().any(|i| i.eq_ignore_ascii_case(w)))
+        // Nothing in the row exists: ask for the last one anyway and let the
+        // platform substitute, rather than silently claiming the design's face.
+        .unwrap_or(&wanted[wanted.len() - 1])
+        .to_string()
+        .into()
+}
+
+/// The first installed handwriting face, or `fallback` with a word about it.
+fn pick_script(installed: &[String], fallback: &SharedString) -> SharedString {
+    match SCRIPT_FACES
+        .iter()
+        .find(|w| installed.iter().any(|i| i.eq_ignore_ascii_case(w)))
+    {
+        Some(face) => {
+            eprintln!("request-pilot: the signature is set in {face:?}");
+            face.to_string().into()
+        }
+        None => {
+            eprintln!(
+                "request-pilot: no handwriting face is installed ({}) — \
+                 the signature is set in {fallback:?} and will not look handwritten",
+                SCRIPT_FACES.join(", ")
+            );
+            fallback.clone()
+        }
+    }
+}
+
+fn resolve_fonts(cx: &mut App) -> Fonts {
+    let installed = cx.text_system().all_font_names();
+    let heading = pick_face(&installed, HEADING_FACES);
+    let fonts = Fonts {
+        script: pick_script(&installed, &heading),
+        heading,
+        body: pick_face(&installed, BODY_FACES),
+        mono: pick_face(&installed, MONO_FACES),
+    };
+    for (role, wanted, got) in [
+        ("heading", theme::FONT_HEADING, &fonts.heading),
+        ("body", theme::FONT_BODY, &fonts.body),
+        ("mono", theme::FONT_MONO, &fonts.mono),
+    ] {
+        if got.as_ref() != wanted {
+            eprintln!("request-pilot: the {role} face {wanted:?} is not installed — using {got:?}");
+        }
+    }
+    fonts
+}
+
+/// The resolved faces. Falls back to the design's names when the global is
+/// missing, which only happens outside `main`.
+fn fonts(cx: &App) -> Fonts {
+    cx.try_global::<Fonts>().cloned().unwrap_or_else(|| Fonts {
+        heading: theme::FONT_HEADING.into(),
+        body: theme::FONT_BODY.into(),
+        mono: theme::FONT_MONO.into(),
+        script: SCRIPT_FACES[0].into(),
+    })
+}
 
 /// The SQLite store plus the registry of live windows, so any window can write
 /// the whole session.
@@ -88,7 +253,11 @@ fn save_session(cx: &mut App) {
         }
         if let Some(ws) = handle.upgrade() {
             let ws = ws.read(cx);
-            sessions.push(tabs::snapshot(&ws.tabs, ws.source_path.as_deref()));
+            sessions.push(tabs::snapshot(
+                &ws.request_tabs,
+                &ws.tool_tabs,
+                ws.source_path.as_deref(),
+            ));
             alive.push(handle);
         }
     }
@@ -99,6 +268,109 @@ fn save_session(cx: &mut App) {
     {
         eprintln!("request-pilot: cannot save the session: {e:#}");
     }
+}
+
+/// The kv keys for the agent-facing HTTP server.
+const MCP_ENABLED_KEY: &str = "mcp.enabled";
+const MCP_PORT_KEY: &str = "mcp.port";
+
+/// The embedded MCP server, off until the user turns it on.
+///
+/// A `Global` for the same reason as [`Persist`]: there is exactly one listener,
+/// and every window has to show the same state.
+///
+/// The server opens its **own** connection to the same database file — see
+/// `rp_mcp::http` for why it cannot share this process's `Store`.
+struct Mcp {
+    /// The port to bind. After a successful start this is the port actually bound.
+    port: u16,
+    /// Which database the server should open. `None` is the app's own; the tests
+    /// point it at a temporary file so they never touch the real one.
+    db: Option<std::path::PathBuf>,
+    server: Option<rp_mcp::http::Handle>,
+    error: Option<SharedString>,
+}
+
+impl Global for Mcp {}
+
+impl Mcp {
+    fn new(port: u16) -> Self {
+        Self {
+            port,
+            db: None,
+            server: None,
+            error: None,
+        }
+    }
+
+    /// Start, unless it is already running — a second click must not leave a
+    /// second listener behind.
+    fn start(&mut self) {
+        if self.server.is_some() {
+            return;
+        }
+        match rp_mcp::http::start(self.port, self.db.clone()) {
+            Ok(handle) => {
+                self.port = handle.port;
+                self.server = Some(handle);
+                self.error = None;
+            }
+            // A taken port or an unopenable database is shown, not fatal.
+            Err(e) => self.error = Some(format!("{e:#}").into()),
+        }
+    }
+
+    /// Stop. Inert when nothing is running. Dropping the handle blocks until the
+    /// listener is gone, which is what actually frees the port.
+    fn stop(&mut self) {
+        self.server = None;
+        self.error = None;
+    }
+
+    fn running(&self) -> bool {
+        self.server.is_some()
+    }
+}
+
+/// Was the server on when the app last closed?
+fn mcp_enabled(store: Option<&Store>) -> bool {
+    // Off by default: this one opens a socket, so it waits to be asked.
+    store
+        .and_then(|s| s.get(MCP_ENABLED_KEY).ok().flatten())
+        .as_deref()
+        == Some("1")
+}
+
+/// The stored port, or the default when there is nothing usable stored.
+fn stored_port(store: Option<&Store>) -> u16 {
+    store
+        .and_then(|s| s.get(MCP_PORT_KEY).ok().flatten())
+        .and_then(|v| v.trim().parse().ok())
+        .filter(|p| *p != 0)
+        .unwrap_or(rp_mcp::http::DEFAULT_PORT)
+}
+
+/// Flip the server, and remember the choice for the next launch.
+fn toggle_mcp(cx: &mut App) {
+    let (running, port) = cx.update_global::<Mcp, _>(|mcp, _| {
+        if mcp.running() {
+            mcp.stop();
+        } else {
+            mcp.start();
+        }
+        (mcp.running(), mcp.port)
+    });
+    if let Some(store) = cx.try_global::<Persist>().and_then(|p| p.store.as_ref()) {
+        for (key, value) in [
+            (MCP_ENABLED_KEY, if running { "1" } else { "0" }),
+            (MCP_PORT_KEY, &port.to_string()),
+        ] {
+            if let Err(e) = store.set(key, value) {
+                eprintln!("request-pilot: cannot store {key}: {e:#}");
+            }
+        }
+    }
+    cx.refresh_windows();
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -129,9 +401,19 @@ struct Workspace {
     /// Time tracking. Owns its own list and detail pane, and polls the database
     /// only while its section is on screen.
     track: Entity<track::Track>,
-    /// Everything open in this window. Tools and requests share one list, and
-    /// each tab owns its view, so switching tabs never rebuilds a pane.
-    tabs: Tabs,
+    /// Everything open in this window, **one list per section**. A tool tab has
+    /// no business in the Requests strip, and requests need their own strip so
+    /// several `.http` requests can be open at once; switching the rail switches
+    /// which of these is shown. Each tab owns its view, so neither switching
+    /// tabs nor switching sections rebuilds a pane.
+    request_tabs: Tabs,
+    tool_tabs: Tabs,
+    /// The open tab context menu: which tab it belongs to, and where in window
+    /// coordinates it was opened. The index is into the strip of whichever
+    /// section is current, which is why `set_section` closes the menu.
+    tab_menu: Option<(usize, gpui::Point<gpui::Pixels>)>,
+    /// The tab menu's focus, so Escape reaches it. Per window, like all focus.
+    menu_focus: gpui::FocusHandle,
 }
 
 impl Workspace {
@@ -157,7 +439,10 @@ impl Workspace {
             captured: Vec::new(),
             tool_query,
             track,
-            tabs: Tabs::default(),
+            request_tabs: Tabs::default(),
+            tool_tabs: Tabs::default(),
+            tab_menu: None,
+            menu_focus: cx.focus_handle(),
         }
     }
 
@@ -165,15 +450,36 @@ impl Workspace {
     /// why the tracker's polling is started and stopped here.
     fn set_section(&mut self, section: Section, cx: &mut Context<Self>) {
         self.section = section;
+        // The menu holds an index into the strip that is about to be replaced.
+        self.tab_menu = None;
         self.track
             .update(cx, |t, cx| t.set_visible(section == Section::Track, cx));
         cx.notify();
     }
 
+    /// The strip the current section shows.
+    ///
+    /// `Track` brings its own body and renders no strip at all, so what it maps
+    /// to is never drawn; it shares the Requests list rather than needing a third
+    /// empty one, or an `Option` every caller would have to unwrap.
+    fn tabs(&self) -> &Tabs {
+        match self.section {
+            Section::Tools => &self.tool_tabs,
+            Section::Requests | Section::Track => &self.request_tabs,
+        }
+    }
+
+    fn tabs_mut(&mut self) -> &mut Tabs {
+        match self.section {
+            Section::Tools => &mut self.tool_tabs,
+            Section::Requests | Section::Track => &mut self.request_tabs,
+        }
+    }
+
     /// The active tab, when it is a request. `Request(usize)` indexes into
     /// `self.requests`, which is why `load` drops request tabs.
     fn active_request(&self) -> Option<(usize, Entity<RequestPane>)> {
-        match self.tabs.active() {
+        match self.request_tabs.active() {
             Some(Tab {
                 key: TabKey::Request(i),
                 content: Content::Request(pane),
@@ -189,8 +495,8 @@ impl Workspace {
         let key = TabKey::Request(i);
         // Already open here? Activate it, the way Zed does, instead of building
         // a second copy.
-        if let Some(at) = self.tabs.find(&key) {
-            self.tabs.activate(at);
+        if let Some(at) = self.request_tabs.find(&key) {
+            self.request_tabs.activate(at);
             return;
         }
         let Some(req) = self.requests.get(i).cloned() else {
@@ -203,10 +509,11 @@ impl Workspace {
         // the pane for them.
         cx.observe(&pane, |this, pane, cx| this.capture_from(&pane, cx))
             .detach();
-        self.tabs.open(Tab {
+        self.request_tabs.open(Tab {
             key,
             title,
             content: Content::Request(pane),
+            pinned: false,
         });
     }
 
@@ -214,8 +521,8 @@ impl Workspace {
     /// form, otherwise the "no UI" marker and its reason.
     fn open_tool(&mut self, tool: &'static Tool, window: &mut Window, cx: &mut Context<Self>) {
         let key = TabKey::Tool(tool.id);
-        if let Some(at) = self.tabs.find(&key) {
-            self.tabs.activate(at);
+        if let Some(at) = self.tool_tabs.find(&key) {
+            self.tool_tabs.activate(at);
             return;
         }
         let content = match custom::pane(tool.id, window, cx) {
@@ -223,10 +530,11 @@ impl Workspace {
             None if unavailable(tool) => Content::Unavailable(custom::unavailable_reason(tool.id)),
             None => Content::Generic(cx.new(|cx| ToolPane::new(tool, window, cx))),
         };
-        self.tabs.open(Tab {
+        self.tool_tabs.open(Tab {
             key,
             title: tool.name.into(),
             content,
+            pinned: false,
         });
     }
 
@@ -254,23 +562,60 @@ impl Workspace {
             self.selected_env = (!self.environments.is_empty()).then_some(0);
             self.rebuild_var_rows(&l.declared, cx);
         }
+        // Each entry knows its section, and `open_tool`/`open_request` already
+        // write into the matching list.
+        let mut active = Vec::new();
         for restore in &plan.tabs {
-            match restore {
-                Restore::Tool(id) => {
+            let list = match restore {
+                Restore::Tool { id, .. } => {
                     // Already resolved by `plan`, but never unwrap on stored data.
-                    if let Some(tool) = rp_devtools::find(id) {
-                        self.open_tool(tool, window, cx);
+                    match rp_devtools::find(id) {
+                        Some(tool) => {
+                            self.open_tool(tool, window, cx);
+                            &mut self.tool_tabs
+                        }
+                        None => continue,
                     }
                 }
-                Restore::Request { index, .. } => self.open_request(*index, cx),
+                Restore::Request { index, .. } => {
+                    self.open_request(*index, cx);
+                    &mut self.request_tabs
+                }
+            };
+            let Some(at) = list.active_index() else {
+                continue;
+            };
+            // Pin what was pinned, on the tab that was just opened. Applied here
+            // rather than in a second pass so a tab that failed to open cannot
+            // shift the pins onto its neighbours.
+            if restore.pinned() {
+                list.set_pinned(at, true);
+            }
+            // Remembered by key rather than index, because the pins still to come
+            // reorder the list under it.
+            if restore.active()
+                && let Some(key) = list.active_key()
+            {
+                active.push(key.clone());
             }
         }
-        self.tabs.activate(plan.active.unwrap_or(0));
-        // Show the section the active tab belongs to, so a restored window opens
-        // on what the user was last looking at. A note has to be readable, and
+        // Last, because `set_pinned` reorders: the stored order is already
+        // pinned-first so nothing moves, but activating after the pins are in
+        // place means that stays true even if it ever is not.
+        for key in active {
+            let list = match key {
+                TabKey::Tool(_) => &mut self.tool_tabs,
+                TabKey::Request(_) => &mut self.request_tabs,
+            };
+            if let Some(at) = list.find(&key) {
+                list.activate(at);
+            }
+        }
+        // Open on the section the active tab belonged to, so a restored window
+        // shows what the user was last looking at. A note has to be readable, and
         // the status line lives in the requests sidebar.
-        self.section = match (&plan.note, self.tabs.active_key()) {
-            (None, Some(TabKey::Tool(_))) => Section::Tools,
+        self.section = match (&plan.note, plan.tabs.iter().find(|r| r.active())) {
+            (None, Some(Restore::Tool { .. })) => Section::Tools,
             _ => Section::Requests,
         };
         self.error = plan.note.map(Into::into);
@@ -279,8 +624,11 @@ impl Workspace {
     /// A `.http` file yields many requests; a directory is a Bruno collection.
     fn load(&mut self, path: &Path, cx: &mut Context<Self>) {
         // Request tabs point at indices into the old `requests`, so they cannot
-        // survive a different file. Tool tabs are unaffected.
-        self.tabs.retain(|k| !matches!(k, TabKey::Request(_)));
+        // survive a different file. The Tools strip is its own list and so is
+        // untouched by definition, where before it had to be filtered around.
+        self.request_tabs.close_all();
+        // The menu points at an index into the old list.
+        self.tab_menu = None;
         self.error = None;
         self.captured.clear();
         self.environments.clear();
@@ -414,39 +762,44 @@ impl Workspace {
     }
 
     fn rail(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let t = theme::theme(cx);
         let mut items = Vec::new();
+        // ponytail: `folder` stands in for the mockup's arrow-into-bar glyph.
+        // Adding an icon means adding an asset, and `assets/` has another owner.
         for (label, glyph, section) in [
             ("Requests", "folder", Section::Requests),
             ("Tools", "wrench", Section::Tools),
             ("Time", "clock", Section::Track),
         ] {
             let active = self.section == section;
+            // Selected is a solid accent tile with ground-coloured ink — not a
+            // wash and not a left bar. Unselected carries no fill at all and is
+            // held back by opacity, which is how the mockups quiet it.
+            let ink = if active { t.on_accent() } else { t.text };
             items.push(
                 div()
                     .id(label)
                     .flex()
+                    .flex_col()
+                    .flex_none()
                     .items_center()
-                    .gap(theme::space::XS)
-                    .h(theme::control::MD)
-                    .px(theme::space::SM)
-                    // The accent bar is what makes "selected" legible; the
-                    // unselected rows carry the same border in the rail's own
-                    // colour so the labels do not shift by two pixels.
-                    .border_l_2()
-                    .border_color(if active { theme::ACCENT } else { theme::SUNKEN })
-                    .text_size(theme::text::BODY)
-                    .line_height(theme::text::BODY_LINE)
+                    .justify_center()
+                    .gap(theme::space::S1)
+                    .w(shell::TILE_W)
+                    .h(shell::TILE_H)
+                    .rounded(shell::TILE_RADIUS)
+                    .text_size(theme::text::TINY)
+                    .text_color(ink)
                     .map(|d| {
                         if active {
-                            d.bg(theme::ACCENT_WASH)
-                                .text_color(theme::ACCENT)
-                                .hover(|s| s.bg(theme::FILL_STRONG))
+                            d.bg(t.accent)
                         } else {
-                            d.text_color(theme::TEXT_SECONDARY)
-                                .hover(|s| s.bg(theme::FILL).text_color(theme::TEXT))
+                            d.opacity(0.65).hover(|s| s.bg(t.hover()))
                         }
                     })
-                    .child(theme::icon_sized(glyph, theme::text::H5))
+                    // svg does not inherit the container's text colour, so the
+                    // glyph is tinted on the element itself or it paints nothing.
+                    .child(theme::icon_tinted(glyph, shell::RAIL_ICON, ink))
                     .child(label)
                     .on_click(cx.listener(move |this, _, _, cx| this.set_section(section, cx))),
             );
@@ -454,30 +807,86 @@ impl Workspace {
         div()
             .flex()
             .flex_col()
-            .gap(theme::space::XXS)
-            .w(RAIL_W)
+            .flex_none()
+            .items_center()
+            .gap(theme::space::S1)
+            .w(shell::RAIL)
             .h_full()
-            .py(theme::space::XS)
-            .bg(theme::SUNKEN)
-            .border_r_1()
-            .border_color(theme::BORDER)
+            .py(theme::space::S3)
+            .bg(t.surface)
             .children(items)
     }
 
+    /// The title bar the mockups put above everything: the app mark, the name,
+    /// the signature and the gear.
+    ///
+    /// Dragging it moves the window, so it behaves like the bar it replaces even
+    /// though the OS frame is still the one being dragged.
+    fn title_bar(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let t = theme::theme(cx);
+        // ponytail: the mockups also put a global running-timer pill here —
+        // accent-200 fill, accent-800 ink, a 7-px accent-600 dot, the task name
+        // and the elapsed time in mono 700 — visible on *every* screen while a
+        // timer runs. It is not built: the state lives in `track::Track::running`
+        // with no accessor, and `Track` only polls while its own section is
+        // visible, so the pill would be stale elsewhere. Needs
+        // `Track::running(&self) -> Option<&Entry>` plus polling that does not
+        // stop when the section is hidden — both in `track.rs`, another owner's
+        // file.
+        div()
+            .id("title-bar")
+            .flex()
+            .flex_none()
+            .items_center()
+            .gap(theme::space::S3)
+            .h(shell::TITLEBAR)
+            .w_full()
+            .pl(shell::S5)
+            .pr(theme::space::S2)
+            .bg(t.surface)
+            .on_mouse_down(gpui::MouseButton::Left, |_, window, _| {
+                window.start_window_move()
+            })
+            // The app mark.
+            .child(
+                div()
+                    .flex_none()
+                    .size(shell::MARK)
+                    .rounded(theme::radius::PILL)
+                    .bg(t.accent),
+            )
+            .child(
+                div()
+                    .flex_none()
+                    .text_size(theme::text::H5)
+                    .font_family(fonts(cx).heading)
+                    .text_color(t.text)
+                    .child(APP_NAME),
+            )
+            .child(div().flex_none().w(px(1.)).h(shell::RULE).bg(t.divider))
+            .child(div().flex_1())
+            // Where the mockups had minimise/maximise/close pills. The app runs
+            // with native decorations, so Windows already draws those a few
+            // pixels higher; a second, differently-behaving set was a trap.
+            .child(signature(cx, t))
+            .child(gear(t))
+    }
+
     fn requests_list(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let t = theme::theme(cx);
         let mut rows = Vec::with_capacity(self.requests.len());
-        let open = self.tabs.active_key().cloned();
+        let open = self.request_tabs.active_key().cloned();
         for (i, r) in self.requests.iter().enumerate() {
             let active = open == Some(TabKey::Request(i));
             rows.push(
-                sidebar_row(active)
+                sidebar_row(t, active)
                     .id(i)
-                    .child(method_badge(&r.method))
+                    .child(method_badge(t, &r.method))
                     .child(
                         div()
                             .flex_1()
                             .truncate()
-                            .text_color(if active { theme::ACCENT } else { theme::TEXT })
+                            .text_color(if active { t.accent } else { t.text })
                             .child(SharedString::from(r.name.clone())),
                     )
                     .on_click(cx.listener(move |this, _, _, cx| {
@@ -488,28 +897,31 @@ impl Workspace {
             );
         }
         let empty = self.requests.is_empty();
-        sidebar()
-            .child(theme::section_label("Collection"))
+        sidebar(t)
+            .child(section(cx, t, "Collection"))
             .child(
                 div()
                     .flex()
                     .flex_wrap()
-                    .gap(theme::space::XXS)
-                    .px(theme::space::SM)
-                    .pb(theme::space::XS)
+                    .gap(theme::space::S1)
+                    .px(theme::space::S3)
+                    .pb(theme::space::S2)
                     .child(button(
+                        t,
                         "open-file",
                         "file",
                         "Open file…",
                         cx.listener(|this, _, _, cx| this.open_dialog(false, cx)),
                     ))
                     .child(button(
+                        t,
                         "open-dir",
                         "folder",
                         "Collection…",
                         cx.listener(|this, _, _, cx| this.open_dialog(true, cx)),
                     ))
                     .child(primary_button(
+                        t,
                         "save",
                         "save",
                         "Save",
@@ -518,19 +930,18 @@ impl Workspace {
             )
             .child(
                 div()
-                    .px(theme::space::SM)
-                    .pb(theme::space::XS)
+                    .px(theme::space::S3)
+                    .pb(theme::space::S2)
                     .text_size(theme::text::SMALL)
-                    .line_height(theme::text::SMALL_LINE)
                     .truncate()
                     .text_color(if self.error.is_some() {
-                        theme::TEXT_SECONDARY
+                        t.text_label()
                     } else {
-                        theme::TEXT_TERTIARY
+                        t.text_meta()
                     })
                     .child(self.error.clone().unwrap_or_else(|| self.source.clone())),
             )
-            .child(theme::divider())
+            .child(theme::divider(&t))
             .child(
                 div()
                     .id("request-list")
@@ -540,6 +951,8 @@ impl Workspace {
                     .overflow_y_scroll()
                     .when(empty, |d| {
                         d.child(empty_state(
+                            cx,
+                            t,
                             "folder",
                             "Nothing loaded",
                             "Open a .http file or a Bruno collection.",
@@ -551,28 +964,28 @@ impl Workspace {
     }
 
     fn vars_panel(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let t = theme::theme(cx);
         let mut env_chips = Vec::with_capacity(self.environments.len());
         for (i, env) in self.environments.iter().enumerate() {
             let active = self.selected_env == Some(i);
+            // `.tag` — a pill on a wash of its own family, not an outline.
+            let (fill, ink) = if active {
+                (t.accent_wash_strong(), t.accent)
+            } else {
+                t.tag_neutral()
+            };
             env_chips.push(
                 div()
                     .id(SharedString::from(format!("env-{i}")))
                     .flex()
                     .items_center()
-                    .h(theme::control::SM)
-                    .px(theme::space::XS)
-                    .rounded(theme::radius::XS)
-                    .text_size(theme::text::SMALL)
-                    .line_height(theme::text::SMALL_LINE)
-                    .border_1()
-                    .border_color(if active { theme::ACCENT } else { theme::BORDER })
-                    .text_color(if active {
-                        theme::ACCENT
-                    } else {
-                        theme::TEXT_SECONDARY
-                    })
-                    .when(active, |d| d.bg(theme::ACCENT_WASH))
-                    .hover(|s| s.bg(theme::FILL))
+                    .px(theme::space::S2)
+                    .py(theme::space::S1)
+                    .rounded(theme::radius::PILL)
+                    .text_size(theme::text::TINY)
+                    .bg(fill)
+                    .text_color(ink)
+                    .hover(|s| s.bg(t.accent_wash()))
                     .child(SharedString::from(env.name.clone()))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.selected_env = Some(i);
@@ -582,23 +995,24 @@ impl Workspace {
             );
         }
 
+        // `.field`: the label sits above its input, which is how the system
+        // states it — and it gives the value editor the sidebar's full width
+        // instead of squeezing it into whatever a name column leaves over.
         let mut rows = Vec::with_capacity(self.var_rows.len());
         for (name, input) in &self.var_rows {
             rows.push(
                 div()
                     .flex()
-                    .gap(theme::space::XS)
-                    .items_center()
+                    .flex_col()
+                    .gap(theme::space::S1)
                     .child(
                         div()
-                            .w(VAR_NAME_W)
                             .truncate()
-                            .text_size(theme::text::SMALL)
-                            .line_height(theme::text::SMALL_LINE)
-                            .text_color(theme::TEXT_SECONDARY)
+                            .text_size(theme::text::LABEL)
+                            .text_color(t.text_label())
                             .child(SharedString::from(name.clone())),
                     )
-                    .child(div().flex_1().child(input.clone())),
+                    .child(input.clone()),
             );
         }
 
@@ -609,8 +1023,7 @@ impl Workspace {
                 div()
                     .truncate()
                     .text_size(theme::text::SMALL)
-                    .line_height(theme::text::SMALL_LINE)
-                    .text_color(theme::SUCCESS)
+                    .text_color(t.success())
                     .child(SharedString::from(format!("{name} = {value}"))),
             );
         }
@@ -618,18 +1031,18 @@ impl Workspace {
         div()
             .flex()
             .flex_col()
-            .gap(theme::space::XXS)
-            .pb(theme::space::SM)
-            .px(theme::space::SM)
+            .gap(theme::space::S2)
+            .pb(theme::space::S3)
+            .px(theme::space::S3)
             .border_t_1()
-            .border_color(theme::BORDER)
-            .child(theme::section_label("Variables").px_0())
+            .border_color(t.divider)
+            .child(section(cx, t, "Variables").px_0())
             .when(!env_chips.is_empty(), |d| {
                 d.child(
                     div()
                         .flex()
                         .flex_wrap()
-                        .gap(theme::space::XXS)
+                        .gap(theme::space::S1)
                         .children(env_chips),
                 )
             })
@@ -638,14 +1051,12 @@ impl Workspace {
                 d.child(
                     div()
                         .text_size(theme::text::SMALL)
-                        .line_height(theme::text::SMALL_LINE)
-                        .text_color(theme::TEXT_TERTIARY)
+                        .text_color(t.text_meta())
                         .child("none — add an http-client.env.json or `@name = value`"),
                 )
             })
             .when(!caught.is_empty(), |d| {
-                d.child(theme::section_label("Captured").px_0())
-                    .children(caught)
+                d.child(section(cx, t, "Captured").px_0()).children(caught)
             })
     }
 
@@ -653,31 +1064,31 @@ impl Workspace {
         let query = self.tool_query.read(cx).text().to_string();
         let matches = rp_devtools::search(&query);
         let count = matches.len();
-        let selected = self.tabs.active_key().cloned();
+        let selected = self.tool_tabs.active_key().cloned();
         // Rows are built eagerly: `cx` is a `&mut` borrow, so a lazy `map`
         // closure would let it escape.
         let mut rows = Vec::with_capacity(count);
-        for t in matches {
-            rows.push(self.tool_row(t, selected == Some(TabKey::Tool(t.id)), cx));
+        for tool in matches {
+            rows.push(self.tool_row(tool, selected == Some(TabKey::Tool(tool.id)), cx));
         }
-        sidebar()
-            .child(theme::section_label("Tools"))
+        let t = theme::theme(cx);
+        sidebar(t)
+            .child(section(cx, t, "Tools"))
             .child(
                 div()
-                    .px(theme::space::SM)
-                    .pb(theme::space::XS)
+                    .px(theme::space::S3)
+                    .pb(theme::space::S2)
                     .child(self.tool_query.clone()),
             )
             .child(
                 div()
-                    .px(theme::space::SM)
-                    .pb(theme::space::XS)
+                    .px(theme::space::S3)
+                    .pb(theme::space::S2)
                     .text_size(theme::text::SMALL)
-                    .line_height(theme::text::SMALL_LINE)
-                    .text_color(theme::TEXT_TERTIARY)
+                    .text_color(t.text_meta())
                     .child(SharedString::from(format!("{count} tools"))),
             )
-            .child(theme::divider())
+            .child(theme::divider(&t))
             .child(
                 div()
                     .id("tool-list")
@@ -687,6 +1098,8 @@ impl Workspace {
                     .overflow_y_scroll()
                     .when(count == 0, |d| {
                         d.child(empty_state(
+                            cx,
+                            t,
                             "search",
                             "No tools match",
                             "Try a shorter search term.",
@@ -702,13 +1115,15 @@ impl Workspace {
         active: bool,
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
-        sidebar_row(active)
+        let t = theme::theme(cx);
+        let (fill, ink) = t.tag_neutral();
+        sidebar_row(t, active)
             .id(tool.id)
             .child(
                 div()
                     .flex_1()
                     .truncate()
-                    .text_color(if active { theme::ACCENT } else { theme::TEXT })
+                    .text_color(if active { t.accent } else { t.text })
                     .child(tool.name),
             )
             // Mark the tools this build cannot provide, so the disappointment
@@ -717,12 +1132,11 @@ impl Workspace {
                 d.child(
                     div()
                         .flex_none()
-                        .px(theme::space::XXS)
-                        .rounded(theme::radius::XS)
-                        .bg(theme::FILL)
-                        .text_size(theme::text::SMALL)
-                        .line_height(theme::text::SMALL_LINE)
-                        .text_color(theme::TEXT_TERTIARY)
+                        .px(theme::space::S2)
+                        .rounded(theme::radius::PILL)
+                        .bg(fill)
+                        .text_size(theme::text::TINY)
+                        .text_color(ink)
                         .child("no UI"),
                 )
             })
@@ -741,7 +1155,7 @@ impl Workspace {
     /// input stays typed. Element ids are scoped per window and focus is
     /// per-window state, so the moved pane just needs a click to regain focus.
     fn detach_tab(&mut self, i: usize, cx: &mut Context<Self>) {
-        let Some(tab) = self.tabs.remove(i) else {
+        let Some(tab) = self.tabs_mut().remove(i) else {
             return;
         };
         let section = match tab.key {
@@ -782,7 +1196,10 @@ impl Workspace {
                         cx.observe(pane, |this, pane, cx| this.capture_from(&pane, cx))
                             .detach();
                     }
-                    ws.tabs.open(tab);
+                    match tab.key {
+                        TabKey::Tool(_) => ws.tool_tabs.open(tab),
+                        TabKey::Request(_) => ws.request_tabs.open(tab),
+                    }
                     ws
                 })
             },
@@ -821,153 +1238,660 @@ fn open_workspace(session: Option<WindowSession>, cx: &mut App) {
     }
 }
 
-/// Ant's default button: an outline, no fill until it is hovered.
+/// `h6` with the face that is actually installed.
+///
+/// `theme::section_label` asks for `FONT_HEADING` by name, and gpui ignores a
+/// missing family without a word — so the family is re-set to whatever
+/// `resolve_fonts` found.
+fn section(cx: &App, t: theme::Theme, label: &'static str) -> gpui::Div {
+    theme::section_label(&t, label).font_family(fonts(cx).heading)
+}
+
+/// The maker's mark, in whatever handwriting this machine has.
+///
+/// A maker's mark, not a heading: the accent carries it and the opacity keeps it
+/// from competing with the app name at the other end of the bar. The line height
+/// comes from the scale rather than a nudge, which is what keeps a script face
+/// with tall ascenders centred in a 52-px bar.
+fn signature(cx: &App, t: theme::Theme) -> impl IntoElement + use<> {
+    div()
+        .flex_none()
+        .px(theme::space::S2)
+        .text_size(theme::text::H5)
+        .line_height(theme::text::H5_LINE)
+        .font_family(fonts(cx).script)
+        .text_color(t.accent)
+        .opacity(0.85)
+        .child(SIGNATURE)
+}
+
+/// The gear: opens the settings window, or brings it forward if it is already up.
+fn gear(t: theme::Theme) -> impl IntoElement {
+    div()
+        .id("settings")
+        .flex()
+        .flex_none()
+        .items_center()
+        .justify_center()
+        .w(shell::CONTROL_W)
+        .h(shell::CONTROL_H)
+        .rounded(theme::radius::PILL)
+        .hover(|s| s.bg(t.hover()))
+        .child(theme::icon_tinted(
+            "settings",
+            theme::text::CONTROL,
+            t.text_muted(),
+        ))
+        .on_click(|_, _, cx| open_settings(cx))
+}
+
+/// `.seg` — the design's segmented control, choosing the ground.
+///
+/// Side by side now that it lives in the settings window rather than in the
+/// 104-px rail. The machinery is unchanged: [`set_ground`] switches the theme and
+/// persists it.
+fn ground_switch(cx: &App) -> impl IntoElement + use<> {
+    let t = theme::theme(cx);
+    let mut opts = Vec::with_capacity(2);
+    for (label, dark) in [("Light", false), ("Dark", true)] {
+        let on = t.dark == dark;
+        opts.push(
+            div()
+                .id(label)
+                .flex()
+                .flex_1()
+                .items_center()
+                .justify_center()
+                .h(theme::control::MD)
+                .rounded(theme::radius::PILL)
+                .text_size(theme::text::CONTROL)
+                .map(|d| {
+                    if on {
+                        d.bg(t.accent).text_color(t.on_accent())
+                    } else {
+                        d.text_color(t.text_muted()).hover(|s| s.bg(t.hover()))
+                    }
+                })
+                .child(label)
+                .on_click(move |_, _, cx| set_ground(dark, cx)),
+        );
+    }
+    div()
+        .flex()
+        .gap(theme::space::S1)
+        .p(theme::space::S1)
+        .rounded(theme::radius::PILL)
+        .bg(t.bg)
+        .children(opts)
+}
+
+/// The settings window, if one is open. Stored so the gear focuses it instead of
+/// opening a second copy — the bug this button always ships with.
+#[derive(Default)]
+struct SettingsWindow(Option<gpui::WindowHandle<Settings>>);
+
+impl Global for SettingsWindow {}
+
+/// Open settings, or focus the window that is already open.
+fn open_settings(cx: &mut App) {
+    // `update` fails once the window is closed, which is how a stale handle is
+    // told apart from a live one.
+    if let Some(handle) = cx.try_global::<SettingsWindow>().and_then(|s| s.0)
+        && handle
+            .update(cx, |_, window, _| window.activate_window())
+            .is_ok()
+    {
+        return;
+    }
+    // Sized for the MCP card's config block and token row, not for the two rows
+    // it started with. The body scrolls, so a narrow drag or a future section
+    // cannot cut content off.
+    let bounds = Bounds::centered(None, size(px(680.), px(620.)), cx);
+    match cx.open_window(
+        WindowOptions {
+            window_bounds: Some(WindowBounds::Windowed(bounds)),
+            ..Default::default()
+        },
+        |_, cx| cx.new(|_| Settings::default()),
+    ) {
+        Ok(handle) => cx.set_global(SettingsWindow(Some(handle))),
+        Err(e) => eprintln!("request-pilot: could not open settings: {e:#}"),
+    }
+}
+
+/// The settings window's root: the ground, and the agent's way in.
+#[derive(Default)]
+struct Settings {
+    /// What the last copy put on the clipboard, so a click has visible effect.
+    /// Cleared by a timer, which is why it lives on the view and not in a global.
+    copied: Option<SharedString>,
+}
+
+impl Settings {
+    /// Put `payload` on the clipboard and say so for [`COPY_NOTICE`].
+    /// Mint a fresh token and put it in force.
+    ///
+    /// The point of a *persisted* token is that the pasted config keeps working;
+    /// the point of this button is that the user can still revoke it. Anything
+    /// holding the old token stops working the moment this returns, so the
+    /// confirmation has to say the config must be copied again.
+    fn regenerate(&mut self, cx: &mut Context<Self>) {
+        let outcome = cx
+            .try_global::<Mcp>()
+            .and_then(|m| m.server.as_ref())
+            .map(|h| h.regenerate_token());
+        match outcome {
+            Some(Ok(_)) => self.note("New token in force — copy the config again.".into(), cx),
+            // A failed store write leaves the old token in force, which is the
+            // safe end of that failure; say so rather than implying it rotated.
+            Some(Err(e)) => {
+                eprintln!("request-pilot: could not regenerate the token: {e:#}");
+                self.note(
+                    "Could not regenerate — the old token still works.".into(),
+                    cx,
+                )
+            }
+            None => self.note("Start the server first.".into(), cx),
+        }
+    }
+
+    /// Show a transient line under the buttons, the way a copy does.
+    fn note(&mut self, what: SharedString, cx: &mut Context<Self>) {
+        self.copied = Some(what);
+        cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(COPY_NOTICE).await;
+            this.update(cx, |this, cx| {
+                this.copied = None;
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+        cx.notify();
+    }
+
+    fn copy(&mut self, what: SharedString, payload: String, cx: &mut Context<Self>) {
+        cx.write_to_clipboard(gpui::ClipboardItem::new_string(payload));
+        self.copied = Some(SharedString::from(format!("Copied the {what}.")));
+        // The confirmation fades on its own; a label that never clears stops
+        // meaning "just now".
+        cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(COPY_NOTICE).await;
+            this.update(cx, |this, cx| {
+                this.copied = None;
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+        cx.notify();
+    }
+}
+
+/// How long a "Copied …" confirmation stays up.
+const COPY_NOTICE: std::time::Duration = std::time::Duration::from_secs(3);
+
+impl Render for Settings {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // Read, never captured, so `cx.refresh_windows()` repaints this window on
+        // the new ground like every other one.
+        let t = theme::theme(cx);
+        div()
+            .flex()
+            .flex_col()
+            .gap(theme::space::S3)
+            .size_full()
+            .p(theme::space::S5)
+            .bg(t.bg)
+            .font_family(fonts(cx).body)
+            .text_size(theme::text::BODY)
+            .line_height(theme::text::BODY_LINE)
+            .text_color(t.text)
+            .child(
+                // `overflow_y_scroll` lives on StatefulInteractiveElement, so the
+                // scroller needs an id. `min_w_0` is what lets the cards shrink
+                // below their content when the window is dragged narrow — a flex
+                // child never goes under its own width without it.
+                div()
+                    .id("settings-body")
+                    .flex()
+                    .flex_col()
+                    .gap(theme::space::S3)
+                    .flex_1()
+                    .min_h_0()
+                    .min_w_0()
+                    .overflow_y_scroll()
+                    .child(
+                        theme::card(&t)
+                            .min_w_0()
+                            .child(section(cx, t, "Appearance"))
+                            .child(ground_switch(cx)),
+                    )
+                    .child(mcp_card(self.copied.clone(), cx)),
+            )
+    }
+}
+
+/// The server name clients see, and the key it goes under in `mcpServers`.
+const MCP_NAME: &str = "time-tracker";
+
+/// The `mcpServers` block to paste into a client's configuration.
+///
+/// Identical for Claude Code (`.mcp.json` in a project, or `~/.claude.json`) and
+/// for Claude Desktop (`claude_desktop_config.json`): the streamable-HTTP
+/// transport is configured the same way in both, so no stdio bridge is needed.
+/// `"type": "http"` (alias `"streamable-http"`), `headers` is an object, and the
+/// header is spelled `Authorization`.
+///
+/// Built with `json!` rather than a format string so the output cannot be
+/// invalid JSON, whatever the token contains.
+fn mcp_config_json(url: &str, token: &str) -> String {
+    let config = serde_json::json!({
+        "mcpServers": {
+            MCP_NAME: {
+                "type": "http",
+                "url": url,
+                "headers": { "Authorization": format!("Bearer {token}") },
+            }
+        }
+    });
+    serde_json::to_string_pretty(&config).unwrap_or_default()
+}
+
+/// The Claude Code CLI equivalent, as one pasteable line. The long flags on
+/// purpose: `-t`/`-H` read as noise when this lands in a chat window.
+fn mcp_add_command(url: &str, token: &str) -> String {
+    format!(
+        "claude mcp add --transport http {MCP_NAME} {url} \
+         --header \"Authorization: Bearer {token}\""
+    )
+}
+
+/// The sentence the user pastes to the assistant.
+///
+/// This exists because the server **cannot** explain itself. `rp_mcp::proto`
+/// returns an `instructions` string in its `initialize` result — the field that
+/// is supposed to carry exactly this — and Claude Desktop stores it but never
+/// reads it (anthropics/claude-code#43749: `getInstructions()` has no call
+/// sites); Claude Code makes no promise to surface it either. So the purpose has
+/// to travel by hand, and asking the user to invent the wording is the friction
+/// this card is here to remove.
+const MCP_PROMPT: &str = "Book your working time to my time tracker through the \
+    `time-tracker` MCP: start a timer when you begin a task, stop it when you \
+    finish or switch away, log time for work done earlier, and give me a summary \
+    of the day when I ask.";
+
+/// The MCP server's controls: state, address, and everything a client needs in
+/// one paste.
+fn mcp_card(copied: Option<SharedString>, cx: &mut Context<Settings>) -> impl IntoElement + use<> {
+    let t = theme::theme(cx);
+    let mcp = cx.try_global::<Mcp>();
+    let running = mcp.is_some_and(Mcp::running);
+    let url = mcp
+        .and_then(|m| m.server.as_ref())
+        .map(|h| SharedString::from(h.url()));
+    let token = mcp
+        .and_then(|m| m.server.as_ref())
+        .map(|h| h.token())
+        .unwrap_or_default();
+    let error = mcp.and_then(|m| m.error.clone());
+    let port = mcp.map_or(rp_mcp::http::DEFAULT_PORT, |m| m.port);
+    let (fill, ink) = if running {
+        (t.accent_wash_strong(), t.accent)
+    } else {
+        t.tag_neutral()
+    };
+    let mono = fonts(cx).mono;
+
+    theme::card(&t)
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap(theme::space::S2)
+                .child(section(cx, t, "Agent access (MCP)").flex_1())
+                .child(
+                    div()
+                        .flex_none()
+                        .px(theme::space::S2)
+                        .rounded(theme::radius::PILL)
+                        .bg(fill)
+                        .text_size(theme::text::TINY)
+                        .text_color(ink)
+                        .child(if running { "running" } else { "stopped" }),
+                ),
+        )
+        .child(
+            div()
+                .text_size(theme::text::SMALL)
+                .text_color(t.text_meta())
+                .child(if running {
+                    "Claude can reach the nine time-tracking tools over HTTP. \
+                     Loopback only, and the token is required."
+                } else {
+                    "Off. Starting it lets Claude book time over HTTP instead of \
+                     launching the rp-mcp binary."
+                }),
+        )
+        // The address, or the port it will try.
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap(theme::space::S2)
+                .text_size(theme::text::SMALL)
+                .child(
+                    div()
+                        .flex_none()
+                        .w(theme::size::LABEL)
+                        .text_color(t.text_label())
+                        .child("URL"),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .truncate()
+                        .font_family(mono.clone())
+                        .text_color(t.text)
+                        .child(url.clone().unwrap_or_else(|| {
+                            SharedString::from(format!(
+                                "http://127.0.0.1:{port}{} (when started)",
+                                rp_mcp::http::PATH
+                            ))
+                        })),
+                ),
+        )
+        // The token is shown but no longer has a copy button of its own: on its
+        // own it is not enough to configure anything, which was the complaint.
+        // The three buttons below carry it inside something pasteable.
+        .when(running, |d| {
+            d.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(theme::space::S2)
+                    .text_size(theme::text::SMALL)
+                    .child(
+                        div()
+                            .flex_none()
+                            .w(theme::size::LABEL)
+                            .text_color(t.text_label())
+                            .child("Token"),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .truncate()
+                            .font_family(mono)
+                            .text_color(t.text)
+                            .child(SharedString::from(token.clone())),
+                    ),
+            )
+        })
+        // Everything a client needs, in one paste each. Only while it runs: there
+        // is no token to put in them otherwise.
+        .when(running, |d| {
+            let url = url.clone().unwrap_or_default();
+            let config = mcp_config_json(&url, &token);
+            let command = mcp_add_command(&url, &token);
+            d.child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap(theme::space::S2)
+                    .child(primary_button(
+                        t,
+                        "mcp-copy-config",
+                        "copy",
+                        "Copy config",
+                        cx.listener(move |this, _: &gpui::ClickEvent, _, cx| {
+                            this.copy("config".into(), config.clone(), cx)
+                        }),
+                    ))
+                    .child(button(
+                        t,
+                        "mcp-copy-command",
+                        "copy",
+                        "Copy command",
+                        cx.listener(move |this, _: &gpui::ClickEvent, _, cx| {
+                            this.copy("command".into(), command.clone(), cx)
+                        }),
+                    ))
+                    .child(button(
+                        t,
+                        "mcp-copy-prompt",
+                        "copy",
+                        "Copy prompt",
+                        cx.listener(|this, _: &gpui::ClickEvent, _, cx| {
+                            this.copy("prompt".into(), MCP_PROMPT.into(), cx)
+                        }),
+                    ))
+                    .child(button(
+                        t,
+                        "mcp-regenerate",
+                        "alert",
+                        "Regenerate token",
+                        cx.listener(|this, _: &gpui::ClickEvent, _, cx| this.regenerate(cx)),
+                    )),
+            )
+            .child(
+                div()
+                    .text_size(theme::text::SMALL)
+                    .text_color(t.text_meta())
+                    .child(
+                        "The config block works as-is for Claude Code (.mcp.json) and for \
+                         Claude Desktop (claude_desktop_config.json). The command is the \
+                         Claude Code CLI equivalent. The prompt tells the assistant what the \
+                         tools are for — the server sends that too, but no client reads it.",
+                    ),
+            )
+            // The token is minted per start and deliberately never stored, so a
+            // pasted config dies with the process. Saying so here is cheaper than
+            // the user blaming the server for a 401.
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(theme::space::S2)
+                    .text_size(theme::text::SMALL)
+                    .text_color(t.text_label())
+                    .child(theme::icon_tinted(
+                        "alert",
+                        theme::text::CONTROL,
+                        t.text_label(),
+                    ))
+                    .child(
+                        "The token is stored, so the config keeps working after a restart. \
+                         Regenerate it to lock out anything still holding the old one — \
+                         then copy the config again.",
+                    ),
+            )
+        })
+        .when_some(copied, |d, what| {
+            d.child(
+                div()
+                    .text_size(theme::text::SMALL)
+                    .text_color(t.success())
+                    .child(what),
+            )
+        })
+        .when_some(error, |d, error| {
+            d.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(theme::space::S2)
+                    .text_size(theme::text::SMALL)
+                    .text_color(t.text_label())
+                    .child(theme::icon_tinted(
+                        "alert",
+                        theme::text::CONTROL,
+                        t.text_label(),
+                    ))
+                    .child(error),
+            )
+        })
+        .child(div().flex().child(primary_button(
+            t,
+            "mcp-toggle",
+            if running { "stop" } else { "play" },
+            if running {
+                "Stop server"
+            } else {
+                "Start server"
+            },
+            |_, _, cx| toggle_mcp(cx),
+        )))
+}
+
+/// `.btn-secondary`: a pill outlined in the ink, no fill until it is hovered.
 fn button(
+    t: theme::Theme,
     id: &'static str,
     glyph: &'static str,
     label: &'static str,
     on_click: impl Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
-    button_of(id, glyph, label, false, on_click)
+    button_of(t, id, glyph, label, false, on_click)
 }
 
-/// Ant's primary button: an `ACCENT` fill. One per group of controls.
+/// `.btn-primary`: an accent fill. One per group of controls.
 fn primary_button(
+    t: theme::Theme,
     id: &'static str,
     glyph: &'static str,
     label: &'static str,
     on_click: impl Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
-    button_of(id, glyph, label, true, on_click)
+    button_of(t, id, glyph, label, true, on_click)
 }
 
-/// The one button in the shell. Both variants are the same box — `control::MD`
-/// high, 2-px corners, icon then label — so a row of mixed buttons still lines
-/// up; only the fill and the hover/active pair differ.
+/// The one button in the shell. Both variants are the same pill — `control::MD`
+/// high, icon then label — so a row of mixed buttons still lines up; only the
+/// fill and the hover/active pair differ.
 fn button_of(
+    t: theme::Theme,
     id: &'static str,
     glyph: &'static str,
     label: &'static str,
     primary: bool,
     on_click: impl Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
+    let ink = if primary {
+        t.on_accent()
+    } else {
+        t.text_label()
+    };
     div()
         .id(id)
         .flex()
         .flex_none()
         .items_center()
         .justify_center()
-        .gap(theme::space::XXS)
+        .gap(theme::space::S1)
         .h(theme::control::MD)
-        .px(theme::space::XS)
-        .rounded(theme::radius::XS)
-        .text_size(theme::text::SMALL)
-        .line_height(theme::text::SMALL_LINE)
+        .px(theme::space::S3)
+        .rounded(theme::radius::PILL)
+        .text_size(theme::text::CONTROL)
+        .text_color(ink)
         .map(|d| {
             if primary {
-                d.bg(theme::ACCENT)
-                    .text_color(theme::TEXT_ON_ACCENT)
-                    .hover(|s| s.bg(theme::ACCENT_HOVER))
-                    .active(|s| s.bg(theme::ACCENT_ACTIVE))
+                d.bg(t.accent)
+                    .hover(|s| s.bg(t.accent_ramp.s400))
+                    .active(|s| s.bg(t.accent_ramp.s600))
             } else {
                 d.border_1()
-                    .border_color(theme::BORDER)
-                    .text_color(theme::TEXT_SECONDARY)
-                    .hover(|s| s.border_color(theme::ACCENT).text_color(theme::ACCENT))
-                    .active(|s| s.bg(theme::FILL_STRONG))
+                    .border_color(t.divider)
+                    .hover(|s| s.bg(t.hover()).border_color(t.border_hover()))
+                    .active(|s| s.bg(t.active()))
             }
         })
-        .child(theme::icon_sized(glyph, theme::text::BODY))
+        .child(theme::icon_tinted(glyph, theme::text::CONTROL, ink))
         .child(label)
         .on_click(on_click)
 }
 
 /// A method badge: the method's own hue on a wash of itself, at a fixed width
 /// so the names to its right form a column.
-fn method_badge(method: &str) -> impl IntoElement + use<> {
-    let color = theme::method_color(method);
+fn method_badge(t: theme::Theme, method: &str) -> impl IntoElement + use<> {
+    let color = theme::method_color(&t, method);
     div()
         .flex_none()
-        .w(METHOD_W)
-        .rounded(theme::radius::XS)
-        .bg(wash(color))
-        .text_size(theme::text::SMALL)
-        .line_height(theme::text::SMALL_LINE)
+        .w(theme::size::METHOD)
+        .rounded(theme::radius::PILL)
+        // `theme` has the accent wash as a token but no general "tint this hue"
+        // helper, and there is one badge per method — so the strength is taken
+        // from the token instead of a second set of hard-coded colours.
+        .bg(theme::alpha(color, t.accent_wash_strong().a))
+        .text_size(theme::text::TINY)
         .text_color(color)
         .text_center()
         .child(SharedString::from(method.to_ascii_uppercase()))
 }
 
-/// Any colour at the strength `ACCENT_WASH` uses.
-///
-/// `theme` has the accent wash as a token but no general "tint this hue"
-/// helper, and the method badges need one per method — so the alpha is taken
-/// from the token rather than a second set of hard-coded colours.
-fn wash(color: Rgba) -> Rgba {
-    Rgba {
-        a: theme::ACCENT_WASH.a,
-        ..color
-    }
-}
-
 /// The shared geometry of a sidebar list row, so requests and tools cannot
-/// drift apart. Selected is an accent bar plus an accent wash; hover is a
-/// plain fill, which is visibly a different thing.
-fn sidebar_row(selected: bool) -> gpui::Div {
+/// drift apart. Selected is an accent wash in the pill; hover is a plain ink
+/// wash, which is visibly a different thing.
+fn sidebar_row(t: theme::Theme, selected: bool) -> gpui::Div {
     div()
         .flex()
         .items_center()
-        .gap(theme::space::XS)
+        .gap(theme::space::S2)
         .h(theme::control::MD)
-        .px(theme::space::SM)
+        .px(theme::space::S3)
+        .mx(theme::space::S2)
+        .rounded(theme::radius::PILL)
         .text_size(theme::text::BODY)
         .line_height(theme::text::BODY_LINE)
-        .border_l_2()
-        .border_color(if selected {
-            theme::ACCENT
-        } else {
-            theme::SURFACE
-        })
-        .when(selected, |d| d.bg(theme::ACCENT_WASH))
-        .hover(|s| s.bg(theme::FILL))
+        .when(selected, |d| d.bg(t.accent_wash()))
+        .hover(|s| s.bg(t.hover()))
 }
 
 /// The sidebar column itself: both lists are the same box.
-fn sidebar() -> gpui::Div {
+fn sidebar(t: theme::Theme) -> gpui::Div {
     div()
         .flex()
         .flex_col()
-        .w(SIDEBAR_W)
+        .w(theme::size::SIDEBAR)
         .h_full()
-        .bg(theme::SURFACE)
+        .bg(t.bg)
         .border_r_1()
-        .border_color(theme::BORDER)
+        .border_color(t.divider)
 }
 
 /// A centred icon, a one-line heading and a quieter hint — for every "there is
 /// nothing here yet" in the shell.
-fn empty_state(glyph: &'static str, heading: &'static str, hint: &'static str) -> impl IntoElement {
+fn empty_state(
+    cx: &App,
+    t: theme::Theme,
+    glyph: &'static str,
+    heading: &'static str,
+    hint: &'static str,
+) -> impl IntoElement + use<> {
     div()
         .flex()
         .flex_1()
         .flex_col()
         .items_center()
         .justify_center()
-        .gap(theme::space::XS)
-        .p(theme::space::XL)
-        .child(theme::icon_sized(glyph, theme::text::H3).text_color(theme::TEXT_DISABLED))
+        .gap(theme::space::S2)
+        .p(theme::space::S8)
+        .child(theme::icon_tinted(
+            glyph,
+            theme::text::H3,
+            t.text_disabled(),
+        ))
         .child(
             div()
-                .text_size(theme::text::H5)
-                .line_height(theme::text::H5_LINE)
-                .text_color(theme::TEXT_SECONDARY)
+                .text_size(theme::text::H4)
+                .font_family(fonts(cx).heading)
+                .text_color(t.text_label())
                 .child(heading),
         )
         .child(
             div()
                 .text_size(theme::text::SMALL)
-                .line_height(theme::text::SMALL_LINE)
-                .text_color(theme::TEXT_TERTIARY)
+                .text_color(t.text_meta())
                 .text_center()
                 .child(hint),
         )
@@ -981,7 +1905,11 @@ impl Render for Workspace {
             let vars = self.effective_vars(cx);
             pane.update(cx, |pane, _| pane.set_vars(vars));
         }
+        let t = theme::theme(cx);
         let rail = self.rail(cx);
+        // Built here, not inside the tab strip: the strip scrolls horizontally
+        // and would clip an overlay drawn inside it.
+        let tab_menu = tabs::menu(self, cx);
         // Time tracking brings its own list *and* detail pane, so it replaces the
         // whole body instead of borrowing the tab area — tabs are untouched and
         // come back exactly as they were.
@@ -994,7 +1922,7 @@ impl Render for Workspace {
             };
             // The active tab's view is cloned, never rebuilt: that is what keeps
             // half-typed input and running timers alive across a tab switch.
-            let main = match self.tabs.active().map(|t| &t.content) {
+            let main = match self.tabs().active().map(|t| &t.content) {
                 Some(Content::Generic(pane)) => pane.clone().into_any_element(),
                 Some(Content::Custom(view)) => view.clone().into_any_element(),
                 Some(Content::Request(pane)) => pane.clone().into_any_element(),
@@ -1002,13 +1930,15 @@ impl Render for Workspace {
                     .flex()
                     .flex_1()
                     .h_full()
-                    .child(empty_state("alert", "No UI for this tool", *reason))
+                    .child(empty_state(cx, t, "alert", "No UI for this tool", reason))
                     .into_any_element(),
                 None => div()
                     .flex()
                     .flex_1()
                     .h_full()
                     .child(empty_state(
+                        cx,
+                        t,
                         "file",
                         "Nothing open",
                         "Pick a request or a tool on the left.",
@@ -1016,9 +1946,15 @@ impl Render for Workspace {
                     .into_any_element(),
             };
             let strip = tabs::strip(self, cx);
+            // `min_w_0` on every link of this chain, or the pane never shrinks
+            // below its content and runs off the right edge of the window — a
+            // flex child does not go under its intrinsic width unless allowed
+            // to, in gpui as in CSS. The panes themselves were made flexible
+            // earlier; this column is what was still holding them open.
             div()
                 .flex()
                 .flex_1()
+                .min_w_0()
                 .h_full()
                 .child(list)
                 .child(
@@ -1026,23 +1962,51 @@ impl Render for Workspace {
                         .flex()
                         .flex_col()
                         .flex_1()
+                        .min_w_0()
                         .h_full()
-                        .bg(theme::SURFACE)
-                        .when(!self.tabs.is_empty(), |d| d.child(strip))
-                        .child(div().flex().flex_1().overflow_hidden().child(main)),
+                        .bg(t.bg)
+                        .when(!self.tabs().is_empty(), |d| d.child(strip))
+                        .child(
+                            div()
+                                .flex()
+                                .flex_1()
+                                .min_w_0()
+                                .min_h_0()
+                                .overflow_hidden()
+                                .child(main),
+                        ),
                 )
                 .into_any_element()
         };
+        // The mockups stack a title bar over the rail-plus-body row.
+        //
+        // ponytail: they also round the whole block by 22 and give it a shadow,
+        // i.e. a client-drawn frame. Not done: that needs
+        // `WindowBackgroundAppearance::Transparent` plus
+        // `WindowDecorations::Client`, which hands resize, snap and move to the
+        // app — and rounding the root *without* them leaves the OS frame's own
+        // square corners showing through as notches. Windows 11 already rounds
+        // the frame. See the report.
         div()
             .flex()
+            .flex_col()
             .size_full()
-            .bg(theme::LAYOUT)
-            .font_family(theme::FONT_UI)
+            .bg(t.bg)
+            .overflow_hidden()
+            .font_family(fonts(cx).body)
             .text_size(theme::text::BODY)
             .line_height(theme::text::BODY_LINE)
-            .text_color(theme::TEXT)
-            .child(rail)
-            .child(body)
+            .text_color(t.text)
+            .child(self.title_bar(cx))
+            .child(
+                div()
+                    .flex()
+                    .flex_1()
+                    .overflow_hidden()
+                    .child(rail)
+                    .child(body),
+            )
+            .when_some(tab_menu, |d, menu| d.child(menu))
     }
 }
 
@@ -1056,12 +2020,20 @@ fn main() {
     Application::new()
         .with_assets(assets::Assets)
         .run(|cx: &mut App| {
+            let resolved = resolve_fonts(cx);
+            cx.set_global(resolved);
             text_input::bind_keys(cx);
             editor::bind_keys(cx);
             // Tabs can be pulled out into their own windows; the app lives until
             // the last one is gone.
             cx.on_window_closed(|cx| {
                 if cx.windows().is_empty() {
+                    // Release the port before the process goes, so a restart
+                    // never meets its own listener. Closing the settings window
+                    // while a workspace is open does not reach this branch.
+                    if cx.has_global::<Mcp>() {
+                        cx.update_global::<Mcp, _>(|mcp, _| mcp.stop());
+                    }
                     // Do not save here: the last snapshot still has this window in
                     // it, which is what should come back. Saving now would store an
                     // empty session and quitting would wipe the tabs.
@@ -1089,10 +2061,27 @@ fn main() {
                     None
                 })
                 .unwrap_or_default();
+            // Before the first window renders, so it opens on the right ground
+            // instead of flashing dark and correcting itself.
+            theme::set_theme(stored_dark(store.as_ref()), cx);
+            // Off unless the user turned it on last time — it opens a socket, so
+            // it waits to be asked.
+            let start_mcp = mcp_enabled(store.as_ref());
+            cx.set_global(Mcp::new(stored_port(store.as_ref())));
             cx.set_global(Persist {
                 store,
                 windows: Vec::new(),
             });
+            if start_mcp {
+                cx.update_global::<Mcp, _>(|mcp, _| mcp.start());
+                if let Some(e) = cx.global::<Mcp>().error.clone() {
+                    eprintln!("request-pilot: the MCP server did not start: {e}");
+                }
+                if let Some(h) = cx.global::<Mcp>().server.as_ref() {
+                    // Never the token: stderr goes to logs and terminals.
+                    eprintln!("request-pilot: the MCP server is listening on {}", h.url());
+                }
+            }
 
             if session.is_empty() {
                 open_workspace(None, cx);
@@ -1103,4 +2092,216 @@ fn main() {
             }
             cx.activate(true);
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::net::{Ipv4Addr, TcpListener};
+
+    /// A database of our own. Never the user's: these tests start a real server.
+    fn temp_db(tag: &str) -> std::path::PathBuf {
+        static N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let path = std::env::temp_dir().join(format!(
+            "request-pilot-mcp-{tag}-{}-{}.db",
+            std::process::id(),
+            N.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
+        let _ = std::fs::remove_file(&path);
+        path
+    }
+
+    #[test]
+    fn the_mcp_server_is_off_by_default_and_its_choice_survives_a_restart() {
+        let store = Store::open_in_memory().expect("store");
+        assert!(!mcp_enabled(Some(&store)), "it opens a socket; it waits");
+        assert!(!mcp_enabled(None), "and without a database too");
+        assert_eq!(stored_port(Some(&store)), rp_mcp::http::DEFAULT_PORT);
+
+        store.set(MCP_ENABLED_KEY, "1").unwrap();
+        store.set(MCP_PORT_KEY, "5123").unwrap();
+        assert!(mcp_enabled(Some(&store)));
+        assert_eq!(stored_port(Some(&store)), 5123);
+
+        // A hand-edited or half-written value must not stop the app starting.
+        for junk in ["nonsense", "0", "", "99999999"] {
+            store.set(MCP_PORT_KEY, junk).unwrap();
+            assert_eq!(
+                stored_port(Some(&store)),
+                rp_mcp::http::DEFAULT_PORT,
+                "{junk:?}"
+            );
+        }
+        store.set(MCP_ENABLED_KEY, "yes please").unwrap();
+        assert!(!mcp_enabled(Some(&store)), "only \"1\" means on");
+    }
+
+    #[test]
+    fn starting_twice_keeps_one_listener_and_stopping_frees_the_port() {
+        let db = temp_db("toggle");
+        let mut mcp = Mcp::new(0);
+        mcp.db = Some(db.clone());
+
+        mcp.start();
+        assert!(mcp.running(), "{:?}", mcp.error);
+        let port = mcp.port;
+        let token = mcp.server.as_ref().unwrap().token();
+        assert_ne!(port, 0, "the bound port must be reported back");
+
+        // A second click is a no-op, not a second listener and not a new token.
+        mcp.start();
+        assert_eq!(mcp.port, port);
+        assert_eq!(mcp.server.as_ref().unwrap().token(), token);
+        assert!(
+            TcpListener::bind((Ipv4Addr::LOCALHOST, port)).is_err(),
+            "the port is in use while it runs"
+        );
+
+        mcp.stop();
+        assert!(!mcp.running());
+        mcp.stop(); // Stopping when nothing runs is inert.
+        assert!(
+            TcpListener::bind((Ipv4Addr::LOCALHOST, port)).is_ok(),
+            "the port must be free again after a stop"
+        );
+        let _ = std::fs::remove_file(&db);
+    }
+
+    #[test]
+    fn a_taken_port_shows_an_error_instead_of_taking_the_app_down() {
+        let squatter = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let port = squatter.local_addr().unwrap().port();
+        let db = temp_db("taken");
+        let mut mcp = Mcp::new(port);
+        mcp.db = Some(db.clone());
+
+        mcp.start();
+        assert!(!mcp.running());
+        let error = mcp.error.clone().expect("the UI needs something to show");
+        assert!(error.contains(&port.to_string()), "{error}");
+
+        // And the error clears when it is asked again successfully.
+        mcp.port = 0;
+        mcp.start();
+        assert!(mcp.running(), "{:?}", mcp.error);
+        assert!(mcp.error.is_none());
+        mcp.stop();
+        let _ = std::fs::remove_file(&db);
+    }
+
+    #[test]
+    fn an_unopenable_database_is_reported_rather_than_bound() {
+        let mut mcp = Mcp::new(0);
+        // A directory is not a database file.
+        mcp.db = Some(std::env::temp_dir());
+        mcp.start();
+        assert!(!mcp.running());
+        assert!(mcp.error.is_some());
+    }
+
+    /// Without a database the app still has to start, and on the ground it
+    /// shipped with.
+    #[test]
+    fn the_ground_defaults_to_dark_when_there_is_no_store() {
+        assert!(stored_dark(None));
+        // Writing without a store is inert rather than a panic.
+        save_dark(None, false);
+    }
+
+    #[test]
+    fn a_chosen_ground_survives_a_restart() {
+        let store = Store::open_in_memory().expect("store");
+        // Nothing stored yet.
+        assert!(stored_dark(Some(&store)));
+
+        save_dark(Some(&store), false);
+        assert!(!stored_dark(Some(&store)));
+        // And back again, so the switch is not one-way.
+        save_dark(Some(&store), true);
+        assert!(stored_dark(Some(&store)));
+    }
+
+    /// A hand-edited or half-written value must not leave the app unreadable.
+    #[test]
+    fn a_junk_stored_value_falls_back_to_dark() {
+        let store = Store::open_in_memory().expect("store");
+        store.set(THEME_KEY, "chartreuse").expect("set");
+        assert!(stored_dark(Some(&store)));
+    }
+
+    /// The copied block has to be valid JSON and carry the exact keys the clients
+    /// read, or the paste fails in a config file with no error message.
+    #[test]
+    fn the_copied_config_is_json_a_client_can_actually_load() {
+        let json = mcp_config_json("http://127.0.0.1:7717/mcp", "s3cret");
+        let v: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        let server = &v["mcpServers"][MCP_NAME];
+        assert_eq!(server["type"], "http");
+        assert_eq!(server["url"], "http://127.0.0.1:7717/mcp");
+        // `headers` is an object, and the header is spelled exactly this way.
+        assert!(server["headers"].is_object(), "{json}");
+        assert_eq!(server["headers"]["Authorization"], "Bearer s3cret");
+        // Pretty-printed: it is going into a config file a human will read.
+        assert!(json.contains('\n'), "{json}");
+    }
+
+    /// A token with JSON-hostile characters must not produce a broken block —
+    /// which is why the config is built with `json!` and not a format string.
+    #[test]
+    fn a_token_with_quotes_cannot_break_the_config() {
+        let json = mcp_config_json("http://127.0.0.1:1/mcp", "a\"b\\c");
+        let v: serde_json::Value = serde_json::from_str(&json).expect("valid JSON");
+        assert_eq!(
+            v["mcpServers"][MCP_NAME]["headers"]["Authorization"],
+            "Bearer a\"b\\c"
+        );
+    }
+
+    #[test]
+    fn the_copied_command_is_one_pasteable_line_with_the_live_url_and_token() {
+        let cmd = mcp_add_command("http://127.0.0.1:7717/mcp", "s3cret");
+        assert_eq!(cmd.lines().count(), 1, "{cmd}");
+        assert!(
+            cmd.starts_with("claude mcp add --transport http time-tracker "),
+            "{cmd}"
+        );
+        assert!(cmd.contains("http://127.0.0.1:7717/mcp"), "{cmd}");
+        assert!(
+            cmd.contains("--header \"Authorization: Bearer s3cret\""),
+            "{cmd}"
+        );
+    }
+
+    /// The prompt has to name the tools concretely, because the server's own
+    /// `instructions` field is not read by any client.
+    #[test]
+    fn the_copied_prompt_names_the_server_and_what_it_is_for() {
+        assert!(MCP_PROMPT.contains(MCP_NAME), "{MCP_PROMPT}");
+        for word in ["start", "stop", "log", "summary"] {
+            assert!(MCP_PROMPT.contains(word), "{word} is missing: {MCP_PROMPT}");
+        }
+        // One pasteable paragraph, not a list the user has to reflow.
+        assert_eq!(MCP_PROMPT.lines().count(), 1);
+    }
+
+    /// Only the faces that exist may be asked for, or the app claims a typeface
+    /// it is not drawing with.
+    #[test]
+    fn a_face_is_only_picked_when_it_is_installed() {
+        let installed = vec!["Segoe UI".to_string(), "consolas".to_string()];
+        assert_eq!(pick_face(&installed, BODY_FACES).as_ref(), "Segoe UI");
+        // Case-insensitive, the way font names are matched.
+        assert_eq!(pick_face(&installed, MONO_FACES).as_ref(), "Consolas");
+        // Nothing in the row installed: the last, most generic entry stands.
+        assert_eq!(
+            pick_face(&installed, HEADING_FACES).as_ref(),
+            HEADING_FACES[HEADING_FACES.len() - 1]
+        );
+        // The design's own face wins whenever it is there.
+        let with_design = vec![theme::FONT_BODY.to_string(), "Segoe UI".to_string()];
+        assert_eq!(
+            pick_face(&with_design, BODY_FACES).as_ref(),
+            theme::FONT_BODY
+        );
+    }
 }

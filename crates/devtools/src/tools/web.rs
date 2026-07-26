@@ -1999,18 +1999,26 @@ fn crontab_generator(args: &Args) -> Result<String> {
 
 // ------------------------------------------------------------ chmod-calculator
 
-pub(crate) const CHMOD_GROUPS: [&str; 3] = ["owner", "group", "public"];
-pub(crate) const CHMOD_SCOPES: [(&str, u8); 3] = [("read", 4), ("write", 2), ("execute", 1)];
+/// The permission axes, in the order [`chmod_forms`] indexes them. `pub` because
+/// the app's chmod panel draws a grid on exactly these axes, and a reorder here
+/// that the panel did not follow would transpose every answer it gives.
+pub const CHMOD_GROUPS: [&str; 3] = ["owner", "group", "public"];
+pub const CHMOD_SCOPES: [(&str, u8); 3] = [("read", 4), ("write", 2), ("execute", 1)];
 
-/// it-tools is a 3x3 permission checkbox grid with the octal and the symbolic
-/// form both always on screen — there is nothing to parse and nothing to fail.
-fn chmod_calculator(args: &Args) -> Result<String> {
-    let t = tool("chmod-calculator");
-    let digits = CHMOD_GROUPS.map(|g| {
-        CHMOD_SCOPES
+/// Octal and symbolic form of a permission matrix, indexed
+/// `[owner, group, public][read, write, execute]` — the order of
+/// [`CHMOD_GROUPS`] and [`CHMOD_SCOPES`].
+///
+/// Public so the app's chmod panel, which owns nine checkboxes rather than nine
+/// text fields, computes the answer with this and not a second copy of the bit
+/// weights.
+pub fn chmod_forms(bits: [[bool; 3]; 3]) -> (String, String) {
+    let digits = bits.map(|group| {
+        group
             .iter()
-            .filter(|(scope, _)| arg(args, t, &format!("{g}_{scope}")) == "true")
-            .map(|(_, bit)| bit)
+            .zip(CHMOD_SCOPES)
+            .filter(|(on, _)| **on)
+            .map(|(_, (_, bit))| bit)
             .sum::<u8>()
     });
     let symbolic: String = digits
@@ -2023,7 +2031,16 @@ fn chmod_calculator(args: &Args) -> Result<String> {
             ]
         })
         .collect();
-    let octal: String = digits.iter().map(|d| d.to_string()).collect();
+    (digits.iter().map(|d| d.to_string()).collect(), symbolic)
+}
+
+/// it-tools is a 3x3 permission checkbox grid with the octal and the symbolic
+/// form both always on screen — there is nothing to parse and nothing to fail.
+fn chmod_calculator(args: &Args) -> Result<String> {
+    let t = tool("chmod-calculator");
+    let bits = CHMOD_GROUPS
+        .map(|g| CHMOD_SCOPES.map(|(scope, _)| arg(args, t, &format!("{g}_{scope}")) == "true"));
+    let (octal, symbolic) = chmod_forms(bits);
     Ok(format!(
         "Octal: {octal}\nSymbolic: {symbolic}\nCommand: chmod {octal} path\n"
     ))

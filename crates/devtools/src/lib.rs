@@ -37,6 +37,57 @@ pub fn section(label: &str, body: anyhow::Result<String>) -> String {
     }
 }
 
+/// The inverse of [`section`]: split a tool's output back into `(label, value)`.
+///
+/// This exists because the labels are *in the text*, which is right for reading
+/// and wrong for copying — a user pressing Copy on the base64 tool got
+/// `Base64 of string:\nSGVsbG8=` when they wanted `SGVsbG8=`. The parser lives
+/// next to the formatter so the two cannot drift.
+///
+/// A header is a line ending in `:` that either starts the output or follows a
+/// blank line — exactly what `section` plus the usual `join("\n\n")` produces.
+/// Output with no such header is one unlabelled section, so a single-value tool
+/// needs no special case at the call site.
+///
+/// Reassembling the result with `section` must reproduce the input byte for
+/// byte; `split_sections_are_lossless_for_every_tool` asserts that across the
+/// whole registry, which is what stops a body line that happens to end in `:`
+/// from being silently mistaken for a header.
+pub fn split_sections(output: &str) -> Vec<(&str, &str)> {
+    // Header positions first, then slice between them. The parser only ever
+    // *cuts* — it never trims — so every byte of the output ends up inside some
+    // section. That is the property `split_sections_loses_nothing` asserts, and
+    // it is what makes a mistaken header harmless: the text is still all there,
+    // just labelled oddly. Trimming for display or copying is the caller's job.
+    let mut heads: Vec<(usize, usize, &str)> = Vec::new(); // (line start, line end, label)
+    let mut at_boundary = true;
+    let mut offset = 0usize;
+    for line in output.split_inclusive('\n') {
+        let text = line.trim_end_matches(['\n', '\r']);
+        if at_boundary && text.len() > 1 && text.ends_with(':') {
+            heads.push((offset, offset + line.len(), &text[..text.len() - 1]));
+        }
+        at_boundary = text.is_empty();
+        offset += line.len();
+    }
+
+    let mut out = Vec::new();
+    // Anything before the first header is a section of its own. Dropping it was
+    // the bug the registry test caught on three tools.
+    let first = heads.first().map_or(output.len(), |&(s, _, _)| s);
+    if first > 0 {
+        out.push(("", &output[..first]));
+    }
+    for (i, &(_, value_start, label)) in heads.iter().enumerate() {
+        let end = heads.get(i + 1).map_or(output.len(), |&(next, _, _)| next);
+        out.push((label, &output[value_start..end]));
+    }
+    if out.is_empty() {
+        out.push(("", output));
+    }
+    out
+}
+
 pub type Args = BTreeMap<String, String>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

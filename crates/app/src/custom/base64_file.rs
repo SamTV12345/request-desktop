@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use super::{Note, Tone, button, header, meta_row, note};
 use crate::editor::Editor;
-use crate::theme;
+use crate::theme::{self, radius, size, space, text};
 use gpui::{
     AppContext, ClipboardItem, Context, Entity, ExternalPaths, Image, ImageFormat,
     PathPromptOptions, SharedString, Window, div, img, prelude::*,
@@ -526,6 +526,7 @@ impl Pane {
 
 impl Render for Pane {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let t = theme::theme(cx);
         // Dialogs and background reads disable the controls that would start a
         // second one, instead of queueing surprises.
         let ready = !self.busy;
@@ -537,36 +538,43 @@ impl Render for Pane {
                 div()
                     .flex()
                     .flex_col()
-                    .gap(theme::space::XXS)
+                    .gap(space::S1)
+                    // Shares the pane's height with the two cards: a floor so
+                    // the image stays recognisable, a ceiling so it never
+                    // pushes them off a short window.
+                    .flex_1()
+                    .min_h(size::CARD_MIN_H)
+                    .max_h(space::S8 * 5.)
                     .child(
                         div()
-                            .text_size(theme::text::SMALL)
-                            .line_height(theme::text::SMALL_LINE)
-                            .text_color(theme::TEXT_SECONDARY)
+                            .text_size(text::SMALL)
+                            .text_color(t.text_muted())
                             .child(label.clone()),
                     )
                     .child(
                         div()
-                            .h(theme::space::XXL * 5.)
+                            .flex_1()
+                            .min_h_0()
                             .w_full()
                             .flex()
                             .items_center()
                             .justify_center()
-                            .p(theme::space::XS)
-                            .rounded(theme::radius::SM)
+                            .p(space::S2)
+                            .rounded(radius::MD)
                             .border_1()
-                            .border_color(theme::BORDER)
+                            .border_color(t.divider)
                             // A mid neutral behind the frame, so a transparent
-                            // PNG is legible either way round.
-                            .bg(theme::FILL_STRONG)
+                            // PNG is legible on either ground.
+                            .bg(t.neutral.s300)
                             // The id gives the element frame state, which is what
                             // steps an animated GIF along.
                             .child(
                                 img(image.clone())
                                     .size_full()
                                     .id("preview-image")
-                                    .with_fallback(|| {
+                                    .with_fallback(move || {
                                         note(
+                                            &t,
                                             "Could not decode these bytes as an image — they may \
                                              be truncated or corrupt."
                                                 .into(),
@@ -579,72 +587,80 @@ impl Render for Pane {
                     .into_any_element(),
             ),
             Preview::Unsupported(message) => Some(
-                note(message.clone(), Note::Info)
-                    .px(theme::space::SM)
+                note(&t, message.clone(), Note::Info)
+                    .px(space::S3)
                     .into_any_element(),
             ),
         };
 
-        let picked = match &self.picked {
-            None => None,
-            Some(p) => Some(
-                div()
-                    .flex()
-                    .flex_col()
-                    .px(theme::space::XS)
-                    .py(theme::space::XXS)
-                    .rounded(theme::radius::XS)
-                    .bg(theme::SUNKEN)
-                    .border_1()
-                    .border_color(theme::BORDER)
-                    .child(meta_row("name", p.name.clone(), false))
-                    .child(meta_row("size", p.size.clone(), false))
-                    .child(meta_row("mime", p.mime.clone(), false)),
-            ),
-        };
+        let picked = self.picked.as_ref().map(|p| {
+            div()
+                .flex()
+                .flex_col()
+                .px(space::S3)
+                .py(space::S2)
+                .rounded(radius::MD)
+                .bg(t.bg)
+                .child(meta_row(&t, "name", p.name.clone(), false))
+                .child(meta_row(&t, "size", p.size.clone(), false))
+                .child(meta_row(&t, "mime", p.mime.clone(), false))
+        });
 
         div()
             .flex()
             .flex_col()
-            .gap(theme::space::MD)
+            .gap(space::S4)
             .size_full()
-            .p(theme::space::MD)
+            .p(space::S4)
             .overflow_hidden()
             .child(header(
+                &t,
                 "Base64 file converter",
                 "Encode a file to a data URI, or write base64 back to a file.",
             ))
             .when_some(preview, |d, preview| d.child(preview))
             // ---- file -> base64. The whole section is the drop target.
             .child(
-                theme::card()
+                theme::card(&t)
                     .id("encode-drop")
                     .flex()
                     .flex_col()
-                    .gap(theme::space::XS)
+                    .gap(space::S2)
                     .flex_1()
-                    .min_h(theme::space::XXL * 4.)
+                    // A floor, not a slab: two of these plus a preview at
+                    // 4 × S8 each no longer fit a short window.
+                    .min_h(size::CARD_MIN_H)
+                    // At rest this reads as a drop target: a dashed accent-tinted
+                    // edge on a washed ground, not a plain card that only
+                    // reacts once something is already over it.
+                    .border_2()
                     .border_dashed()
+                    .border_color(t.accent_wash_strong())
+                    .bg(t.accent_wash())
                     .on_drop(
                         cx.listener(|this, paths: &ExternalPaths, _, cx| {
                             this.drop_files(paths, cx)
                         }),
                     )
-                    .drag_over::<ExternalPaths>(|style, _, _, _| {
-                        style.border_color(theme::ACCENT).bg(theme::ACCENT_WASH)
+                    .drag_over::<ExternalPaths>(move |style, _, _, _| {
+                        style.border_color(t.accent).bg(t.accent_wash_strong())
                     })
                     .child(
                         div()
                             .flex()
                             .items_center()
                             .justify_between()
-                            .gap(theme::space::SM)
-                            .child(theme::section_label("File to base64").px_0().pt_0())
+                            // The buttons drop under the label rather than off
+                            // the card when the pane is narrow.
+                            .flex_wrap()
+                            .gap(space::S3)
+                            .child(theme::section_label(&t, "File to base64").px_0().pt_0())
                             .child(
                                 div()
                                     .flex()
-                                    .gap(theme::space::XS)
+                                    .gap(space::S2)
                                     .child(button(
+                                        &t,
                                         "pick-file",
                                         "Choose file…",
                                         "folder",
@@ -653,6 +669,7 @@ impl Render for Pane {
                                         cx.listener(|this, _, _, cx| this.pick_file(cx)),
                                     ))
                                     .child(button(
+                                        &t,
                                         "copy-base64",
                                         "Copy",
                                         "copy",
@@ -668,42 +685,47 @@ impl Render for Pane {
                         div()
                             .flex()
                             .items_center()
-                            .gap(theme::space::XS)
-                            .text_size(theme::text::SMALL)
-                            .line_height(theme::text::SMALL_LINE)
-                            .text_color(theme::TEXT_TERTIARY)
-                            .child(
-                                theme::icon_sized("file", theme::text::H5)
-                                    .text_color(theme::TEXT_TERTIARY),
-                            )
+                            .gap(space::S2)
+                            .text_size(text::SMALL)
+                            .text_color(t.text_muted())
+                            .child(theme::icon_tinted("file", text::H5, t.accent))
                             .child(SharedString::from(format!(
                                 "Drop a single file anywhere in this box, or choose one — up to {}.",
                                 human_size(MAX_BYTES)
                             ))),
                     )
                     .when_some(picked, |d, picked| d.child(picked))
-                    .child(div().flex().flex_1().child(self.encoded.clone())),
+                    .child(
+                        div()
+                            .flex()
+                            .flex_1()
+                            .min_h_0()
+                            .overflow_hidden()
+                            .child(self.encoded.clone()),
+                    ),
             )
             // ---- base64 -> file
             .child(
-                theme::card()
+                theme::card(&t)
                     .flex()
                     .flex_col()
-                    .gap(theme::space::XS)
+                    .gap(space::S2)
                     .flex_1()
-                    .min_h(theme::space::XXL * 4.)
+                    .min_h(size::CARD_MIN_H)
                     .child(
                         div()
                             .flex()
                             .items_center()
                             .justify_between()
-                            .gap(theme::space::SM)
-                            .child(theme::section_label("Base64 to file").px_0().pt_0())
+                            .flex_wrap()
+                            .gap(space::S3)
+                            .child(theme::section_label(&t, "Base64 to file").px_0().pt_0())
                             .child(
                                 div()
                                     .flex()
-                                    .gap(theme::space::XS)
+                                    .gap(space::S2)
                                     .child(button(
+                                        &t,
                                         "preview-base64",
                                         "Preview",
                                         "file",
@@ -712,6 +734,7 @@ impl Render for Pane {
                                         cx.listener(|this, _, _, cx| this.preview_decoded(cx)),
                                     ))
                                     .child(button(
+                                        &t,
                                         "save-file",
                                         "Save as…",
                                         "save",
@@ -721,9 +744,17 @@ impl Render for Pane {
                                     )),
                             ),
                     )
-                    .child(div().flex().flex_1().child(self.to_decode.clone())),
+                    .child(
+                        div()
+                            .flex()
+                            .flex_1()
+                            .min_h_0()
+                            .overflow_hidden()
+                            .child(self.to_decode.clone()),
+                    ),
             )
             .child(note(
+                &t,
                 self.status.clone(),
                 if self.failed { Note::Bad } else { Note::Info },
             ))

@@ -14,7 +14,7 @@
 //! unwrapped. Add it when someone actually asks.
 use std::ops::Range;
 
-use crate::theme;
+use crate::theme::{self, radius, space, text};
 use gpui::{
     App, Bounds, ClipboardItem, ContentMask, Context, CursorStyle, ElementId, ElementInputHandler,
     Entity, EntityInputHandler, FocusHandle, Focusable, GlobalElementId, KeyBinding, LayoutId,
@@ -732,7 +732,9 @@ impl Element for EditorElement {
         let font_size = style.font_size.to_pixels(window.rem_size());
         let font = style.font();
 
+        let t = theme::theme(cx);
         let editor = self.editor.read(cx);
+        let read_only = editor.buf.read_only;
         let selected = editor.buf.selected_range.clone();
         let cursor_offset = editor.buf.cursor();
         let mut scroll = editor.scroll;
@@ -744,7 +746,7 @@ impl Element for EditorElement {
             editor.buf.content.clone()
         };
         let color = if is_placeholder {
-            theme::TEXT_DIM.into()
+            t.text_muted().into()
         } else {
             style.color
         };
@@ -815,10 +817,7 @@ impl Element for EditorElement {
             .x
             .clamp(px(0.), (widest + px(8.) - bounds.size.width).max(px(0.)));
 
-        let selection_color = gpui::Rgba {
-            a: 0.3,
-            ..theme::ACCENT
-        };
+        let selection_color = t.selection();
         let mut selections = Vec::new();
         let mut cursor = None;
         for (i, shaped) in lines.iter().enumerate() {
@@ -854,7 +853,9 @@ impl Element for EditorElement {
                 }
             }
 
-            if selected.is_empty() && index == cursor_line && !is_placeholder {
+            // No caret in a read-only view: it is selectable and focusable, but
+            // a blinking insertion point there would promise editing.
+            if selected.is_empty() && index == cursor_line && !is_placeholder && !read_only {
                 cursor = Some(fill(
                     Bounds::new(
                         point(
@@ -863,17 +864,17 @@ impl Element for EditorElement {
                         ),
                         size(px(2.), line_height),
                     ),
-                    theme::ACCENT,
+                    t.accent,
                 ));
             }
         }
-        if is_placeholder {
+        if is_placeholder && !read_only {
             cursor = Some(fill(
                 Bounds::new(
                     point(bounds.left(), bounds.top()),
                     size(px(2.), line_height),
                 ),
-                theme::ACCENT,
+                t.accent,
             ));
         }
 
@@ -940,8 +941,28 @@ impl Element for EditorElement {
 }
 
 impl Render for Editor {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        div()
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let t = theme::theme(cx);
+        let focused = self.focus_handle.is_focused(window);
+        // The border is always drawn, so gaining focus never shifts the text by a
+        // pixel; what changes is its colour.
+        //
+        // At rest a read-only editor has none. It is content — tool output, a
+        // reference table, a response body — and a bordered rounded box with an
+        // I-beam reads as a field you are failing to type into. It still takes
+        // focus, and then shows the ring, because selecting and copying with the
+        // keyboard has to remain possible.
+        let mut frame = div()
+            .border_1()
+            .border_color(match (focused, self.buf.read_only) {
+                (true, _) => t.focus(),
+                (false, true) => gpui::transparent_black().into(),
+                (false, false) => t.divider,
+            });
+        if !focused && !self.buf.read_only {
+            frame = frame.hover(|s| s.border_color(t.border_hover()));
+        }
+        frame
             .key_context("Editor")
             .track_focus(&self.focus_handle(cx))
             .cursor(CursorStyle::IBeam)
@@ -976,15 +997,24 @@ impl Render for Editor {
             .on_mouse_move(cx.listener(Self::on_mouse_move))
             .on_scroll_wheel(cx.listener(Self::on_scroll_wheel))
             .size_full()
-            .min_h(px(60.))
-            .p(px(6.))
-            .bg(theme::BG)
-            .border_1()
-            .border_color(theme::BORDER)
-            .rounded_md()
-            .text_size(px(13.))
-            .line_height(px(20.))
-            .text_color(theme::TEXT)
+            // `textarea.input { min-height: 90px }`. No token for it — see report.
+            .min_h(px(90.))
+            .px(space::S3)
+            .py(space::S2)
+            // A read-only body sits on the window ground rather than the raised
+            // input surface, so "you cannot type here" is visible before you try.
+            .bg(if self.buf.read_only { t.bg } else { t.surface })
+            // Not a pill: this is a code area several hundred pixels tall, where
+            // the system's 999-px override would swallow the first and last
+            // lines. `radius::MD` is the softest corner that still clears them.
+            .rounded(radius::MD)
+            // Request bodies, response bodies and tool output: the design loads
+            // a mono face for exactly these. Resolved rather than named, since
+            // gpui substitutes a missing family silently.
+            .font_family(crate::fonts(cx).mono)
+            .text_size(text::CONTROL)
+            .line_height(text::BODY_LINE)
+            .text_color(t.text)
             .overflow_hidden()
             .child(EditorElement {
                 editor: cx.entity(),

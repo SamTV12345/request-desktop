@@ -14,3 +14,9 @@ unicode-segmentation = "1.13.3"
 tokio = { version = "1.53.1", features = ["rt-multi-thread"] }
 serde_json.workspace = true
 rp-store = { version = "0.1.0", path = "../store" }
+# The MCP server, hosted in-process over HTTP when the user turns it on in
+# settings. Same crate the `rp-mcp` stdio binary is built from.
+rp-mcp = { version = "0.1.0", path = "../mcp" }
+
+[build-dependencies]
+winresource = "0.1.31"

@@ -722,6 +722,8 @@ fn a_session_survives_being_saved_closed_and_reopened() {
                     kind: "tool".into(),
                     key: "base64-string-converter".into(),
                     detail: None,
+                    pinned: false,
+                    active: true,
                 },
                 TabRecord {
                     kind: "request".into(),
@@ -730,6 +732,8 @@ fn a_session_survives_being_saved_closed_and_reopened() {
                         .to_string_lossy()
                         .into_owned(),
                     detail: Some("1".into()),
+                    pinned: false,
+                    active: true,
                 },
             ],
             active_tab: Some(1),
@@ -739,6 +743,8 @@ fn a_session_survives_being_saved_closed_and_reopened() {
                 kind: "tool".into(),
                 key: "json-viewer".into(),
                 detail: None,
+                pinned: false,
+                active: true,
             }],
             active_tab: Some(0),
         },
@@ -751,7 +757,12 @@ fn a_session_survives_being_saved_closed_and_reopened() {
 
     let store = Store::open_at(&db).expect("reopen");
     assert_eq!(store.load_session().expect("load"), windows);
-    assert_eq!(store.schema_version().expect("version"), 2);
+    // Compared against the build's own target, so adding a migration does not
+    // break this test for a reason that has nothing to do with sessions.
+    assert_eq!(
+        store.schema_version().expect("version"),
+        Store::latest_schema_version()
+    );
 
     // The restored request tab still points at a file the loader can open.
     let restored = &store.load_session().expect("load")[0].tabs[1];
@@ -772,6 +783,8 @@ fn a_database_from_a_newer_build_is_refused_not_mangled() {
                     kind: "tool".into(),
                     key: "uuid-generator".into(),
                     detail: None,
+                    pinned: false,
+                    active: true,
                 }],
                 active_tab: Some(0),
             }])

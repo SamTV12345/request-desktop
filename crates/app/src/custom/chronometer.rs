@@ -5,8 +5,8 @@
 //! The displayed value is always derived from `Instant`s — never accumulated
 //! per tick — so the tick rate is a refresh rate, not the source of truth. A
 //! dropped frame or a late timer costs nothing.
-use super::{Note, Tone, button, header, note};
-use crate::theme;
+use super::{Note, Tone, button, chip, header, note};
+use crate::theme::{self, radius, space, text};
 use gpui::{Context, IntoElement, ParentElement, Styled, Task, Window, div, prelude::*};
 use std::time::{Duration, Instant};
 
@@ -125,17 +125,20 @@ impl Pane {
 
 impl Render for Pane {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let t = theme::theme(cx);
         let running = self.clock.running();
         let elapsed = format(self.clock.elapsed_at(Instant::now()));
-        // Running versus stopped is legible from the readout itself: a live
-        // clock is accent-bordered and washed, a stopped one is inert.
+        // Running versus stopped is legible from the container, not from the
+        // button label: a live clock is accent-bordered on an accent wash with
+        // full-strength digits, a stopped one is an inert surface.
         let (frame_border, frame_bg, digits) = if running {
-            (theme::ACCENT, theme::ACCENT_WASH, theme::TEXT)
+            (t.accent, t.accent_wash_strong(), t.text)
         } else {
-            (theme::BORDER, theme::SUNKEN, theme::TEXT_SECONDARY)
+            (t.divider, t.surface, t.text_muted())
         };
         let toggle = if running {
             button(
+                &t,
                 "chrono-pause",
                 "Stop",
                 "stop",
@@ -145,6 +148,7 @@ impl Render for Pane {
             )
         } else {
             button(
+                &t,
                 "chrono-start",
                 "Start",
                 "play",
@@ -157,38 +161,49 @@ impl Render for Pane {
         div()
             .flex()
             .flex_col()
-            .gap(theme::space::MD)
+            .gap(space::S4)
             .size_full()
-            .p(theme::space::MD)
+            .p(space::S4)
             .child(header(
+                &t,
                 "Chronometer",
                 "Monitor the duration of a thing. Basically a stopwatch.",
             ))
             .child(
                 div()
                     .flex()
+                    .flex_col()
                     .items_center()
-                    .justify_center()
-                    .py(theme::space::XXL)
+                    .gap(space::S3)
+                    .py(space::S8)
                     .bg(frame_bg)
                     .border_1()
                     .border_color(frame_border)
-                    .rounded(theme::radius::SM)
-                    // Mono, so the centiseconds do not shove the digits left
-                    // and right as they roll over.
-                    .font_family(theme::FONT_MONO)
-                    .text_size(theme::text::H3 * 2.)
-                    .line_height(theme::text::H3 * 2.5)
-                    .text_color(digits)
-                    .child(elapsed),
+                    .rounded(radius::CARD)
+                    .child(chip(
+                        &t,
+                        if running { "running" } else { "stopped" },
+                        running,
+                    ))
+                    .child(
+                        // Mono, so the centiseconds do not shove the digits left
+                        // and right as they roll over.
+                        div()
+                            .font_family(theme::FONT_MONO)
+                            .text_size(text::H1)
+                            .line_height(text::H1)
+                            .text_color(digits)
+                            .child(elapsed),
+                    ),
             )
             .child(
                 div()
                     .flex()
-                    .gap(theme::space::XS)
+                    .gap(space::S2)
                     .justify_center()
                     .child(toggle)
                     .child(button(
+                        &t,
                         "chrono-reset",
                         "Reset",
                         "trash",
@@ -198,6 +213,7 @@ impl Render for Pane {
                     )),
             )
             .child(div().flex().justify_center().child(note(
+                &t,
                 if running {
                     "Running — refreshed every 10 ms, measured from a monotonic clock.".into()
                 } else {

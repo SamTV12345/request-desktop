@@ -72,6 +72,21 @@ const MIGRATIONS: &[&str] = &[
     CREATE UNIQUE INDEX track_entry_single_running
         ON track_entry ((1)) WHERE stopped_at IS NULL;
     "#,
+    // v3: a pinned tab. Separate from `detail`, which already carries a
+    // request's index — overloading it would make "pinned" unrepresentable for
+    // request tabs, which is exactly the case pinning is most useful for.
+    r#"
+    ALTER TABLE session_tab ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;
+    "#,
+    // v4: which tab is active, per tab rather than per window.
+    //
+    // The tab strip used to be shared by every section, so one index per window
+    // was enough. Requests and Tools now keep separate strips — switching
+    // section switches the strip — so each has its own active tab and a single
+    // `session_window.active_tab` can no longer express both.
+    r#"
+    ALTER TABLE session_tab ADD COLUMN active INTEGER NOT NULL DEFAULT 0;
+    "#,
 ];
 
 /// What a restored tab needs in order to be rebuilt.
@@ -86,11 +101,20 @@ pub struct TabRecord {
     pub key: String,
     /// Anything the caller needs to disambiguate, e.g. a request's index.
     pub detail: Option<String>,
+    /// A pinned tab resists "close others" and sorts ahead of the rest.
+    pub pinned: bool,
+    /// The active tab *within its own kind*. Each section has its own strip, so
+    /// a window has one active tab per kind rather than one overall — which is
+    /// why this is here and not a single index on [`WindowSession`].
+    pub active: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct WindowSession {
     pub tabs: Vec<TabRecord>,
+    /// Kept for databases written before v4, where one index per window was the
+    /// whole story. New writers set [`TabRecord::active`] per kind instead; this
+    /// is still read so an older session restores something sensible.
     pub active_tab: Option<usize>,
 }
 
@@ -152,6 +176,13 @@ impl Store {
         Ok(())
     }
 
+    /// The version this build migrates to. Callers that want to assert "the
+    /// database is current" should compare against this rather than a literal,
+    /// or every new migration breaks an unrelated test.
+    pub const fn latest_schema_version() -> u32 {
+        MIGRATIONS.len() as u32
+    }
+
     pub fn schema_version(&self) -> Result<u32> {
         Ok(self
             .conn
@@ -173,9 +204,18 @@ impl Store {
             let window_id = tx.last_insert_rowid();
             for (t, tab) in window.tabs.iter().enumerate() {
                 tx.execute(
-                    "INSERT INTO session_tab (window_id, position, kind, key, detail) \
-                     VALUES (?1, ?2, ?3, ?4, ?5)",
-                    params![window_id, t as i64, tab.kind, tab.key, tab.detail],
+                    "INSERT INTO session_tab \
+                     (window_id, position, kind, key, detail, pinned, active) \
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                    params![
+                        window_id,
+                        t as i64,
+                        tab.kind,
+                        tab.key,
+                        tab.detail,
+                        tab.pinned as i64,
+                        tab.active as i64
+                    ],
                 )?;
             }
         }
@@ -194,8 +234,8 @@ impl Store {
 
         for (id, active) in rows {
             let mut tab_stmt = self.conn.prepare(
-                "SELECT kind, key, detail FROM session_tab WHERE window_id = ?1 \
-                 ORDER BY position",
+                "SELECT kind, key, detail, pinned, active FROM session_tab \
+                 WHERE window_id = ?1 ORDER BY position",
             )?;
             let tabs: Vec<TabRecord> = tab_stmt
                 .query_map([id], |r| {
@@ -203,6 +243,8 @@ impl Store {
                         kind: r.get(0)?,
                         key: r.get(1)?,
                         detail: r.get(2)?,
+                        pinned: r.get::<_, i64>(3)? != 0,
+                        active: r.get::<_, i64>(4)? != 0,
                     })
                 })?
                 .collect::<rusqlite::Result<_>>()?;
@@ -249,6 +291,8 @@ mod tests {
             kind: kind.into(),
             key: key.into(),
             detail: None,
+            pinned: false,
+            active: false,
         }
     }
 
@@ -294,6 +338,8 @@ mod tests {
                         kind: "request".into(),
                         key: "C:/x/api.http".into(),
                         detail: Some("2".into()),
+                        pinned: true,
+                        active: true,
                     },
                 ],
                 active_tab: Some(1),
@@ -381,6 +427,83 @@ mod tests {
             }])
             .unwrap();
         assert_eq!(store.load_session().unwrap()[0].active_tab, None);
+    }
+
+    /// The pin flag is its own column, so it survives a save/load and does not
+    /// collide with a request tab's index in `detail`.
+    #[test]
+    fn a_pin_survives_the_round_trip_alongside_a_detail() {
+        let mut store = Store::open_in_memory().unwrap();
+        let pinned = TabRecord {
+            kind: "request".into(),
+            key: "C:/x/api.http".into(),
+            detail: Some("7".into()),
+            pinned: true,
+            active: true,
+        };
+        let plain = tab("tool", "chronometer");
+        store
+            .save_session(&[WindowSession {
+                tabs: vec![pinned.clone(), plain.clone()],
+                active_tab: Some(0),
+            }])
+            .unwrap();
+        let back = store.load_session().unwrap();
+        assert_eq!(back[0].tabs, [pinned, plain]);
+        assert!(back[0].tabs[0].pinned);
+        assert_eq!(back[0].tabs[0].detail.as_deref(), Some("7"));
+        assert!(!back[0].tabs[1].pinned);
+    }
+
+    /// A database written before v3 has neither the `pinned` nor the `active`
+    /// column; each migration's DEFAULT 0 must make every existing tab load
+    /// rather than failing the read. `WindowSession::active_tab` is what still
+    /// carries the active tab for such a session — see `tabs::plan`.
+    #[test]
+    fn a_pre_v3_database_migrates_and_reads_as_unpinned() {
+        let dir = std::env::temp_dir().join("rp-store-v3");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("state.db");
+
+        // Build a v2 database by hand: the first two migrations only.
+        {
+            let conn = rusqlite::Connection::open(&path).unwrap();
+            conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
+            for (i, sql) in MIGRATIONS.iter().take(2).enumerate() {
+                conn.execute_batch(sql).unwrap();
+                conn.pragma_update(None, "user_version", (i + 1) as i64)
+                    .unwrap();
+            }
+            conn.execute(
+                "INSERT INTO session_window (position, active_tab) VALUES (0, 0)",
+                [],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO session_tab (window_id, position, kind, key, detail) VALUES (1, 0, 'tool', 'chronometer', NULL)",
+                [],
+            )
+            .unwrap();
+        }
+
+        let store = Store::open_at(&path).unwrap();
+        assert_eq!(store.schema_version().unwrap(), MIGRATIONS.len() as u32);
+        let back = store.load_session().unwrap();
+        assert_eq!(
+            back[0].tabs.len(),
+            1,
+            "the pre-v3 tab must survive the upgrade"
+        );
+        assert!(!back[0].tabs[0].pinned);
+        assert!(!back[0].tabs[0].active);
+        assert_eq!(
+            back[0].active_tab,
+            Some(0),
+            "the pre-v4 per-window index is all such a session has"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

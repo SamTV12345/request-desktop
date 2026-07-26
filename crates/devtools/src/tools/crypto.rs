@@ -163,21 +163,36 @@ fn run_hmac(a: &Args) -> Result<String> {
 // it-tools renders two independent cards, "Hash" and "Compare string with
 // hash", both always visible. So both are always emitted, each as its own
 // section: a salt count the hasher rejects must not hide the comparison.
-fn bcrypt_hash(a: &Args) -> Result<String> {
-    // bcryptjs' genSaltSync silently clamps rounds into 4..=31, which is why
-    // it-tools can offer a 0..=100 number input at all.
-    // ponytail: the upper end is clamped to 15, not 31 — `run` is called on
-    // every keystroke and cost 31 is ~18 hours of CPU per call. Say so instead
-    // of freezing the UI.
-    let rounds = n(a, "rounds", 10).clamp(4, 31);
+/// Hash `text`, applying the salt-round rule in one place so the registry entry
+/// and the app's bcrypt panel cannot disagree about it.
+///
+/// bcryptjs' `genSaltSync` silently clamps rounds into 4..=31, which is why
+/// it-tools can offer a 0..=100 number input at all.
+///
+/// ponytail: the upper end is clamped to 15, not 31 — cost 31 is ~18 hours of
+/// CPU for one hash. Say so instead of freezing the UI.
+pub fn bcrypt_hash_with_rounds(text: &str, rounds: i64) -> Result<String> {
+    let rounds = rounds.clamp(4, 31);
     if rounds > 15 {
         bail!("salt rounds above 15 would take minutes to hours per hash; not run here");
     }
-    bcrypt::hash(s(a, "text", ""), rounds as u32).map_err(Into::into)
+    bcrypt::hash(text, rounds as u32).map_err(Into::into)
+}
+
+/// Whether `text` is the string behind `hash`.
+///
+/// `Err` means `hash` is not a bcrypt hash at all, which is a different answer
+/// from "does not match" — the text output collapses the two, a UI should not.
+pub fn bcrypt_verify(text: &str, hash: &str) -> Result<bool> {
+    bcrypt::verify(text, hash.trim()).map_err(Into::into)
+}
+
+fn bcrypt_hash(a: &Args) -> Result<String> {
+    bcrypt_hash_with_rounds(s(a, "text", ""), n(a, "rounds", 10))
 }
 
 fn bcrypt_compare(a: &Args) -> Result<String> {
-    let matches = bcrypt::verify(s(a, "compare_text", ""), s(a, "compare_hash", "").trim());
+    let matches = bcrypt_verify(s(a, "compare_text", ""), s(a, "compare_hash", ""));
     Ok(match matches.unwrap_or(false) {
         true => "Yes".into(),
         false => "No".into(),

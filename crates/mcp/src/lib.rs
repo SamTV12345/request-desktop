@@ -1,11 +1,17 @@
-//! An MCP server over stdio that books time into the desktop app's local time
-//! tracker, so an agent can track its own work and the user sees it live.
+//! An MCP server that books time into the desktop app's local time tracker, so
+//! an agent can track its own work and the user sees it live.
 //!
-//! The binary is `rp-mcp`; this library exists so the protocol layer can be
-//! tested without spawning a process. See README-mcp.md for registration.
+//! Two transports onto one protocol layer: [`serve`] is newline-delimited
+//! JSON-RPC on stdio, used by the `rp-mcp` binary; [`http`] is MCP's Streamable
+//! HTTP transport, started from the desktop app's UI. Both call the same
+//! [`Server::handle_line`], so the tools cannot drift apart.
 //!
-//! **stdout carries the protocol.** Nothing in this crate may write to it except
-//! [`serve`]. All diagnostics go to stderr.
+//! This library exists so the protocol layer can be tested without spawning a
+//! process. See README-mcp.md for registration.
+//!
+//! **stdout carries the protocol** for the stdio transport. Nothing in this crate
+//! may write to it except [`serve`]. All diagnostics go to stderr.
+pub mod http;
 pub mod proto;
 pub mod time;
 pub mod tools;

@@ -8,8 +8,8 @@
 //! GPUI does not surface at all — so this panel reports them as unavailable
 //! rather than inventing numbers from a lookup table that would be wrong for
 //! every non-US layout.
-use super::{Note, chip, header, meta_row, note};
-use crate::theme;
+use super::{Note, chip, header, label_cell, meta_row, note};
+use crate::theme::{self, radius, space, text};
 use gpui::{
     Context, FocusHandle, Focusable, IntoElement, KeyDownEvent, Keystroke, MouseButton,
     ParentElement, SharedString, Styled, Window, div, prelude::*,
@@ -112,6 +112,7 @@ impl Focusable for Pane {
 
 impl Render for Pane {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let t = theme::theme(cx);
         let focused = self.focus_handle.is_focused(window);
         let last = self.history.first().cloned();
 
@@ -131,16 +132,17 @@ impl Render for Pane {
         let mut rows = Vec::new();
         match &last {
             Some(s) => {
-                rows.push(meta_row("key (gpui)", s.key.clone(), false));
+                rows.push(meta_row(&t, "key (gpui)", s.key.clone(), false));
                 rows.push(meta_row(
+                    &t,
                     "typed character",
                     s.key_char.clone().unwrap_or_else(|| "—".into()),
                     s.key_char.is_none(),
                 ));
-                rows.push(meta_row("keystroke (keymap)", s.raw.clone(), false));
-                rows.push(meta_row("auto-repeat", s.held.to_string(), !s.held));
+                rows.push(meta_row(&t, "keystroke (keymap)", s.raw.clone(), false));
+                rows.push(meta_row(&t, "auto-repeat", s.held.to_string(), !s.held));
             }
-            None => rows.push(meta_row("key (gpui)", "waiting for a keystroke", true)),
+            None => rows.push(meta_row(&t, "key (gpui)", "waiting for a keystroke", true)),
         }
 
         // Modifier state as chips: which ones are down is a glance, not a
@@ -151,19 +153,28 @@ impl Render for Pane {
             .unwrap_or_default();
         let mut modifier_chips = Vec::new();
         for name in MODIFIERS {
-            modifier_chips.push(chip(name, held.split(" + ").any(|m| m == name)));
+            modifier_chips.push(chip(&t, name, held.split(" + ").any(|m| m == name)));
         }
 
-        // Honest about the gaps rather than guessing a number: deliberately
-        // unavailable, with the reason kept quiet underneath.
+        // Honest about the gaps rather than guessing a number. The value slot
+        // carries a tag rather than a blank or a dash, so these read as
+        // deliberately unavailable instead of as rows that failed to fill in.
         let mut missing = Vec::new();
         for field in ["keyCode", "code", "location"] {
-            missing.push(meta_row(field, "unavailable", true));
+            missing.push(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(space::S3)
+                    .py(space::S1)
+                    .child(label_cell(&t, field))
+                    .child(chip(&t, "not exposed by gpui", false)),
+            );
         }
 
         let mut recent = Vec::new();
         for shown in self.history.iter().skip(1) {
-            recent.push(chip(shown.raw.clone(), false));
+            recent.push(chip(&t, shown.raw.clone(), false));
         }
 
         div()
@@ -179,11 +190,12 @@ impl Render for Pane {
             )
             .flex()
             .flex_col()
-            .gap(theme::space::MD)
+            .gap(space::S4)
             .size_full()
-            .p(theme::space::MD)
+            .p(space::S4)
             .overflow_hidden()
             .child(header(
+                &t,
                 "Keycode info",
                 "Find the key name and modifiers of any pressed key.",
             ))
@@ -194,72 +206,66 @@ impl Render for Pane {
                     .flex()
                     .flex_col()
                     .items_center()
-                    .gap(theme::space::XS)
-                    .py(theme::space::XXL)
+                    .gap(space::S3)
+                    .py(space::S8)
                     .bg(if focused {
-                        theme::ACCENT_WASH
+                        t.accent_wash_strong()
                     } else {
-                        theme::SUNKEN
+                        t.surface
                     })
                     .border_1()
-                    .border_color(if focused {
-                        theme::ACCENT
-                    } else {
-                        theme::BORDER
-                    })
-                    .rounded(theme::radius::SM)
+                    .border_color(if focused { t.accent } else { t.divider })
+                    .rounded(radius::CARD)
                     .child(
                         div()
                             .font_family(theme::FONT_MONO)
-                            .text_size(theme::text::H3 * 1.5)
-                            .line_height(theme::text::H3 * 2.)
+                            .text_size(text::H1)
+                            .line_height(text::H1)
                             .text_color(if last.is_some() {
-                                theme::TEXT
+                                t.text
                             } else {
-                                theme::TEXT_TERTIARY
+                                t.text_meta()
                             })
                             .child(SharedString::from(banner)),
                     )
-                    .child(div().flex().gap(theme::space::XXS).children(modifier_chips))
+                    // A chip cloud is the one thing here that may wrap: five
+                    // modifier names on one line do not fit a narrow pane.
                     .child(
                         div()
-                            .text_size(theme::text::SMALL)
-                            .line_height(theme::text::SMALL_LINE)
-                            .text_color(if focused {
-                                theme::TEXT_SECONDARY
-                            } else {
-                                theme::WARNING
-                            })
+                            .flex()
+                            .flex_wrap()
+                            .justify_center()
+                            .gap(space::S1)
+                            .children(modifier_chips),
+                    )
+                    .child(
+                        div()
+                            .text_size(text::SMALL)
+                            .text_color(if focused { t.text_muted() } else { t.warning() })
                             .child(hint),
                     ),
             )
             .child(
-                theme::card()
+                theme::card(&t)
                     .id("keycode-fields")
                     .flex()
                     .flex_col()
                     .flex_1()
+                    .min_h_0()
                     .p_0()
                     .overflow_y_scroll()
-                    .child(theme::section_label("Reported by gpui"))
-                    .child(div().flex().flex_col().px(theme::space::SM).children(rows))
-                    .child(theme::divider().mt(theme::space::XS))
-                    .child(theme::section_label("Not available on this platform"))
+                    .child(theme::section_label(&t, "Reported by gpui"))
+                    .child(div().flex().flex_col().px(space::S3).children(rows))
+                    .child(theme::divider(&t).mt(space::S2))
+                    .child(theme::section_label(&t, "Not available on this platform"))
+                    .child(div().flex().flex_col().px(space::S3).children(missing))
                     .child(
                         div()
-                            .flex()
-                            .flex_col()
-                            .px(theme::space::SM)
-                            .children(missing),
-                    )
-                    .child(
-                        div()
-                            .px(theme::space::SM)
-                            .pb(theme::space::SM)
-                            .pt(theme::space::XXS)
-                            .text_size(theme::text::SMALL)
-                            .line_height(theme::text::SMALL_LINE)
-                            .text_color(theme::TEXT_TERTIARY)
+                            .px(space::S3)
+                            .pb(space::S3)
+                            .pt(space::S1)
+                            .text_size(text::SMALL)
+                            .text_color(t.text_meta())
                             .child(
                                 "These are DOM concepts. GPUI reports a normalised key name, not \
                                  a keyCode, a physical code or which side of the keyboard was \
@@ -273,18 +279,13 @@ impl Render for Pane {
                     div()
                         .flex()
                         .flex_col()
-                        .gap(theme::space::XXS)
-                        .child(theme::section_label("Recent").px_0().pt_0())
-                        .child(
-                            div()
-                                .flex()
-                                .flex_wrap()
-                                .gap(theme::space::XXS)
-                                .children(recent),
-                        ),
+                        .gap(space::S1)
+                        .child(theme::section_label(&t, "Recent").px_0().pt_0())
+                        .child(div().flex().flex_wrap().gap(space::S1).children(recent)),
                 )
             })
             .child(note(
+                &t,
                 SharedString::from(format!(
                     "{} of the last {HISTORY} keystrokes kept.",
                     self.history.len()

@@ -5,13 +5,15 @@
 //! "needs a dedicated UI — not wired up yet", which is worse than not listing
 //! it: the tool looks present and does nothing. Each module here is the real
 //! panel for one such tool.
-use crate::theme;
+use crate::theme::{self, Theme, control, radius, size, space, text};
 use gpui::{
     AnyView, App, AppContext as _, ClickEvent, Div, InteractiveElement as _, ParentElement as _,
     SharedString, Stateful, StatefulInteractiveElement as _, Styled as _, Window, div,
 };
 
 mod base64_file;
+mod bcrypt;
+mod chmod;
 mod chronometer;
 mod device_info;
 mod emoji_picker;
@@ -28,9 +30,17 @@ pub const HAS_PANE: &[&str] = &[
 ];
 
 /// Build the bespoke pane for `id`, if one exists.
+///
+/// Not only for `Kind::Custom` tools: `bcrypt` is a perfectly ordinary
+/// `fields in -> text out` entry that the generic form nevertheless got wrong
+/// (random salts, and a verdict rendered as prose), so it is answered here.
+/// Which is why it is absent from [`HAS_PANE`] — that list is about which
+/// `Kind::Custom` tools would otherwise be inert.
 pub fn pane(id: &str, window: &mut Window, cx: &mut App) -> Option<AnyView> {
     match id {
         "base64-file-converter" => Some(cx.new(base64_file::Pane::new).into()),
+        "bcrypt" => Some(cx.new(bcrypt::Pane::new).into()),
+        "chmod-calculator" => Some(cx.new(chmod::Pane::new).into()),
         "chronometer" => Some(cx.new(chronometer::Pane::new).into()),
         "device-information" => Some(cx.new(device_info::Pane::new).into()),
         "emoji-picker" => Some(cx.new(emoji_picker::Pane::new).into()),
@@ -46,8 +56,13 @@ pub fn pane(id: &str, window: &mut Window, cx: &mut App) -> Option<AnyView> {
 // label/value row. One copy here, on the tokens in `theme`, is why they now
 // look like one app. Nothing here is public: these are only for the panes.
 
-/// A button's weight, Ant-style: one primary action per group, destructive in
-/// red, everything else quiet.
+/// A button's weight, mapped onto the system's `.btn` variants: `Primary` is
+/// `.btn-primary`, `Default` is `.btn-secondary`, `Danger` is the same solid
+/// shape in the danger role.
+///
+/// ponytail: no `Ghost` or `Icon` tone. The system has `.btn-ghost` and
+/// `.btn-icon`, but none of the five panels wants a button without a label —
+/// add them when one does.
 #[derive(Clone, Copy, PartialEq)]
 enum Tone {
     Default,
@@ -55,9 +70,10 @@ enum Tone {
     Danger,
 }
 
-/// The standard button: icon, label, one control height, visibly distinct
-/// hover/active/disabled states.
+/// The standard button: icon, label, the system's one control height, and a
+/// pill corner — `.btn` is `999px` in this design.
 fn button(
+    t: &Theme,
     id: &'static str,
     label: impl Into<SharedString>,
     icon: &'static str,
@@ -66,42 +82,46 @@ fn button(
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> Stateful<Div> {
     let (bg, ink, border) = match (enabled, tone) {
-        (false, _) => (theme::FILL, theme::TEXT_DISABLED, theme::BORDER),
-        (true, Tone::Primary) => (theme::ACCENT, theme::TEXT_ON_ACCENT, theme::ACCENT),
-        (true, Tone::Danger) => (theme::DANGER, theme::TEXT_ON_ACCENT, theme::DANGER),
-        (true, Tone::Default) => (theme::RAISED, theme::TEXT, theme::BORDER),
+        (false, _) => (t.hover(), t.text_disabled(), t.divider),
+        (true, Tone::Primary) => (t.accent, t.on_accent(), t.accent),
+        (true, Tone::Danger) => (t.danger(), t.on_accent(), t.danger()),
+        (true, Tone::Default) => (t.surface, t.text, t.divider),
     };
+    let (accent_hover, accent_active) = (t.accent_ramp.s400, t.accent_ramp.s600);
     let mut el = div()
         .id(id)
         .flex()
+        // A button is sized by its label: it must not be squeezed narrower than
+        // it, and the label must not wrap inside a pill.
+        .flex_none()
+        .whitespace_nowrap()
         .items_center()
-        .gap(theme::space::XXS)
-        .h(theme::control::MD)
-        .px(theme::space::SM)
-        .rounded(theme::radius::XS)
+        .justify_center()
+        .gap(space::S1)
+        .h(control::MD)
+        .px(space::S4)
+        .rounded(radius::PILL)
         .border_1()
         .border_color(border)
         .bg(bg)
-        .text_size(theme::text::BODY)
-        .line_height(theme::text::BODY_LINE)
+        .text_size(text::CONTROL)
         .text_color(ink)
-        .child(theme::icon_sized(icon, theme::text::BODY).text_color(ink))
+        .child(theme::icon_tinted(icon, text::CONTROL, ink))
         .child(label.into());
     if enabled {
         el = el.cursor_pointer();
         el = match tone {
             Tone::Primary => el
-                .hover(|s| s.bg(theme::ACCENT_HOVER).border_color(theme::ACCENT_HOVER))
-                .active(|s| {
-                    s.bg(theme::ACCENT_ACTIVE)
-                        .border_color(theme::ACCENT_ACTIVE)
-                }),
+                .hover(|s| s.bg(accent_hover).border_color(accent_hover))
+                .active(|s| s.bg(accent_active).border_color(accent_active)),
+            // No danger ramp in this system, so the state change is the fill
+            // dropping to its wash rather than a second red.
             Tone::Danger => el
-                .hover(|s| s.bg(theme::DANGER_HOVER).border_color(theme::DANGER_HOVER))
-                .active(|s| s.bg(theme::hue::RED_6).border_color(theme::hue::RED_6)),
+                .hover(|s| s.bg(t.danger_wash()).text_color(t.danger()))
+                .active(|s| s.bg(t.danger()).text_color(t.on_accent())),
             Tone::Default => el
-                .hover(|s| s.border_color(theme::ACCENT).text_color(theme::ACCENT))
-                .active(|s| s.bg(theme::FILL_STRONG)),
+                .hover(|s| s.bg(t.hover()).border_color(t.border_hover()))
+                .active(|s| s.bg(t.active())),
         };
         el = el.on_click(on_click);
     }
@@ -109,23 +129,23 @@ fn button(
 }
 
 /// Title plus one line of what the panel is for. Every pane opens with this.
-fn header(title: &'static str, subtitle: &'static str) -> Div {
+/// The title takes the heading face; the system reserves it for headings.
+fn header(t: &Theme, title: &'static str, subtitle: &'static str) -> Div {
     div()
         .flex()
         .flex_col()
-        .gap(theme::space::XXS)
+        .gap(space::S1)
         .child(
             div()
-                .text_size(theme::text::H5)
-                .line_height(theme::text::H5_LINE)
-                .text_color(theme::TEXT)
+                .font_family(theme::FONT_HEADING)
+                .text_size(text::H4)
+                .text_color(t.text)
                 .child(title),
         )
         .child(
             div()
-                .text_size(theme::text::SMALL)
-                .line_height(theme::text::SMALL_LINE)
-                .text_color(theme::TEXT_SECONDARY)
+                .text_size(text::SMALL)
+                .text_color(t.text_muted())
                 .child(subtitle),
         )
 }
@@ -139,83 +159,85 @@ enum Note {
 }
 
 /// The footer line every pane ends with. An error looks like an error.
-fn note(message: SharedString, kind: Note) -> Div {
+fn note(t: &Theme, message: SharedString, kind: Note) -> Div {
     let (ink, icon) = match kind {
-        Note::Info => (theme::TEXT_TERTIARY, None),
-        Note::Good => (theme::SUCCESS, Some("check")),
-        Note::Bad => (theme::DANGER, Some("alert")),
+        Note::Info => (t.text_meta(), None),
+        Note::Good => (t.success(), Some("check")),
+        Note::Bad => (t.danger(), Some("alert")),
     };
     let mut row = div()
         .flex()
         .items_start()
-        .gap(theme::space::XXS)
-        .text_size(theme::text::SMALL)
-        .line_height(theme::text::SMALL_LINE)
+        .gap(space::S1)
+        .text_size(text::SMALL)
         .text_color(ink);
     if let Some(icon) = icon {
-        row = row.child(theme::icon_sized(icon, theme::text::SMALL).text_color(ink));
+        row = row.child(theme::icon_tinted(icon, text::SMALL, ink));
     }
     row.child(message)
 }
 
-/// Width of the label column in [`meta_row`]. Five spacing steps, so the values
-/// of every panel line up on the same grid.
-fn label_column() -> gpui::Pixels {
-    theme::space::XXL * 5.
+/// The label column shared by every `label   value` row in these panels.
+///
+/// `size::LABEL` is a *starting* width, not a rigid one: the cap is half the row,
+/// so in a narrow pane the label gives way to the value instead of leaving it a
+/// sliver. The cap is relative, so every row in one container lands on the same
+/// width and the column still aligns; the label itself ellipsizes.
+fn label_cell(t: &Theme, label: &'static str) -> Div {
+    div()
+        .flex_none()
+        .w(size::LABEL)
+        .max_w_1_2()
+        .truncate()
+        .text_size(text::LABEL)
+        .text_color(t.text_label())
+        .child(label)
 }
 
-/// `label   value` — label quiet and proportional, value in mono so digits and
-/// paths line up down the column.
-fn meta_row(label: &'static str, value: impl Into<SharedString>, muted: bool) -> Div {
+/// `label   value`, two columns on one grid across all five panels: label quiet
+/// and proportional in the label column, value in mono so digits and paths line
+/// up down the column.
+fn meta_row(t: &Theme, label: &'static str, value: impl Into<SharedString>, muted: bool) -> Div {
     div()
         .flex()
         .items_baseline()
-        .gap(theme::space::SM)
-        .child(
-            div()
-                .w(label_column())
-                .flex_none()
-                .text_size(theme::text::SMALL)
-                .line_height(theme::text::BODY_LINE)
-                .text_color(theme::TEXT_SECONDARY)
-                .child(label),
-        )
+        .gap(space::S3)
+        .py(space::S1)
+        .child(label_cell(t, label))
         .child(
             div()
                 .flex_1()
+                .min_w_0()
                 .overflow_hidden()
                 .font_family(theme::FONT_MONO)
-                .text_size(theme::text::BODY)
-                .line_height(theme::text::BODY_LINE)
-                .text_color(if muted {
-                    theme::TEXT_DISABLED
-                } else {
-                    theme::TEXT
-                })
+                .text_size(text::CONTROL)
+                .text_color(if muted { t.text_disabled() } else { t.text })
                 .child(value.into()),
         )
 }
 
-/// A pill. `on` lights it up in the accent; off it is a quiet outline.
-fn chip(text: impl Into<SharedString>, on: bool) -> Div {
+/// `.tag` — a pill. `on` lights it up in the accent wash; off it is the
+/// system's neutral tag.
+fn chip(t: &Theme, label: impl Into<SharedString>, on: bool) -> Div {
     let (bg, ink, border) = if on {
-        (theme::ACCENT_WASH, theme::ACCENT, theme::ACCENT)
+        (t.accent_wash(), t.accent, t.accent)
     } else {
-        (theme::FILL, theme::TEXT_TERTIARY, theme::BORDER)
+        let (bg, ink) = t.tag_neutral();
+        (bg, ink, t.divider)
     };
     div()
         .flex()
         .items_center()
-        .h(theme::control::SM)
-        .px(theme::space::XS)
-        .rounded(theme::radius::PILL)
+        .px(space::S2)
+        .py(space::S1)
+        .rounded(radius::PILL)
         .border_1()
         .border_color(border)
         .bg(bg)
         .font_family(theme::FONT_MONO)
-        .text_size(theme::text::SMALL)
+        .text_size(text::TINY)
         .text_color(ink)
-        .child(text.into())
+        .child(label.into())
 }
 
 /// Why a `Kind::Custom` tool has no pane, for the ones that genuinely cannot

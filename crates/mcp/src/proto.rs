@@ -21,6 +21,12 @@ pub const PROTOCOL_VERSION: &str = "2025-11-25";
 /// newest first; the shapes this server uses are identical across all of them.
 const SUPPORTED_VERSIONS: &[&str] = &["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
 
+/// Whether a revision is one we will talk. The HTTP transport needs this to
+/// answer an `MCP-Protocol-Version` header, which stdio has no equivalent of.
+pub fn supported_version(version: &str) -> bool {
+    SUPPORTED_VERSIONS.contains(&version)
+}
+
 pub const PARSE_ERROR: i64 = -32700;
 pub const INVALID_REQUEST: i64 = -32600;
 pub const METHOD_NOT_FOUND: i64 = -32601;

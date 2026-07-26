@@ -13,7 +13,7 @@
 //! in, and os/arch/family/pointer-width already say the same thing.
 use super::{Note, Tone, button, header, meta_row, note};
 use crate::editor::Editor;
-use crate::theme;
+use crate::theme::{self, size, space};
 use gpui::{ClipboardItem, Context, Entity, SharedString, Window, div, prelude::*};
 
 /// The bits of the report that need a live window; everything else is `std`.
@@ -183,6 +183,7 @@ impl Pane {
 
 impl Render for Pane {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let t = theme::theme(cx);
         // `new` only gets a `Context`, so window geometry is read here — it is
         // also the only place that sees a resize.
         let size = window.viewport_size();
@@ -206,35 +207,45 @@ impl Render for Pane {
         let mut sections = Vec::new();
         for (i, (heading, rows)) in groups(&geo).into_iter().enumerate() {
             if i > 0 {
-                sections.push(theme::divider().into_any_element());
+                sections.push(theme::divider(&t).into_any_element());
             }
-            let group = div().flex().flex_col().child(theme::section_label(heading));
-            let mut body = div().flex().flex_col().px(theme::space::SM);
+            let group = div()
+                .flex()
+                .flex_col()
+                .child(theme::section_label(&t, heading));
+            let mut body = div().flex().flex_col().px(space::S3);
             for (label, value) in rows {
-                body = body.child(meta_row(label, value, false));
+                body = body.child(meta_row(&t, label, value, false));
             }
-            sections.push(group.child(body).pb(theme::space::XS).into_any_element());
+            sections.push(group.child(body).pb(space::S3).into_any_element());
         }
 
         div()
             .flex()
             .flex_col()
-            .gap(theme::space::MD)
+            .gap(space::S4)
             .size_full()
-            .p(theme::space::MD)
+            .p(space::S4)
             .overflow_hidden()
             .child(
                 div()
                     .flex()
                     .items_start()
                     .justify_between()
-                    .gap(theme::space::MD)
-                    .child(header(
-                        "Device information",
-                        "The desktop environment this build is running in — upstream's browser \
-                         report has no meaning here.",
-                    ))
+                    .gap(space::S4)
+                    .child(
+                        header(
+                            &t,
+                            "Device information",
+                            "The desktop environment this build is running in — upstream's \
+                             browser report has no meaning here.",
+                        )
+                        // The subtitle wraps; the button keeps its size.
+                        .flex_1()
+                        .min_w_0(),
+                    )
                     .child(button(
+                        &t,
                         "copy-device-info",
                         "Copy all",
                         "copy",
@@ -244,11 +255,12 @@ impl Render for Pane {
                     )),
             )
             .child(
-                theme::card()
+                theme::card(&t)
                     .id("device-info-groups")
                     .flex()
                     .flex_col()
                     .flex_1()
+                    .min_h_0()
                     .p_0()
                     .overflow_y_scroll()
                     .children(sections),
@@ -257,18 +269,26 @@ impl Render for Pane {
                 div()
                     .flex()
                     .flex_col()
-                    .gap(theme::space::XXS)
-                    .child(theme::section_label("Copyable report").px_0().pt_0())
+                    .gap(space::S1)
+                    // The report shares the leftover height with the group list
+                    // instead of reserving a fixed slab of it.
+                    .flex_1()
+                    .min_h(size::CARD_MIN_H)
+                    .max_h(space::S8 * 5.)
+                    .child(theme::section_label(&t, "Copyable report").px_0().pt_0())
                     // Kept as a real editor: selecting a couple of lines out of
                     // it is how this ends up in a bug report.
                     .child(
                         div()
                             .flex()
-                            .h(theme::space::XXL * 5.)
+                            .flex_1()
+                            .min_h_0()
+                            .overflow_hidden()
                             .child(self.view.clone()),
                     ),
             )
             .child(note(
+                &t,
                 self.status.clone(),
                 if self.copied { Note::Good } else { Note::Info },
             ))

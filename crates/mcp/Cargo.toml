@@ -24,3 +24,15 @@ serde_json.workspace = true
 # two cannot disagree about where a day boundary is. The alternative -- chrono or
 # jiff -- would be a new dependency *and* a second timezone implementation.
 rusqlite = { version = "0.40", features = ["bundled"] }
+# The Streamable HTTP transport. `default-features = false` keeps it to routing
+# plus a JSON body: no multipart, no form, no tracing.
+axum = { version = "0.8", default-features = false, features = ["http1", "tokio"] }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "time"] }
+# Bearer tokens and session ids. Already in the tree via rusqlite/gpui; it is the
+# OS random source and nothing else, which is all a token needs.
+getrandom = { version = "0.3", features = ["std"] }
+
+[dev-dependencies]
+# The HTTP tests talk to the server over a real socket rather than calling the
+# handlers. Already in the tree via rp-core.
+reqwest = { version = "0.12", default-features = false, features = ["blocking"] }
