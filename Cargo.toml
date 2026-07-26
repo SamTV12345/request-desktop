@@ -1,9 +1,8 @@
 [workspace]
 resolver = "2"
 members = ["crates/core", "crates/devtools", "crates/store", "crates/app", "crates/mcp"]
-# The old Tauri app stays buildable on its own until the GPUI port replaces it.
 # `fuzz` is its own crate: cargo-fuzz needs nightly and its own profile.
-exclude = ["src-tauri", "fuzz"]
+exclude = ["fuzz"]
 
 [workspace.package]
 version = "0.1.0"

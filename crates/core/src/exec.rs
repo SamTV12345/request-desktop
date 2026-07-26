@@ -9,29 +9,71 @@ use std::time::Instant;
 
 /// How long to wait for the connection itself.
 const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+/// The `# @no-redirect` directive, as `httpfile` stores it. A 3xx then comes back
+/// as the response instead of being followed, which is what you want when the
+/// redirect *is* the thing under test.
+const NO_REDIRECT: &str = "@no-redirect";
+/// The `>> file` and `>>! file` response redirects, as `httpfile` stores them.
+/// Acted on by [`write_redirect`], which needs a base directory `send` has not got.
+const REDIRECT: &str = "response_redirect";
+const REDIRECT_FORCE: &str = "response_redirect_force";
+
 /// Ceiling for a whole request when the file does not say otherwise.
 /// Overridable per request with the JetBrains `# @timeout <seconds>` directive.
 const DEFAULT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
 
-/// One client for the whole process: connection pool + cookie jar are shared
-/// state, building one per request would leak both.
-fn client() -> &'static reqwest::Client {
-    static C: OnceLock<reqwest::Client> = OnceLock::new();
-    C.get_or_init(|| {
-        reqwest::Client::builder()
-            .cookie_store(true)
-            .gzip(true)
-            .redirect(reqwest::redirect::Policy::limited(10))
-            // reqwest has no default timeout, so without these a server that
-            // accepts the connection and then says nothing wedges the caller
-            // forever — in the UI that is a request that can never be cancelled.
-            // Generous, because a slow API is not an error; the point is that
-            // there is an end.
-            .connect_timeout(CONNECT_TIMEOUT)
-            .timeout(DEFAULT_TIMEOUT)
-            .build()
-            .expect("reqwest client")
-    })
+/// The cookie jar, shared by every client below.
+///
+/// Held apart from the clients because there are two of them — see [`client`] —
+/// and a request that opts out of redirects must still see the session cookie an
+/// earlier request was given. Handing both clients the same jar is what keeps
+/// that true; `cookie_store(true)` would give each its own.
+fn jar() -> &'static std::sync::Arc<reqwest::cookie::Jar> {
+    static J: OnceLock<std::sync::Arc<reqwest::cookie::Jar>> = OnceLock::new();
+    J.get_or_init(Default::default)
+}
+
+fn build_client(follow_redirects: bool) -> reqwest::Client {
+    reqwest::Client::builder()
+        .cookie_provider(jar().clone())
+        .gzip(true)
+        .redirect(if follow_redirects {
+            reqwest::redirect::Policy::limited(10)
+        } else {
+            reqwest::redirect::Policy::none()
+        })
+        // reqwest has no default timeout, so without these a server that
+        // accepts the connection and then says nothing wedges the caller
+        // forever — in the UI that is a request that can never be cancelled.
+        // Generous, because a slow API is not an error; the point is that
+        // there is an end.
+        .connect_timeout(CONNECT_TIMEOUT)
+        .timeout(DEFAULT_TIMEOUT)
+        .build()
+        .expect("reqwest client")
+}
+
+/// The client for this request, kept for the whole process: the connection pool
+/// is shared state and building one per request would leak it.
+///
+/// Two of them, because reqwest fixes the redirect policy on the *client* and the
+/// JetBrains `# @no-redirect` directive is per request. They share the jar, so the
+/// only thing that differs is whether a 3xx is followed.
+pub fn client_for(req: &Request) -> &'static reqwest::Client {
+    if req.extra.contains_key(NO_REDIRECT) {
+        static NOT_FOLLOWING: OnceLock<reqwest::Client> = OnceLock::new();
+        NOT_FOLLOWING.get_or_init(|| build_client(false))
+    } else {
+        following_client()
+    }
+}
+
+/// The ordinary client. Used directly for machinery that is not the user's
+/// request — an OAuth2 token fetch, where a 3xx is the provider's business and
+/// never something the caller asked to inspect.
+fn following_client() -> &'static reqwest::Client {
+    static FOLLOWING: OnceLock<reqwest::Client> = OnceLock::new();
+    FOLLOWING.get_or_init(|| build_client(true))
 }
 
 pub async fn send(req: &Request, vars: &Vars) -> Result<Response> {
@@ -41,7 +83,7 @@ pub async fn send(req: &Request, vars: &Vars) -> Result<Response> {
     let built = build_request(&r)?;
 
     let start = Instant::now();
-    let res = client().execute(built).await?;
+    let res = client_for(req).execute(built).await?;
     let status = res.status();
     let headers: Vec<(String, String)> = res
         .headers()
@@ -64,6 +106,40 @@ pub async fn send(req: &Request, vars: &Vars) -> Result<Response> {
         body,
         duration_ms,
     })
+}
+
+/// Carry out a `>> file` / `>>! file` response redirect, if the request has one.
+///
+/// Returns the path written, or `None` when the request asked for nothing. `>>`
+/// keeps an existing file and reports that it did; `>>!` overwrites. `base` is the
+/// directory of the `.http` file, because that is what a relative path in it means
+/// — the process's working directory is not it.
+///
+/// Separate from [`send`] rather than inside it: `send` takes no base directory
+/// and should not start writing to the disk of its own accord. The caller decides,
+/// and the caller is the one that knows where the file came from.
+pub fn write_redirect(
+    req: &Request,
+    body: &[u8],
+    base: &std::path::Path,
+) -> Result<Option<std::path::PathBuf>> {
+    let (target, force) = match (req.extra.get(REDIRECT), req.extra.get(REDIRECT_FORCE)) {
+        (_, Some(p)) => (p, true),
+        (Some(p), None) => (p, false),
+        (None, None) => return Ok(None),
+    };
+    let path = base.join(target);
+    if !force && path.exists() {
+        bail!(
+            "{} exists and `>>` does not overwrite; write `>>! {target}` if that is what you want",
+            path.display()
+        );
+    }
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).with_context(|| format!("cannot create {}", dir.display()))?;
+    }
+    std::fs::write(&path, body).with_context(|| format!("cannot write {}", path.display()))?;
+    Ok(Some(path))
 }
 
 /// Fail before hitting the wire when a `{{variable}}` went unresolved.
@@ -230,7 +306,7 @@ async fn resolve_auth(req: &Request) -> Result<Auth> {
         form.push(("scope", &o.scope));
     }
 
-    let res = client()
+    let res = following_client()
         .post(&o.access_token_url)
         .form(&form)
         .send()
@@ -288,7 +364,7 @@ fn parse_timeout(raw: &str) -> Result<std::time::Duration> {
 fn build_request(r: &Request) -> Result<reqwest::Request> {
     let method = reqwest::Method::from_bytes(r.method.trim().to_uppercase().as_bytes())
         .with_context(|| format!("bad http method {:?}", r.method))?;
-    let mut rb = client().request(method, &r.url);
+    let mut rb = client_for(r).request(method, &r.url);
 
     // `# @timeout` from a .http file overrides the client default.
     //

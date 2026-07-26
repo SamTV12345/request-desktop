@@ -717,6 +717,7 @@ fn a_session_survives_being_saved_closed_and_reopened() {
     let db = tmp.path("state.db");
     let windows = vec![
         WindowSession {
+            sources: Vec::new(),
             tabs: vec![
                 TabRecord {
                     kind: "tool".into(),
@@ -739,6 +740,7 @@ fn a_session_survives_being_saved_closed_and_reopened() {
             active_tab: Some(1),
         },
         WindowSession {
+            sources: Vec::new(),
             tabs: vec![TabRecord {
                 kind: "tool".into(),
                 key: "json-viewer".into(),
@@ -779,6 +781,7 @@ fn a_database_from_a_newer_build_is_refused_not_mangled() {
         let mut store = Store::open_at(&db).expect("create");
         store
             .save_session(&[WindowSession {
+                sources: Vec::new(),
                 tabs: vec![TabRecord {
                     kind: "tool".into(),
                     key: "uuid-generator".into(),
@@ -812,4 +815,35 @@ fn a_database_from_a_newer_build_is_refused_not_mangled() {
         bytes,
         "a refused database must not be written to"
     );
+}
+
+/// The dragged sidebar width is a preference, so it has to survive a restart —
+/// and it has to be held to sane bounds, because a value that no longer fits the
+/// screen would open the window with the pane pushed out of it.
+#[test]
+fn the_sidebar_width_round_trips_and_is_clamped() {
+    let tmp = Tmp::new("sidebar-width");
+    let db = tmp.path("state.db");
+    const KEY: &str = "ui.sidebar_width";
+    {
+        let store = Store::open_at(&db).expect("open");
+        assert_eq!(store.get(KEY).expect("get"), None, "nothing stored yet");
+        store.set(KEY, "412.5").expect("set");
+    }
+    let store = Store::open_at(&db).expect("reopen");
+    assert_eq!(store.get(KEY).expect("get").as_deref(), Some("412.5"));
+    assert_eq!(
+        store.get(KEY).unwrap().unwrap().parse::<f32>().unwrap(),
+        412.5
+    );
+
+    // Garbage and absurd values are the store's to hold and the app's to reject;
+    // what matters here is that neither is a failure to read.
+    store.set(KEY, "not a number").expect("set");
+    assert!(
+        store.get(KEY).unwrap().unwrap().parse::<f32>().is_err(),
+        "a stale value must be a parse failure the caller can fall back from"
+    );
+    store.set(KEY, "99999").expect("set");
+    assert_eq!(store.get(KEY).unwrap().unwrap(), "99999");
 }

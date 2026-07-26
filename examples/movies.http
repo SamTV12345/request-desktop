@@ -1,0 +1,152 @@
+# Toolbench — Testblatt gegen freie Film-APIs
+#
+# Keine API-Keys, keine Anmeldung. Drei Hosts:
+#   ghibliapi.vercel.app   Studio-Ghibli-Filme, nur lesend
+#   api.tvmaze.com         Serien, für einen zweiten Host im selben File
+#   postman-echo.com       spiegelt zurück, was man schickt
+#
+# Reihenfolge zählt: Anfrage 1 merkt sich Werte, die 2 bis 6 benutzen. Von oben
+# nach unten senden, dann ist jede Variable belegt.
+#
+# ---------------------------------------------------------------------------
+# Lokal und global — der Unterschied, den dieses Blatt vorführt
+# ---------------------------------------------------------------------------
+#
+# LOKAL   `@name = wert` steht im File. Gilt ab der Zeile, in der es steht, und
+#         gehört der Anfrage, unter der es notiert ist. Nichts sendet dafür.
+#
+# GLOBAL  `client.global.set("name", ...)` steht in einem `> {% %}`-Handler und
+#         wird aus einer *Antwort* gewonnen. Überlebt die Anfrage und gilt für
+#         alle folgenden — so wandert sonst ein Auth-Token weiter.
+#
+# UMGEBUNG  `http-client.env.json` daneben, im Kopf der Anwendung umschaltbar.
+#
+# Wer gewinnt: global schlägt lokal schlägt Umgebung. `@pageSize` unten und
+# `pageSize` in der env-Datei sind genau dafür da — schalte die Umgebung um und
+# vergleiche, was Anfrage 7 tatsächlich sendet.
+#
+# Die Umgebungen heißen `ghibli` und `tvmaze`, die Dateivariablen `ghibliBase` und
+# `tvmazeBase`. Absichtlich verschieden: eine Umgebung und eine Variable, die
+# gleich heißen, liest sich wie dasselbe und ist es nicht.
+
+@ghibliBase = https://ghibliapi.vercel.app
+@tvmazeBase = https://api.tvmaze.com
+@echoBase = https://postman-echo.com
+@pageSize = 3
+
+### Filme auflisten — setzt fünf globale Variablen
+# @name listFilms
+# @timeout 30 s
+GET {{ghibliBase}}/films?limit={{pageSize}}
+Accept: application/json
+X-Request-Id: {{$uuid}}
+
+> {%
+    // Feldzugriff über einen Pfad, inklusive Array-Index.
+    client.global.set("filmId", response.body[0].id);
+    client.global.set("filmTitle", response.body[0].title);
+    client.global.set("filmScore", response.body[0].rt_score);
+    // Nicht nur der Body: Header und Status gehen auch.
+    client.global.set("apiServer", response.headers.valueOf("server"));
+    client.global.set("listStatus", response.status);
+%}
+
+### Ein Film über die gerade gemerkte ID
+# Hier steht die lokale Variable *unter* der Überschrift und damit bei dieser
+# Anfrage. `{{filmId}}` dagegen kommt aus der Antwort von oben.
+@detailFields = title,director,rt_score
+
+GET {{ghibliBase}}/films/{{filmId}}
+Accept: application/json
+X-Wanted-Fields: {{detailFields}}
+
+> {%
+    client.global.set("director", response.body.director);
+    // Ein String direkt aus einem Array.
+    client.global.set("firstPersonUrl", response.body.people[0]);
+    // Klammerschreibweise, falls ein Schlüssel je einen Punkt enthält.
+    client.global.set("runningTime", response.body["running_time"]);
+%}
+
+### Lokal und global nebeneinander, zurückgespiegelt
+# Die Antwort zeigt in `args`, was wirklich gesendet wurde — der Beweis, dass
+# beide Sorten Variablen aufgelöst wurden.
+GET {{echoBase}}/get?lokal={{detailFields}}&global={{filmTitle}}&lauf={{runningTime}}
+Accept: application/json
+
+> {%
+    client.global.set("echoedLocal", response.body.args.lokal);
+    client.global.set("echoedGlobal", response.body.args.global);
+%}
+
+### POST mit JSON-Body aus gemerkten und dynamischen Werten
+POST {{echoBase}}/post
+Content-Type: application/json
+X-Request-Id: {{$uuid}}
+
+{
+  "requestId": "{{$uuid}}",
+  "sentAt": "{{$isoTimestamp}}",
+  "epoch": {{$timestamp}},
+  "film": {
+    "id": "{{filmId}}",
+    "title": "{{filmTitle}}",
+    "director": "{{director}}",
+    "score": {{filmScore}}
+  },
+  "seats": {{$randomInt}},
+  "contact": "{{$random.email}}"
+}
+
+> {%
+    // Verschachtelt bis in den gespiegelten Body hinein.
+    client.global.set("echoedTitle", response.body.json.film.title);
+    client.global.set("echoedSeats", response.body.json.seats);
+%}
+
+### Formular statt JSON, mit demselben Titel
+POST {{echoBase}}/post
+Content-Type: application/x-www-form-urlencoded
+
+title={{filmTitle}}&score={{filmScore}}&note=aus%20Toolbench
+
+### Zweiter Host, dieselben Variablen
+# Zeigt, dass die globalen Werte nicht am Host hängen. Der Regisseur reist im
+# Header mit, nicht im Query-String — dort wäre das Leerzeichen zu kodieren.
+GET {{tvmazeBase}}/search/shows?q=ghibli
+Accept: application/json
+X-Compare-With: {{director}}
+
+> {%
+    client.global.set("showName", response.body[0].show.name);
+%}
+
+### Aus der Umgebung statt aus dem File
+# `envBase` und `pageSize` stehen in `http-client.env.json` daneben. Schalte oben
+# die Umgebung um: die Basis-URL wechselt, `pageSize` aber bleibt bei 3, weil das
+# lokale `@pageSize` die Umgebung schlägt.
+GET {{envBase}}/films?limit={{pageSize}}
+Accept: application/json
+
+### Redirect bewusst nicht folgen
+# Ohne die Direktive käme 200 zurück; mit ihr steht die 302 samt Location da.
+# @no-redirect
+GET https://httpbin.org/redirect/1
+
+### Antwort zusätzlich in eine Datei schreiben
+# `>>!` überschreibt, `>>` würde eine bestehende Datei stehen lassen.
+GET {{ghibliBase}}/films/{{filmId}}
+Accept: application/json
+
+>>! ./out/film.json
+
+### Ein Fehlerfall, absichtlich
+# Eine ID, die es nicht gibt. Gehört auf ein Testblatt: man will auch sehen, wie
+# ein 404 dargestellt wird.
+GET {{ghibliBase}}/films/00000000-0000-0000-0000-000000000000
+Accept: application/json
+
+### Eine Variable, die niemand setzt — auch absichtlich
+# Toolbench sendet das nicht, sondern nennt den fehlenden Namen. Genau dieser
+# Fall war früher ein nacktes "builder error".
+GET {{ghibliBase}}/films/{{gibtEsNicht}}

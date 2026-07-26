@@ -28,8 +28,23 @@ use crate::{Workspace, theme};
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum TabKey {
     Tool(&'static str),
-    /// Index into `Workspace::requests`.
-    Request(usize),
+    /// A request in one open file: which file, and its position in that file.
+    ///
+    /// The path travels with the key rather than an index into a list of open
+    /// sources, because several files are open at once and closing one would
+    /// renumber every tab behind it. It is also exactly what has to be persisted,
+    /// so a saved tab needs no lookup table to come back.
+    Request {
+        source: PathBuf,
+        index: usize,
+    },
+    /// The environment and file variables, and what earlier responses captured.
+    ///
+    /// A tab and not a sidebar panel: it used to sit under the request list and
+    /// take half the rail's height, which left the list of requests about nine
+    /// rows tall. It is also workspace-wide rather than per request, which is why
+    /// it is a tab of the Requests section and not one of the request pane's own.
+    Vars,
 }
 
 impl TabKey {
@@ -37,7 +52,10 @@ impl TabKey {
     fn id(&self) -> SharedString {
         match self {
             TabKey::Tool(id) => format!("tab-tool-{id}").into(),
-            TabKey::Request(i) => format!("tab-req-{i}").into(),
+            TabKey::Request { source, index } => {
+                format!("tab-req-{}-{index}", source.display()).into()
+            }
+            TabKey::Vars => "tab-vars".into(),
         }
     }
 }
@@ -51,6 +69,8 @@ pub enum Content {
     /// A `Kind::Custom` tool this build cannot provide; carries the reason.
     Unavailable(&'static str),
     Request(Entity<RequestPane>),
+    /// Drawn from `Workspace` state, so it carries nothing of its own.
+    Vars,
 }
 
 pub struct Tab<C = Content> {
@@ -103,6 +123,11 @@ impl<C> Tabs<C> {
         self.tabs.get(self.active_index()?)
     }
 
+    /// The key of tab `i`, for a caller that has an index and needs the identity.
+    pub fn key_at(&self, i: usize) -> Option<&TabKey> {
+        self.tabs.get(i).map(|t| &t.key)
+    }
+
     pub fn active_key(&self) -> Option<&TabKey> {
         self.active().map(|t| &t.key)
     }
@@ -138,6 +163,16 @@ impl<C> Tabs<C> {
             self.active = self.active.saturating_sub(1).min(self.tabs.len() - 1);
         }
         Some(tab)
+    }
+
+    /// Drop every tab whose key fails `keep`. Used when a source is closed and
+    /// its `Request { source, .. }` keys stop pointing at anything open.
+    pub fn retain(&mut self, keep: impl Fn(&TabKey) -> bool) {
+        for i in (0..self.tabs.len()).rev() {
+            if !keep(&self.tabs[i].key) {
+                self.remove(i);
+            }
+        }
     }
 
     // -- pinning -----------------------------------------------------------
@@ -246,6 +281,7 @@ impl<C> Tabs<C> {
 /// interpret them, so they are ours to define.
 const KIND_TOOL: &str = "tool";
 const KIND_REQUEST: &str = "request";
+const KIND_VARS: &str = "vars";
 
 /// What restoring a window asks for. Both variants are already validated: an
 /// unknown tool id or an out-of-range request index never reaches the caller.
@@ -270,18 +306,26 @@ pub enum Restore {
         pinned: bool,
         active: bool,
     },
+    Vars {
+        pinned: bool,
+        active: bool,
+    },
 }
 
 impl Restore {
     pub fn pinned(&self) -> bool {
         match self {
-            Restore::Tool { pinned, .. } | Restore::Request { pinned, .. } => *pinned,
+            Restore::Tool { pinned, .. }
+            | Restore::Request { pinned, .. }
+            | Restore::Vars { pinned, .. } => *pinned,
         }
     }
 
     pub fn active(&self) -> bool {
         match self {
-            Restore::Tool { active, .. } | Restore::Request { active, .. } => *active,
+            Restore::Tool { active, .. }
+            | Restore::Request { active, .. }
+            | Restore::Vars { active, .. } => *active,
         }
     }
 
@@ -293,7 +337,9 @@ impl Restore {
 
     fn activate(&mut self) {
         match self {
-            Restore::Tool { active, .. } | Restore::Request { active, .. } => *active = true,
+            Restore::Tool { active, .. }
+            | Restore::Request { active, .. }
+            | Restore::Vars { active, .. } => *active = true,
         }
     }
 }
@@ -306,8 +352,10 @@ impl Restore {
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct Plan {
     pub tabs: Vec<Restore>,
-    /// The request file that was loaded, if any — a window has exactly one.
-    pub source: Option<PathBuf>,
+    /// Every request file that loaded, in the order the tabs first named it. The
+    /// caller opens these as its sources; a file that would not load is absent and
+    /// accounted for in `note`.
+    pub sources: Vec<PathBuf>,
     /// Why some tabs did not come back, for the status line. `None` when
     /// everything that was stored was restored (or skipped silently).
     pub note: Option<String>,
@@ -319,43 +367,51 @@ pub struct Plan {
 /// pane and fetched responses are deliberately not saved: a restored tab is a
 /// fresh one. That is the design, not a bug.
 ///
-/// `TabKey::Request(i)` indexes `Workspace::requests`, which means nothing after
-/// a restart — the file it came from is what makes it resolvable, so a window
-/// without a `source_path` cannot contribute request tabs at all.
-///
 /// Both of the window's lists go into the one flat record list, requests first;
 /// each marks its own active tab, so restoring gives each section back the tab
 /// it was on rather than leaving one of them at the front.
+///
+/// Every request tab already carries its own file, so there is nothing to look up
+/// and no request tab that cannot be written — which was the case while a window
+/// had exactly one source.
 pub fn snapshot<C>(
     request_tabs: &Tabs<C>,
     tool_tabs: &Tabs<C>,
-    source_path: Option<&Path>,
+    sources: &[std::path::PathBuf],
 ) -> WindowSession {
     let mut out = Vec::with_capacity(request_tabs.len() + tool_tabs.len());
     for tabs in [request_tabs, tool_tabs] {
         for (i, tab) in tabs.iter().enumerate() {
             let active = tabs.active_index() == Some(i);
-            out.push(match (&tab.key, source_path) {
-                (TabKey::Tool(id), _) => TabRecord {
+            out.push(match &tab.key {
+                TabKey::Tool(id) => TabRecord {
                     kind: KIND_TOOL.into(),
                     key: (*id).into(),
                     detail: None,
                     pinned: tab.pinned,
                     active,
                 },
-                (TabKey::Request(index), Some(path)) => TabRecord {
+                TabKey::Vars => TabRecord {
+                    kind: KIND_VARS.into(),
+                    key: String::new(),
+                    detail: None,
+                    pinned: tab.pinned,
+                    active,
+                },
+                TabKey::Request { source, index } => TabRecord {
                     kind: KIND_REQUEST.into(),
-                    key: path.display().to_string(),
+                    key: source.display().to_string(),
                     detail: Some(index.to_string()),
                     pinned: tab.pinned,
                     active,
                 },
-                // Nothing to point at: skip rather than write junk.
-                (TabKey::Request(_), None) => continue,
             });
         }
     }
     WindowSession {
+        // The open files in their own right: one with no tab open in it is still
+        // open, and inferring the list from the tabs would lose it.
+        sources: sources.iter().map(|p| p.display().to_string()).collect(),
         // Superseded by the per-tab flag; still written so a *downgrade* to a
         // build before v4 reopens something rather than an empty window.
         active_tab: out.iter().position(|r| r.active),
@@ -365,19 +421,36 @@ pub fn snapshot<C>(
 
 /// Work out what a stored window can actually reopen.
 ///
-/// `requests_at` loads the request file and reports how many requests it holds,
-/// or `None` if it has moved, been deleted or no longer parses. It is called at
-/// most once, because a `Workspace` owns exactly one source file — so the first
-/// request path in the window wins and records naming another are stale.
+/// `requests_at` loads a request file and reports how many requests it holds, or
+/// `None` if it has moved, been deleted or no longer parses. Called **once per
+/// distinct path**: a window holds several files now, and each is loaded exactly
+/// once no matter how many of its requests were open.
 ///
 /// Kept a plain function over plain values so the mapping is testable without a
 /// window; that is where this feature breaks, not in the SQL.
-pub fn plan(session: &WindowSession, requests_at: impl FnOnce(&Path) -> Option<usize>) -> Plan {
+pub fn plan(session: &WindowSession, mut requests_at: impl FnMut(&Path) -> Option<usize>) -> Plan {
     let mut out = Vec::with_capacity(session.tabs.len());
-    let mut source = None;
-    let mut loader = Some(requests_at);
-    let mut total: Option<usize> = None;
-    let mut note = None;
+    let mut note: Option<String> = None;
+    // The stored file list comes first and in its own order, so reopening puts the
+    // sidebar back the way it was rather than in the order the tabs happen to be.
+    let mut stored: Vec<PathBuf> = Vec::new();
+    // path -> how many requests it holds, or `None` for one that would not load.
+    // Doubles as the "already tried" set, so a file is read once however many of
+    // its requests were open.
+    let mut loaded: Vec<(PathBuf, Option<usize>)> = Vec::new();
+    for path in &session.sources {
+        let path = PathBuf::from(path);
+        if loaded.iter().any(|(p, _)| *p == path) {
+            continue;
+        }
+        let total = requests_at(&path);
+        if total.is_some() {
+            stored.push(path.clone());
+        } else {
+            note.get_or_insert_with(|| format!("could not reopen {}", path.display()));
+        }
+        loaded.push((path, total));
+    }
     // Databases written before migration v4 have no per-tab flag, only the one
     // index per window. Fall back to it so an older session still reopens on the
     // tab it was on; `active` on every record is how we tell the two apart.
@@ -394,23 +467,33 @@ pub fn plan(session: &WindowSession, requests_at: impl FnOnce(&Path) -> Option<u
                 pinned: record.pinned,
                 active,
             }),
+            KIND_VARS => Some(Restore::Vars {
+                pinned: record.pinned,
+                active,
+            }),
             KIND_REQUEST => {
                 let path = PathBuf::from(&record.key);
-                if let Some(load) = loader.take() {
-                    total = load(&path);
-                    match total {
-                        Some(_) => source = Some(path.clone()),
-                        None => note = Some(format!("could not reopen {}", path.display())),
+                let total = match loaded.iter().find(|(p, _)| *p == path) {
+                    Some((_, total)) => *total,
+                    None => {
+                        let total = requests_at(&path);
+                        if total.is_none() {
+                            // One note per lost file, and the first one wins:
+                            // three missing files are one problem to go and look
+                            // at, not three lines in a status bar.
+                            note.get_or_insert_with(|| {
+                                format!("could not reopen {}", path.display())
+                            });
+                        }
+                        loaded.push((path.clone(), total));
+                        total
                     }
-                }
-                // Records for a second file, or an index the file no longer
-                // has, cannot be resolved.
-                let usable = source.as_deref() == Some(path.as_path());
+                };
                 record
                     .detail
                     .as_deref()
                     .and_then(|d| d.parse::<usize>().ok())
-                    .filter(|index| usable && total.is_some_and(|n| *index < n))
+                    .filter(|index| total.is_some_and(|n| *index < n))
                     .map(|index| Restore::Request {
                         path,
                         index,
@@ -439,7 +522,18 @@ pub fn plan(session: &WindowSession, requests_at: impl FnOnce(&Path) -> Option<u
     }
     Plan {
         tabs: out,
-        source,
+        sources: {
+            // Anything a tab named that was not in the stored list is appended: a
+            // database written before v5 has no list at all, and its tabs are then
+            // the only record of which files were open.
+            let mut all = stored;
+            for (path, total) in loaded {
+                if total.is_some() && !all.contains(&path) {
+                    all.push(path);
+                }
+            }
+            all
+        },
         note,
     }
 }
@@ -648,7 +742,7 @@ pub struct MenuRow {
 /// every enable/disable rule is testable without a window. Empty when `i` is not
 /// a tab, which is also how a menu left open over a list that changed underneath
 /// it disappears instead of acting on the wrong tab.
-pub fn menu_rows<C>(tabs: &Tabs<C>, i: usize, source_path: Option<&Path>) -> Vec<Vec<MenuRow>> {
+pub fn menu_rows<C>(tabs: &Tabs<C>, i: usize) -> Vec<Vec<MenuRow>> {
     let n = tabs.len();
     let Some(tab) = tabs.tabs.get(i) else {
         return Vec::new();
@@ -699,14 +793,12 @@ pub fn menu_rows<C>(tabs: &Tabs<C>, i: usize, source_path: Option<&Path>) -> Vec
             row("Move to New Window", MenuAction::Detach, true),
         ],
     ];
-    // Only a request tab has a file behind it. Greyed rather than absent when the
-    // window has no source path: the rows mean something for this kind of tab,
-    // just not for this one.
-    if matches!(tab.key, TabKey::Request(_)) {
-        let has_file = source_path.is_some();
+    // Only a request tab has a file behind it — and it carries its own, so these
+    // rows are never inert for one.
+    if matches!(tab.key, TabKey::Request { .. }) {
         groups.push(vec![
-            row("Copy Path", MenuAction::CopyPath, has_file),
-            row("Reveal in Explorer", MenuAction::Reveal, has_file),
+            row("Copy Path", MenuAction::CopyPath, true),
+            row("Reveal in Explorer", MenuAction::Reveal, true),
         ]);
     }
     groups.push(vec![row(
@@ -735,16 +827,18 @@ impl MenuAction {
             MenuAction::CloseRight => ws.tabs_mut().close_right_of(i),
             MenuAction::TogglePin => ws.tabs_mut().toggle_pin(i),
             MenuAction::Detach => ws.detach_tab(i, cx),
+            // The path of the tab that was right-clicked, not of the window: with
+            // several files open the window has no single one.
             MenuAction::CopyPath => {
-                if let Some(path) = &ws.source_path {
+                if let Some(TabKey::Request { source, .. }) = ws.tabs().key_at(i) {
                     cx.write_to_clipboard(gpui::ClipboardItem::new_string(
-                        path.display().to_string(),
+                        source.display().to_string(),
                     ));
                 }
             }
             MenuAction::Reveal => {
-                if let Some(path) = ws.source_path.clone() {
-                    reveal(&path);
+                if let Some(TabKey::Request { source, .. }) = ws.tabs().key_at(i).cloned() {
+                    reveal(&source);
                 }
             }
             MenuAction::Settings => crate::open_settings(cx),
@@ -808,7 +902,7 @@ fn menu_item(
 /// to hold focus, which is why `Workspace` owns a handle for it.
 pub fn menu(ws: &Workspace, cx: &mut gpui::Context<Workspace>) -> Option<impl IntoElement + use<>> {
     let (i, at) = ws.tab_menu?;
-    let groups = menu_rows(ws.tabs(), i, ws.source_path.as_deref());
+    let groups = menu_rows(ws.tabs(), i);
     if groups.is_empty() {
         return None;
     }
@@ -915,11 +1009,11 @@ mod tests {
     #[test]
     fn reopening_a_request_activates_it_too() {
         let mut t: Tabs<&str> = Tabs::default();
-        t.open(tab(TabKey::Request(0), "req"));
-        t.open(tab(TabKey::Request(1), "req1"));
-        t.open(tab(TabKey::Request(0), "req"));
+        t.open(tab(req(Path::new("api.http"), 0), "req"));
+        t.open(tab(req(Path::new("api.http"), 1), "req1"));
+        t.open(tab(req(Path::new("api.http"), 0), "req"));
         assert_eq!(t.len(), 2);
-        assert_eq!(t.active_key(), Some(&TabKey::Request(0)));
+        assert_eq!(t.active_key(), Some(&req(Path::new("api.http"), 0)));
     }
 
     #[test]
@@ -1111,15 +1205,15 @@ mod tests {
     #[test]
     fn the_range_closes_are_greyed_at_the_ends_of_the_strip() {
         let t = tools(&["a", "b", "c"]);
-        let first = menu_rows(&t, 0, None);
+        let first = menu_rows(&t, 0);
         assert_eq!(find(&first, "Close Tabs to the Left"), Some(false));
         assert_eq!(find(&first, "Close Tabs to the Right"), Some(true));
 
-        let last = menu_rows(&t, 2, None);
+        let last = menu_rows(&t, 2);
         assert_eq!(find(&last, "Close Tabs to the Left"), Some(true));
         assert_eq!(find(&last, "Close Tabs to the Right"), Some(false));
 
-        let middle = menu_rows(&t, 1, None);
+        let middle = menu_rows(&t, 1);
         assert_eq!(find(&middle, "Close Tabs to the Left"), Some(true));
         assert_eq!(find(&middle, "Close Tabs to the Right"), Some(true));
     }
@@ -1127,7 +1221,7 @@ mod tests {
     #[test]
     fn close_others_is_greyed_when_there_is_nothing_else_to_close() {
         let one = tools(&["a"]);
-        let rows = menu_rows(&one, 0, None);
+        let rows = menu_rows(&one, 0);
         assert_eq!(find(&rows, "Close Others"), Some(false));
         // Close and Close All always mean something, even for a lone tab.
         assert_eq!(find(&rows, "Close"), Some(true));
@@ -1135,37 +1229,34 @@ mod tests {
         assert_eq!(find(&rows, "Move to New Window"), Some(true));
 
         let two = tools(&["a", "b"]);
-        assert_eq!(find(&menu_rows(&two, 0, None), "Close Others"), Some(true));
+        assert_eq!(find(&menu_rows(&two, 0), "Close Others"), Some(true));
     }
 
     #[test]
-    fn the_file_rows_are_absent_for_a_tool_tab_and_greyed_without_a_path() {
+    fn the_file_rows_are_absent_for_a_tool_tab_and_live_for_a_request() {
         let mut t = tools(&["a"]);
-        t.open(tab(TabKey::Request(0), "r0"));
-        let path = PathBuf::from("api.http");
+        t.open(tab(req(Path::new("api.http"), 0), "r0"));
 
         // A tool tab has no file behind it at all, so the rows are not shown.
-        let tool = menu_rows(&t, 0, Some(&path));
+        let tool = menu_rows(&t, 0);
         assert_eq!(find(&tool, "Copy Path"), None);
         assert_eq!(find(&tool, "Reveal in Explorer"), None);
 
-        // A request tab in a window with a source path can use them.
-        let req = menu_rows(&t, 1, Some(&path));
+        // A request tab carries its own file, so the rows always mean something.
+        let req = menu_rows(&t, 1);
         assert_eq!(find(&req, "Copy Path"), Some(true));
         assert_eq!(find(&req, "Reveal in Explorer"), Some(true));
 
-        // Same tab, no file loaded: shown but inert, never silently doing nothing.
-        let orphan = menu_rows(&t, 1, None);
-        assert_eq!(find(&orphan, "Copy Path"), Some(false));
-        assert_eq!(find(&orphan, "Reveal in Explorer"), Some(false));
+        // There is no longer a "no file loaded" case to grey them out for: the tab
+        // carries the path, so if the tab exists the path does.
     }
 
     #[test]
     fn a_menu_for_a_tab_that_is_gone_has_no_rows() {
         let t = tools(&["a"]);
-        assert!(menu_rows(&t, 1, None).is_empty());
+        assert!(menu_rows(&t, 1).is_empty());
         let empty: Tabs<&str> = Tabs::default();
-        assert!(menu_rows(&empty, 0, None).is_empty());
+        assert!(menu_rows(&empty, 0).is_empty());
     }
 
     /// The menu is grouped, and the groups are what the dividers are drawn from —
@@ -1173,9 +1264,9 @@ mod tests {
     #[test]
     fn every_group_holds_at_least_one_row() {
         let mut t = tools(&["a"]);
-        t.open(tab(TabKey::Request(0), "r0"));
+        t.open(tab(req(Path::new("api.http"), 0), "r0"));
         for i in 0..t.len() {
-            let groups = menu_rows(&t, i, Some(Path::new("api.http")));
+            let groups = menu_rows(&t, i);
             assert!(groups.len() >= 4, "{i}: {:?}", labels(&groups));
             assert!(groups.iter().all(|g| !g.is_empty()), "{i}");
         }
@@ -1186,13 +1277,10 @@ mod tests {
     #[test]
     fn no_menu_action_is_unreachable() {
         let mut t = tools(&["a", "b"]);
-        t.open(tab(TabKey::Request(0), "r0"));
+        t.open(tab(req(Path::new("api.http"), 0), "r0"));
         let mut seen = Vec::new();
         for i in 0..t.len() {
-            for row in menu_rows(&t, i, Some(Path::new("api.http")))
-                .iter()
-                .flatten()
-            {
+            for row in menu_rows(&t, i).iter().flatten() {
                 if !seen.contains(&row.action) {
                     seen.push(row.action);
                 }
@@ -1375,7 +1463,7 @@ mod tests {
         t.close_all_but_pinned();
         assert_eq!(t.len(), 3, "pins are the point");
         // And the menu says so rather than offering dead rows.
-        let rows = menu_rows(&t, 1, None);
+        let rows = menu_rows(&t, 1);
         assert_eq!(find(&rows, "Close Others"), Some(false));
         assert_eq!(find(&rows, "Close Tabs to the Left"), Some(false));
         assert_eq!(find(&rows, "Close Tabs to the Right"), Some(false));
@@ -1391,12 +1479,12 @@ mod tests {
     #[test]
     fn the_menu_names_the_direction_the_pin_will_go() {
         let mut t = tools(&["a", "b"]);
-        let rows = menu_rows(&t, 0, None);
+        let rows = menu_rows(&t, 0);
         assert_eq!(find(&rows, "Pin Tab"), Some(true));
         assert_eq!(find(&rows, "Unpin Tab"), None);
 
         t.set_pinned(0, true);
-        let rows = menu_rows(&t, 0, None);
+        let rows = menu_rows(&t, 0);
         assert_eq!(find(&rows, "Unpin Tab"), Some(true));
         assert_eq!(find(&rows, "Pin Tab"), None);
     }
@@ -1405,25 +1493,16 @@ mod tests {
     fn close_all_but_pinned_is_greyed_unless_it_would_do_something() {
         // Nothing pinned: it would be a second Close All.
         let t = tools(&["a", "b"]);
-        assert_eq!(
-            find(&menu_rows(&t, 0, None), "Close All but Pinned"),
-            Some(false)
-        );
+        assert_eq!(find(&menu_rows(&t, 0), "Close All but Pinned"), Some(false));
 
         // Something pinned and something not: it means something.
         let mut t = tools(&["a", "b"]);
         t.set_pinned(0, true);
-        assert_eq!(
-            find(&menu_rows(&t, 0, None), "Close All but Pinned"),
-            Some(true)
-        );
+        assert_eq!(find(&menu_rows(&t, 0), "Close All but Pinned"), Some(true));
 
         // Everything pinned: nothing to close.
         t.set_pinned(1, true);
-        assert_eq!(
-            find(&menu_rows(&t, 0, None), "Close All but Pinned"),
-            Some(false)
-        );
+        assert_eq!(find(&menu_rows(&t, 0), "Close All but Pinned"), Some(false));
     }
 
     #[test]
@@ -1460,10 +1539,19 @@ mod tests {
         r
     }
 
-    fn requests(indices: &[usize]) -> Tabs<&'static str> {
+    /// A request tab key. One helper, so a change to the key's shape is one edit
+    /// here rather than thirty.
+    fn req(source: &Path, index: usize) -> TabKey {
+        TabKey::Request {
+            source: source.to_path_buf(),
+            index,
+        }
+    }
+
+    fn requests(source: &Path, indices: &[usize]) -> Tabs<&'static str> {
         let mut t = Tabs::default();
         for i in indices {
-            t.open(tab(TabKey::Request(*i), "r"));
+            t.open(tab(req(source, *i), "r"));
         }
         t
     }
@@ -1484,13 +1572,27 @@ mod tests {
         path
     }
 
+    /// `snapshot` as a workspace with no extra files open would call it: the source
+    /// list is exactly the files the request tabs name.
+    fn snap(reqs: &Tabs<&'static str>, tools: &Tabs<&'static str>) -> WindowSession {
+        let mut sources: Vec<PathBuf> = Vec::new();
+        for tab in reqs.iter() {
+            if let TabKey::Request { source, .. } = &tab.key
+                && !sources.contains(source)
+            {
+                sources.push(source.clone());
+            }
+        }
+        snapshot(reqs, tools, &sources)
+    }
+
     fn load_requests(p: &Path) -> Option<usize> {
         crate::session::load(p).ok().map(|l| l.requests.len())
     }
 
     #[test]
     fn a_tool_tab_round_trips() {
-        let stored = snapshot(&none(), &tools(&[TOOL]), None);
+        let stored = snap(&none(), &tools(&[TOOL]));
         assert_eq!(stored.tabs, [active(record("tool", TOOL, None))]);
         assert_eq!(stored.active_tab, Some(0));
 
@@ -1503,7 +1605,7 @@ mod tests {
                 active: true,
             }]
         );
-        assert_eq!(plan.source, None);
+        assert!(plan.sources.is_empty());
         assert_eq!(plan.note, None);
     }
 
@@ -1513,12 +1615,12 @@ mod tests {
     #[test]
     fn each_section_keeps_its_own_active_tab() {
         let path = http_file("per-section-active", 3);
-        let mut reqs = requests(&[0, 1, 2]);
+        let mut reqs = requests(&path, &[0, 1, 2]);
         reqs.activate(1);
         let mut tls = tools(&[TOOL, "qr-code-generator"]);
         tls.activate(0);
 
-        let stored = snapshot(&reqs, &tls, Some(&path));
+        let stored = snap(&reqs, &tls);
         let marks: Vec<bool> = stored.tabs.iter().map(|r| r.active).collect();
         assert_eq!(
             marks,
@@ -1556,14 +1658,14 @@ mod tests {
     #[test]
     fn a_pin_round_trips_for_both_kinds_of_tab() {
         let path = http_file("pin-roundtrip", 2);
-        let mut reqs = requests(&[1, 0]);
+        let mut reqs = requests(&path, &[1, 0]);
         // Pin the first request: it moves to the front, so the stored order is
         // already pinned-first and restoring cannot reshuffle it.
-        let at = reqs.find(&TabKey::Request(1)).expect("r1");
+        let at = reqs.find(&req(&path, 1)).expect("r1");
         reqs.set_pinned(at, true);
-        reqs.activate(reqs.find(&TabKey::Request(0)).expect("r0"));
+        reqs.activate(reqs.find(&req(&path, 0)).expect("r0"));
 
-        let stored = snapshot(&reqs, &tools(&[TOOL]), Some(&path));
+        let stored = snap(&reqs, &tools(&[TOOL]));
         let flags: Vec<bool> = stored.tabs.iter().map(|r| r.pinned).collect();
         assert_eq!(flags, vec![true, false, false], "{:?}", stored.tabs);
         assert_eq!(stored.tabs[0].detail.as_deref(), Some("1"));
@@ -1584,7 +1686,7 @@ mod tests {
         // A pinned *tool* tab too, and the flag rides on the tool variant.
         let mut tls = tools(&[TOOL]);
         tls.set_pinned(0, true);
-        let stored = snapshot(&none(), &tls, None);
+        let stored = snap(&none(), &tls);
         assert!(stored.tabs[0].pinned);
         // `super::`, because `plan` is shadowed by the binding above.
         let plan = super::plan(&stored, |_| unreachable!());
@@ -1601,7 +1703,7 @@ mod tests {
     #[test]
     fn a_request_tab_round_trips_with_its_source_path_and_index() {
         let path = http_file("roundtrip", 3);
-        let stored = snapshot(&requests(&[2]), &tools(&[TOOL]), Some(&path));
+        let stored = snap(&requests(&path, &[2]), &tools(&[TOOL]));
         assert_eq!(
             stored.tabs,
             [
@@ -1632,22 +1734,28 @@ mod tests {
                 },
             ]
         );
-        assert_eq!(plan.source.as_deref(), Some(path.as_path()));
+        assert_eq!(plan.sources, std::slice::from_ref(&path));
         assert_eq!(plan.note, None);
     }
 
+    /// Every request tab carries its own file, so there is no longer such a thing
+    /// as a request tab that cannot be written down. While a window had one source
+    /// path, a tab opened before a file was loaded was silently dropped on save.
     #[test]
-    fn a_window_with_no_source_path_contributes_no_request_tabs() {
-        let stored = snapshot(&requests(&[0]), &tools(&[TOOL]), None);
-        assert_eq!(stored.tabs, [active(record("tool", TOOL, None))]);
-        // The tool strip's active tab is still marked; the dropped request cannot
-        // leave the mark on a tab that is not there.
-        assert_eq!(stored.active_tab, Some(0));
+    fn a_request_tab_is_persisted_with_its_own_file() {
+        let path = http_file("own-file", 1);
+        let stored = snap(&requests(&path, &[0]), &tools(&[TOOL]));
+        assert_eq!(stored.tabs.len(), 2, "{:?}", stored.tabs);
+        assert_eq!(stored.tabs[0].kind, "request");
+        assert_eq!(stored.tabs[0].key, path.display().to_string());
+        // And the file is in the source list in its own right.
+        assert_eq!(stored.sources, [path.display().to_string()]);
     }
 
     #[test]
     fn a_tool_id_that_no_longer_exists_is_skipped_silently() {
         let stored = WindowSession {
+            sources: Vec::new(),
             tabs: vec![
                 active(record("tool", "tool-that-was-renamed", None)),
                 record("tool", TOOL, None),
@@ -1673,6 +1781,7 @@ mod tests {
     #[test]
     fn a_request_whose_file_is_gone_is_skipped_with_a_note() {
         let stored = WindowSession {
+            sources: Vec::new(),
             tabs: vec![
                 active(record("request", "definitely/not/here.http", Some("0"))),
                 active(record("tool", TOOL, None)),
@@ -1688,7 +1797,7 @@ mod tests {
                 active: true,
             }]
         );
-        assert_eq!(plan.source, None);
+        assert!(plan.sources.is_empty());
         let note = plan.note.expect("a lost file must be visible, not silent");
         assert!(note.contains("here.http"), "{note}");
     }
@@ -1698,6 +1807,7 @@ mod tests {
         let path = http_file("shrunk", 1);
         let key = path.display().to_string();
         let stored = WindowSession {
+            sources: Vec::new(),
             tabs: vec![
                 record("request", &key, Some("0")),
                 active(record("request", &key, Some("7"))),
@@ -1725,6 +1835,7 @@ mod tests {
     #[test]
     fn a_session_from_before_the_split_still_restores_its_active_tab() {
         let stored = WindowSession {
+            sources: Vec::new(),
             tabs: vec![
                 record("tool", "qr-code-generator", None),
                 record("tool", TOOL, None),
@@ -1738,6 +1849,7 @@ mod tests {
         // An index the stored tabs never had falls back to the first one, the way
         // a clamped index used to.
         let stored = WindowSession {
+            sources: Vec::new(),
             tabs: vec![record("tool", TOOL, None)],
             active_tab: Some(9),
         };
@@ -1746,6 +1858,7 @@ mod tests {
 
         // And nothing restorable means nothing to mark, rather than a panic.
         let empty = WindowSession {
+            sources: Vec::new(),
             tabs: vec![record("tool", "gone", None)],
             active_tab: Some(0),
         };
@@ -1772,6 +1885,7 @@ mod tests {
             }
             let plan = plan(
                 &WindowSession {
+                    sources: Vec::new(),
                     tabs,
                     active_tab: None,
                 },
@@ -1789,32 +1903,138 @@ mod tests {
         }
     }
 
+    /// The variables tab is workspace state, so it has nothing to resolve — but it
+    /// still has to come back, and it belongs to the Requests strip.
     #[test]
-    fn request_records_for_a_second_file_are_stale_and_dropped() {
-        // A window owns one source file, so only the first path is loaded.
+    fn the_variables_tab_round_trips_without_a_source_file() {
+        let mut reqs: Tabs<&str> = Tabs::default();
+        reqs.open(tab(TabKey::Vars, "Variables"));
+        let stored = snap(&reqs, &none());
+        assert_eq!(stored.tabs, [active(record("vars", "", None))]);
+
+        let plan = plan(&stored, |_| unreachable!("no request tabs to load"));
+        assert_eq!(
+            plan.tabs,
+            [Restore::Vars {
+                pinned: false,
+                active: true
+            }]
+        );
+        assert!(plan.sources.is_empty());
+
+        // It sorts and pins like any other tab, and is not confused for a request:
+        // the file rows are for tabs that have a file behind them.
+        let mut reqs: Tabs<&str> = Tabs::default();
+        reqs.open(tab(TabKey::Vars, "Variables"));
+        reqs.open(tab(req(Path::new("api.http"), 0), "r0"));
+        reqs.set_pinned(0, true);
+        assert!(reqs.is_pinned(0));
+        let rows = menu_rows(&reqs, reqs.find(&TabKey::Vars).expect("vars"));
+        assert_eq!(find(&rows, "Copy Path"), None);
+        // And opening it twice is one tab, like every other key.
+        reqs.open(tab(TabKey::Vars, "Variables"));
+        assert_eq!(
+            reqs.iter().filter(|t| t.key == TabKey::Vars).count(),
+            1,
+            "the variables tab must not duplicate"
+        );
+    }
+
+    /// Two files, both restored. This test used to assert the opposite — that a
+    /// window owned one source and records naming a second were stale — which is
+    /// exactly the restriction that had to go.
+    #[test]
+    fn tabs_from_several_files_all_come_back_and_each_file_is_read_once() {
         let first = http_file("two-a", 2);
         let second = http_file("two-b", 2);
         let stored = WindowSession {
+            sources: Vec::new(),
             tabs: vec![
                 active(record("request", &first.display().to_string(), Some("0"))),
                 record("request", &second.display().to_string(), Some("1")),
+                // A second tab into the first file must not read it again.
+                record("request", &first.display().to_string(), Some("1")),
             ],
             active_tab: Some(0),
         };
-        let mut loads = 0;
+        let mut loads: Vec<PathBuf> = Vec::new();
         let plan = plan(&stored, |p| {
-            loads += 1;
+            loads.push(p.to_path_buf());
             load_requests(p)
         });
-        assert_eq!(loads, 1);
         assert_eq!(
-            plan.tabs,
-            [Restore::Request {
-                path: first,
-                index: 0,
-                pinned: false,
-                active: true,
-            }]
+            loads,
+            [first.clone(), second.clone()],
+            "each file read once, in the order the tabs name it"
         );
+        assert_eq!(plan.tabs.len(), 3, "{:?}", plan.tabs);
+        assert_eq!(plan.sources, [first.clone(), second.clone()]);
+        assert_eq!(
+            plan.tabs[1],
+            Restore::Request {
+                path: second,
+                index: 1,
+                pinned: false,
+                active: false,
+            }
+        );
+    }
+
+    /// A file with no tab open in it is still open, which is what the stored source
+    /// list is for — inferring the list from the tabs loses it.
+    #[test]
+    fn a_file_with_no_open_tab_still_comes_back() {
+        let quiet = http_file("quiet", 1);
+        let busy = http_file("busy", 1);
+        let stored = WindowSession {
+            sources: vec![
+                quiet.display().to_string(),
+                busy.display().to_string(),
+                // A duplicate is not two entries.
+                quiet.display().to_string(),
+            ],
+            tabs: vec![active(record(
+                "request",
+                &busy.display().to_string(),
+                Some("0"),
+            ))],
+            active_tab: Some(0),
+        };
+        let mut loads: Vec<PathBuf> = Vec::new();
+        let plan = plan(&stored, |p| {
+            loads.push(p.to_path_buf());
+            load_requests(p)
+        });
+        assert_eq!(
+            plan.sources,
+            [quiet.clone(), busy.clone()],
+            "the stored order wins, and the quiet file is in it"
+        );
+        assert_eq!(
+            loads,
+            [quiet, busy],
+            "each file once, the stored list included"
+        );
+        assert_eq!(plan.tabs.len(), 1, "one tab was open, one comes back");
+    }
+
+    /// A file in the stored list that has since gone says so, and does not take the
+    /// rest of the window with it.
+    #[test]
+    fn a_stored_file_that_is_gone_is_reported_and_the_others_still_open() {
+        let there = http_file("still-there", 1);
+        let stored = WindowSession {
+            sources: vec![
+                "definitely/not/here.http".into(),
+                there.display().to_string(),
+            ],
+            tabs: vec![active(record("tool", TOOL, None))],
+            active_tab: Some(0),
+        };
+        let plan = plan(&stored, load_requests);
+        assert_eq!(plan.sources, [there]);
+        let note = plan.note.expect("a lost file must be visible");
+        assert!(note.contains("here.http"), "{note}");
+        assert_eq!(plan.tabs.len(), 1, "the tool tab is unaffected");
     }
 }

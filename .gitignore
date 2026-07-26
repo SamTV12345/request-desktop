@@ -28,3 +28,6 @@ database
 /target
 /target-app
 lcov.info
+
+# Written by the `>>! ./out/film.json` response redirect in examples/movies.http
+examples/out/

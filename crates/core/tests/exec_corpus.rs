@@ -863,3 +863,76 @@ fn an_unresolved_variable_fails_before_any_connection() {
     assert!(err.contains("userName"), "{err}");
     assert_eq!(s.hits(), 0, "no connection may be made: {err}");
 }
+
+// ---------------------------------------------------------------------------
+// Directives that were parsed but never acted on
+// ---------------------------------------------------------------------------
+
+/// `# @no-redirect` has to reach the transport, not just the model. The two
+/// clients are process-wide singletons, so the check is that the directive picks
+/// a *different* one — which is the whole mechanism, since reqwest fixes the
+/// redirect policy per client.
+#[test]
+fn no_redirect_selects_a_different_client_than_the_default() {
+    let (plain, _) = rp_core::httpfile::parse_with_vars("GET https://example.com/\n").unwrap();
+    let (opted, _) =
+        rp_core::httpfile::parse_with_vars("# @no-redirect\nGET https://example.com/\n").unwrap();
+    assert!(
+        opted[0].extra.contains_key("@no-redirect"),
+        "the parser must record the directive: {:?}",
+        opted[0].extra
+    );
+    // Same request twice is the same client; opting out is a different one.
+    assert!(std::ptr::eq(
+        rp_core::exec::client_for(&plain[0]),
+        rp_core::exec::client_for(&plain[0])
+    ));
+    assert!(!std::ptr::eq(
+        rp_core::exec::client_for(&plain[0]),
+        rp_core::exec::client_for(&opted[0])
+    ));
+}
+
+/// `>> file` and `>>! file` write the response body next to the `.http` file.
+#[test]
+fn a_response_redirect_writes_relative_to_the_http_file() {
+    let dir = std::env::temp_dir().join("rp-redirect-write");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+
+    // A request with no redirect writes nothing and says so.
+    let (none, _) = rp_core::httpfile::parse_with_vars("GET https://example.com/\n").unwrap();
+    assert_eq!(
+        rp_core::exec::write_redirect(&none[0], b"x", &dir).unwrap(),
+        None
+    );
+
+    // `>>` writes, including a directory that does not exist yet.
+    let (soft, _) =
+        rp_core::httpfile::parse_with_vars("GET https://example.com/\n\n>> ./out/body.json\n")
+            .unwrap();
+    let written = rp_core::exec::write_redirect(&soft[0], b"{\"a\":1}", &dir)
+        .unwrap()
+        .expect("a path");
+    assert_eq!(written, dir.join("./out/body.json"));
+    assert_eq!(std::fs::read(&written).unwrap(), b"{\"a\":1}");
+
+    // A second `>>` refuses rather than overwriting, and names the way out.
+    let again = rp_core::exec::write_redirect(&soft[0], b"newer", &dir).unwrap_err();
+    let message = format!("{again:#}");
+    assert!(message.contains(">>!"), "{message}");
+    assert_eq!(
+        std::fs::read(&written).unwrap(),
+        b"{\"a\":1}",
+        "the refusal must leave the file alone"
+    );
+
+    // `>>!` overwrites the same path.
+    let (force, _) =
+        rp_core::httpfile::parse_with_vars("GET https://example.com/\n\n>>! ./out/body.json\n")
+            .unwrap();
+    rp_core::exec::write_redirect(&force[0], b"newer", &dir).unwrap();
+    assert_eq!(std::fs::read(&written).unwrap(), b"newer");
+
+    let _ = std::fs::remove_dir_all(&dir);
+}

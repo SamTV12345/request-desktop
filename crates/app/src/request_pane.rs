@@ -38,10 +38,19 @@ pub struct RequestPane {
     vars: Vars,
     response: Option<Result<Response, String>>,
     sending: bool,
+    /// Directory of the `.http` file this request came from, for a `>> file`
+    /// response redirect: a relative path in the file means relative to the file,
+    /// not to wherever the process happens to have been started.
+    base_dir: Option<std::path::PathBuf>,
 }
 
 impl RequestPane {
-    pub fn new(request: Request, vars: Vars, cx: &mut Context<Self>) -> Self {
+    pub fn new(
+        request: Request,
+        vars: Vars,
+        base_dir: Option<std::path::PathBuf>,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let url = cx.new(|cx| {
             let mut i = TextInput::new(cx, "https://example.com/api");
             i.set_text(request.url.clone(), cx);
@@ -75,6 +84,7 @@ impl RequestPane {
             vars,
             response: None,
             sending: false,
+            base_dir,
         }
     }
 
@@ -109,22 +119,46 @@ impl RequestPane {
 
         let req = self.edited(cx);
         let vars = self.vars.clone();
+        let base = self.base_dir.clone();
 
         cx.spawn(async move |this, cx| {
             let result = cx
                 .background_executor()
                 .spawn(async move {
-                    runtime()
+                    let sent = runtime()
                         .block_on(exec::send(&req, &vars))
-                        .map_err(|e| format!("{e:#}"))
+                        .map_err(|e| format!("{e:#}"));
+                    // The `>> file` redirect, carried out here: once per send by
+                    // construction, and on the background thread, where writing a
+                    // response of any size belongs. Reported either way — a write
+                    // that silently did not happen is worse than none at all.
+                    let note = match (&sent, &base) {
+                        (Ok(res), Some(base)) => {
+                            match exec::write_redirect(&req, &res.body, base) {
+                                Ok(Some(path)) => Some(format!(
+                                    "wrote {} bytes to {}",
+                                    res.body.len(),
+                                    path.display()
+                                )),
+                                Ok(None) => None,
+                                Err(e) => Some(format!("{e:#}")),
+                            }
+                        }
+                        _ => None,
+                    };
+                    (sent, note)
                 })
                 .await;
+            let (result, note) = result;
             this.update(cx, |this, cx| {
                 this.sending = false;
-                let shown = match &result {
+                let mut shown = match &result {
                     Ok(res) => render_response(res),
                     Err(e) => e.clone(),
                 };
+                if let Some(note) = note {
+                    shown = format!("# {note}\n\n{shown}");
+                }
                 this.response_view.update(cx, |v, cx| v.set_text(shown, cx));
                 this.response = Some(result);
                 cx.notify();
@@ -145,10 +179,12 @@ impl RequestPane {
             cells.push(
                 seg_option(t, active)
                     .id(*m)
-                    .text_color(if active {
-                        theme::method_color(t, m)
-                    } else {
-                        t.text_muted()
+                    // The selected cell is filled in the method's own colour —
+                    // GET green, DELETE red — so the choice reads at a glance and
+                    // says which method it is. `bg` after `seg_option`'s, which is
+                    // what makes this an override rather than a second fill.
+                    .when(active, |d| {
+                        d.bg(theme::method_color(t, m)).text_color(t.on_accent())
                     })
                     .child(*m)
                     .on_click(cx.listener(move |this, _, _, cx| {
@@ -221,7 +257,9 @@ impl RequestPane {
             tabs.push(
                 seg_option(t, active)
                     .id(label)
-                    .text_color(if active { t.accent } else { t.text_muted() })
+                    // No `text_color` here: `seg_option` sets the ink for both
+                    // states, and overriding it after the fact put accent text on
+                    // the accent fill — the selected tab's label vanished.
                     .child(label)
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.tab = tab;
@@ -403,6 +441,12 @@ fn seg_track(t: &Theme) -> gpui::Div {
 }
 
 /// `.seg-opt` — one option inside a [`seg_track`].
+///
+/// The checked option used to be `t.surface` on a `t.hover()` track, which on the
+/// dark ground are within a few percent of each other: you could not see which
+/// method was selected. It is now a filled pill against an unfilled one. The
+/// method control paints over this fill with the method's own colour, so the
+/// selection carries which method it is as well as that there is one.
 fn seg_option(t: &Theme, active: bool) -> gpui::Div {
     div()
         .flex()
@@ -415,8 +459,11 @@ fn seg_option(t: &Theme, active: bool) -> gpui::Div {
         .min_w_0()
         .truncate()
         .cursor_pointer()
-        .when(active, |d| d.bg(t.surface))
-        .when(!active, |d| d.hover(|s| s.bg(t.hover())))
+        .when(active, |d| d.bg(t.accent).text_color(t.on_accent()))
+        .when(!active, |d| {
+            d.text_color(t.text_muted())
+                .hover(|s| s.bg(t.hover()).text_color(t.text))
+        })
 }
 
 // ------------------------------------------------------------------ text <-> model

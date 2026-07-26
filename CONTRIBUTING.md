@@ -4,10 +4,10 @@ The standard for this workspace is "tested as well as SQLite": the parsers and
 devtools are expected to be covered by a corpus, property and fuzz suite, and
 branch coverage is the number we watch.
 
-The workspace is three crates — `rp-core` (`crates/core`), `rp-devtools`
-(`crates/devtools`) and `request-pilot` (`crates/app`, the gpui GUI). `src-tauri`
-(the legacy Tauri app) and `fuzz` are excluded from the workspace and build on
-their own.
+The workspace is five crates — `rp-core` (`crates/core`), `rp-devtools`
+(`crates/devtools`), `rp-store` (`crates/store`), `request-pilot` (`crates/app`,
+the gpui GUI) and `rp-mcp` (`crates/mcp`). Only `fuzz` is excluded and builds on
+its own, because cargo-fuzz needs nightly and its own profile.
 
 ## Running the suites locally
 

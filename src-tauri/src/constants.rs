@@ -1,1 +1,0 @@
-pub static HEADER_AUTHORIZATION: &str = "Authorization";

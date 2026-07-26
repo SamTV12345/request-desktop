@@ -1,6 +1,7 @@
 mod assets;
 mod custom;
 mod editor;
+mod reference;
 mod request_pane;
 mod session;
 mod tabs;
@@ -11,7 +12,7 @@ mod track;
 
 use gpui::{
     App, Application, Bounds, Context, Entity, Global, IntoElement, ParentElement,
-    PathPromptOptions, Render, SharedString, Styled, WeakEntity, Window, WindowBounds,
+    PathPromptOptions, Pixels, Render, SharedString, Styled, WeakEntity, Window, WindowBounds,
     WindowOptions, div, prelude::*, px, size,
 };
 use request_pane::RequestPane;
@@ -253,11 +254,9 @@ fn save_session(cx: &mut App) {
         }
         if let Some(ws) = handle.upgrade() {
             let ws = ws.read(cx);
-            sessions.push(tabs::snapshot(
-                &ws.request_tabs,
-                &ws.tool_tabs,
-                ws.source_path.as_deref(),
-            ));
+            let paths: Vec<std::path::PathBuf> =
+                ws.sources.iter().map(|s| s.path.clone()).collect();
+            sessions.push(tabs::snapshot(&ws.request_tabs, &ws.tool_tabs, &paths));
             alive.push(handle);
         }
     }
@@ -380,15 +379,85 @@ enum Section {
     Track,
 }
 
+/// One open request file, or one Bruno collection.
+///
+/// Several of these are open at once, which is why the requests, the declarations
+/// and the reload stamp live here and not on the workspace: `@name = value`
+/// belongs to a file, so two files are two sets of variables, and a file that
+/// changed on disk is one file to reload.
+#[derive(Clone)]
+struct Source {
+    path: std::path::PathBuf,
+    /// File name, for the group header. Kept rather than derived per frame.
+    label: SharedString,
+    requests: Vec<Request>,
+    declared: Vec<(String, String)>,
+    /// Why this source did not load, if it did not. Held per source so one broken
+    /// file does not take the others' requests off the screen with it.
+    error: Option<SharedString>,
+    /// mtime as of the last load. `None` for a path that cannot be stat'ed, which
+    /// the watcher reads as "no news" rather than reloading forever.
+    stamp: Option<std::time::SystemTime>,
+    collapsed: bool,
+}
+
+impl Source {
+    fn new(path: std::path::PathBuf) -> Self {
+        let label = path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| path.display().to_string());
+        let mut source = Self {
+            label: label.into(),
+            path,
+            requests: Vec::new(),
+            declared: Vec::new(),
+            error: None,
+            stamp: None,
+            collapsed: false,
+        };
+        source.reload();
+        source
+    }
+
+    /// Re-read the file. Keeps the old requests on a parse failure — a file being
+    /// edited elsewhere is briefly invalid all the time, and blanking the list on
+    /// every intermediate save would be worse than showing slightly stale entries
+    /// with the reason next to them.
+    fn reload(&mut self) {
+        self.stamp = session::stamp(&self.path);
+        match session::load(&self.path) {
+            Ok(loaded) => {
+                self.requests = loaded.requests;
+                self.declared = loaded.declared;
+                self.error = None;
+            }
+            Err(e) => self.error = Some(format!("{e:#}").into()),
+        }
+    }
+
+    /// Whether the file on disk is newer than what is loaded.
+    fn is_stale(&self) -> bool {
+        match (session::stamp(&self.path), self.stamp) {
+            (Some(now), Some(then)) => now > then,
+            // A file that has just appeared where there was none is news too.
+            (Some(_), None) => true,
+            _ => false,
+        }
+    }
+}
+
 struct Workspace {
     section: Section,
-    // Requests
-    requests: Vec<Request>,
-    source: SharedString,
-    /// Where `requests` came from, so edits can be written back.
-    source_path: Option<std::path::PathBuf>,
+    /// Every open request file, in the order they were opened.
+    sources: Vec<Source>,
+    /// Filters the request list across **every** source at once — with a dozen
+    /// files open, scrolling to find one request is not a plan.
+    request_query: Entity<TextInput>,
     error: Option<SharedString>,
-    /// Environments found next to the opened file.
+    /// Environments found next to the opened files, merged by name: a directory's
+    /// `http-client.env.json` is shared by every `.http` file in it, so two files
+    /// from one directory offer one set of environments, not two identical ones.
     environments: Vec<Environment>,
     selected_env: Option<usize>,
     /// Editable variable rows: name plus a live value editor.
@@ -414,6 +483,17 @@ struct Workspace {
     tab_menu: Option<(usize, gpui::Point<gpui::Pixels>)>,
     /// The tab menu's focus, so Escape reaches it. Per window, like all focus.
     menu_focus: gpui::FocusHandle,
+    /// Width of the list column, dragged by the handle beside it.
+    ///
+    /// A request named "Redirect bewusst nicht folgen" does not fit 264 px and was
+    /// cut off mid-word, so the width had to stop being a constant. Kept in `kv`
+    /// rather than per window: it is a preference about this app, not about one
+    /// window, and a new window opening at someone else's width reads as a bug.
+    sidebar_width: Pixels,
+    /// A drag in progress: where it started, and the width it started from. Both,
+    /// because tracking the delta from the *pointer* is what keeps the handle from
+    /// jumping when the grab was not exactly on its centre.
+    resizing: Option<(Pixels, Pixels)>,
 }
 
 impl Workspace {
@@ -427,11 +507,27 @@ impl Workspace {
         if cx.has_global::<Persist>() {
             cx.global_mut::<Persist>().windows.push(weak);
         }
+        let request_query = cx.new(|cx| TextInput::new(cx, "Search all open files…"));
+        cx.observe(&request_query, |_, _, cx| cx.notify()).detach();
+        // The watcher. One timer for the window, not one per file: it only stats
+        // the open paths, which is a handful of syscalls a second and needs no
+        // platform notification API or extra dependency to be right.
+        cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(WATCH_INTERVAL_MS))
+                    .await;
+                if this.update(cx, |this, cx| this.reload_changed(cx)).is_err() {
+                    // The window is gone.
+                    return;
+                }
+            }
+        })
+        .detach();
         Self {
             section: Section::Requests,
-            requests: Vec::new(),
-            source: "nothing open".into(),
-            source_path: None,
+            sources: Vec::new(),
+            request_query,
             error: None,
             environments: Vec::new(),
             selected_env: None,
@@ -443,7 +539,63 @@ impl Workspace {
             tool_tabs: Tabs::default(),
             tab_menu: None,
             menu_focus: cx.focus_handle(),
+            sidebar_width: stored_sidebar_width(cx),
+            resizing: None,
         }
+    }
+
+    /// Follow a drag of the sidebar handle.
+    fn resize_sidebar(&mut self, to: Pixels, cx: &mut Context<Self>) {
+        let Some((from, started_at)) = self.resizing else {
+            return;
+        };
+        self.sidebar_width = clamp_sidebar(started_at + (to - from));
+        cx.notify();
+    }
+
+    /// Finish the drag and remember the width.
+    ///
+    /// Written once here rather than on every mouse move: a drag is a few hundred
+    /// events and each would be its own transaction.
+    fn end_sidebar_drag(&mut self, cx: &mut Context<Self>) {
+        if self.resizing.take().is_none() {
+            return;
+        }
+        let width = self.sidebar_width;
+        if let Some(store) = cx.try_global::<Persist>().and_then(|p| p.store.as_ref())
+            && let Err(e) = store.set(SIDEBAR_WIDTH_KEY, &f32::from(width).to_string())
+        {
+            // Not worth interrupting the user over: the width is right for this
+            // session either way, it just will not come back.
+            eprintln!("request-pilot: could not remember the sidebar width: {e:#}");
+        }
+        // Every other window shows the same list, so they follow along.
+        cx.refresh_windows();
+        cx.notify();
+    }
+
+    /// The handle between the list and the pane beside it.
+    ///
+    /// Its own element rather than a border on the sidebar: a 1-px border is not
+    /// something a pointer can reliably hit, and the grab area has to be wider
+    /// than the line it appears to be.
+    fn sidebar_handle(&self, t: theme::Theme, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let active = self.resizing.is_some();
+        div()
+            .id("sidebar-handle")
+            .flex_none()
+            .w(theme::space::S2)
+            .h_full()
+            .cursor(gpui::CursorStyle::ResizeLeftRight)
+            .when(active, |d| d.bg(t.accent))
+            .when(!active, |d| d.hover(|s| s.bg(t.accent_wash_strong())))
+            .on_mouse_down(
+                gpui::MouseButton::Left,
+                cx.listener(|this, ev: &gpui::MouseDownEvent, _, cx| {
+                    this.resizing = Some((ev.position.x, this.sidebar_width));
+                    cx.notify();
+                }),
+            )
     }
 
     /// Switch the rail. The single place the section changes by hand, which is
@@ -476,35 +628,169 @@ impl Workspace {
         }
     }
 
-    /// The active tab, when it is a request. `Request(usize)` indexes into
-    /// `self.requests`, which is why `load` drops request tabs.
-    fn active_request(&self) -> Option<(usize, Entity<RequestPane>)> {
+    /// The active tab, when it is a request: its file, its position in it, and the
+    /// pane showing it.
+    fn active_request(&self) -> Option<(std::path::PathBuf, usize, Entity<RequestPane>)> {
         match self.request_tabs.active() {
             Some(Tab {
-                key: TabKey::Request(i),
+                key: TabKey::Request { source, index },
                 content: Content::Request(pane),
                 ..
-            }) => Some((*i, pane.clone())),
+            }) => Some((source.clone(), *index, pane.clone())),
             _ => None,
         }
     }
 
+    fn source_at(&self, path: &Path) -> Option<&Source> {
+        self.sources.iter().find(|s| s.path == path)
+    }
+
+    /// Open `path` as a source, or bring the one already open forward.
+    ///
+    /// A directory is expanded: a folder of `.http` files becomes one source per
+    /// file, because that is what they are — see [`session::http_files_in`]. A
+    /// Bruno collection stays one source with its tree flattened.
+    fn add_source(&mut self, path: &Path, cx: &mut Context<Self>) {
+        let mut paths = vec![path.to_path_buf()];
+        if path.is_dir() {
+            let http = session::http_files_in(path);
+            if !http.is_empty() {
+                paths = http;
+            }
+        }
+        let mut added = 0usize;
+        for path in paths {
+            if let Some(at) = self.sources.iter().position(|s| s.path == path) {
+                // Already open: re-read it rather than opening a second copy, since
+                // asking for a file again is how someone asks for it afresh.
+                self.sources[at].reload();
+                continue;
+            }
+            self.sources.push(Source::new(path));
+            added += 1;
+        }
+        let _ = added;
+        self.after_sources_changed(cx);
+    }
+
+    /// Close a source and every tab that pointed into it.
+    fn close_source(&mut self, path: &Path, cx: &mut Context<Self>) {
+        self.sources.retain(|s| s.path != path);
+        let gone = path.to_path_buf();
+        self.request_tabs
+            .retain(|k| !matches!(k, TabKey::Request { source, .. } if *source == gone));
+        // The menu holds an index into the strip that just shrank.
+        self.tab_menu = None;
+        self.after_sources_changed(cx);
+    }
+
+    /// Environments, variable rows and the status line, after the set of open
+    /// files changed. One place, so no caller can update half of it.
+    fn after_sources_changed(&mut self, cx: &mut Context<Self>) {
+        // Environments come from `http-client.env.json` next to the files, so two
+        // files in one directory yield the same set — merge by name rather than
+        // listing `dev` twice.
+        let mut merged: Vec<Environment> = Vec::new();
+        for source in &self.sources {
+            for env in session::load(&source.path)
+                .map(|l| l.environments)
+                .unwrap_or_default()
+            {
+                if !merged.iter().any(|e| e.name == env.name) {
+                    merged.push(env);
+                }
+            }
+        }
+        // Keep the selection on the *same environment*, not the same index: the
+        // list just changed under it.
+        let was = self
+            .selected_env
+            .and_then(|i| self.environments.get(i))
+            .map(|e| e.name.clone());
+        self.environments = merged;
+        self.selected_env = was
+            .and_then(|name| self.environments.iter().position(|e| e.name == name))
+            .or((!self.environments.is_empty()).then_some(0));
+
+        self.error = self
+            .sources
+            .iter()
+            .find_map(|s| s.error.clone())
+            .or_else(|| {
+                self.sources
+                    .is_empty()
+                    .then(|| SharedString::from("nothing open"))
+            });
+        self.rebuild_var_rows(cx);
+        cx.defer(save_session);
+        cx.notify();
+    }
+
+    /// Re-read whatever changed on disk. Driven by the timer in `new`.
+    fn reload_changed(&mut self, cx: &mut Context<Self>) {
+        let stale: Vec<std::path::PathBuf> = self
+            .sources
+            .iter()
+            .filter(|s| s.is_stale())
+            .map(|s| s.path.clone())
+            .collect();
+        if stale.is_empty() {
+            return;
+        }
+        for path in &stale {
+            if let Some(source) = self.sources.iter_mut().find(|s| s.path == *path) {
+                source.reload();
+            }
+        }
+        // A reloaded file may have fewer requests than it had, so a tab pointing
+        // past the end has to go — otherwise it would render an empty pane and
+        // send nothing. Tabs that still resolve are left alone, which is what
+        // keeps a half-typed body alive across someone else's save.
+        let counts: Vec<(std::path::PathBuf, usize)> = self
+            .sources
+            .iter()
+            .map(|s| (s.path.clone(), s.requests.len()))
+            .collect();
+        self.request_tabs.retain(|k| match k {
+            TabKey::Request { source, index } => counts
+                .iter()
+                .find(|(p, _)| p == source)
+                .is_some_and(|(_, n)| index < n),
+            _ => true,
+        });
+        self.after_sources_changed(cx);
+    }
+
     /// Open request `i` from `self.requests` in a tab, or activate the tab it is
     /// already in. Shared by the sidebar and by session restore.
-    fn open_request(&mut self, i: usize, cx: &mut Context<Self>) {
-        let key = TabKey::Request(i);
+    fn open_request(&mut self, path: &Path, i: usize, cx: &mut Context<Self>) {
+        let key = TabKey::Request {
+            source: path.to_path_buf(),
+            index: i,
+        };
         // Already open here? Activate it, the way Zed does, instead of building
         // a second copy.
         if let Some(at) = self.request_tabs.find(&key) {
             self.request_tabs.activate(at);
             return;
         }
-        let Some(req) = self.requests.get(i).cloned() else {
+        let Some(req) = self
+            .source_at(path)
+            .and_then(|s| s.requests.get(i))
+            .cloned()
+        else {
             return;
         };
         let title = SharedString::from(req.name.clone());
-        let vars = self.effective_vars(cx);
-        let pane = cx.new(|cx| RequestPane::new(req, vars, cx));
+        let vars = self.effective_vars(path, cx);
+        // The directory the file came from, so a `>> file` redirect in it resolves
+        // where the author meant.
+        let base_dir = if path.is_dir() {
+            Some(path.to_path_buf())
+        } else {
+            path.parent().map(Path::to_path_buf)
+        };
+        let pane = cx.new(|cx| RequestPane::new(req, vars, base_dir, cx));
         // A finished response may carry variables for the next request, so watch
         // the pane for them.
         cx.observe(&pane, |this, pane, cx| this.capture_from(&pane, cx))
@@ -515,6 +801,17 @@ impl Workspace {
             content: Content::Request(pane),
             pinned: false,
         });
+    }
+
+    /// Open the variables tab, or activate it if it is already open.
+    fn open_vars(&mut self, cx: &mut Context<Self>) {
+        self.request_tabs.open(Tab {
+            key: TabKey::Vars,
+            title: "Variables".into(),
+            content: Content::Vars,
+            pinned: false,
+        });
+        cx.notify();
     }
 
     /// Same for a tool: the bespoke pane if there is one, otherwise the generic
@@ -547,21 +844,17 @@ impl Workspace {
     /// Anything that no longer resolves is dropped: a renamed tool id silently,
     /// a request file that moved with a note in the status line.
     fn restore(&mut self, session: &WindowSession, window: &mut Window, cx: &mut Context<Self>) {
-        let mut loaded = None;
         let plan = tabs::plan(session, |path| {
-            let l = session::load(path).ok()?;
-            let n = l.requests.len();
-            loaded = Some(l);
-            Some(n)
+            session::load(path).ok().map(|l| l.requests.len())
         });
-        if let (Some(l), Some(path)) = (loaded, plan.source.clone()) {
-            self.source = path.display().to_string().into();
-            self.source_path = Some(path);
-            self.requests = l.requests;
-            self.environments = l.environments;
-            self.selected_env = (!self.environments.is_empty()).then_some(0);
-            self.rebuild_var_rows(&l.declared, cx);
+        // Every file the plan could load becomes a source, in the order its tabs
+        // first named it.
+        for path in &plan.sources {
+            if !self.sources.iter().any(|s| s.path == *path) {
+                self.sources.push(Source::new(path.clone()));
+            }
         }
+        self.after_sources_changed(cx);
         // Each entry knows its section, and `open_tool`/`open_request` already
         // write into the matching list.
         let mut active = Vec::new();
@@ -577,8 +870,12 @@ impl Workspace {
                         None => continue,
                     }
                 }
-                Restore::Request { index, .. } => {
-                    self.open_request(*index, cx);
+                Restore::Request { path, index, .. } => {
+                    self.open_request(&path.clone(), *index, cx);
+                    &mut self.request_tabs
+                }
+                Restore::Vars { .. } => {
+                    self.open_vars(cx);
                     &mut self.request_tabs
                 }
             };
@@ -605,7 +902,7 @@ impl Workspace {
         for key in active {
             let list = match key {
                 TabKey::Tool(_) => &mut self.tool_tabs,
-                TabKey::Request(_) => &mut self.request_tabs,
+                TabKey::Request { .. } | TabKey::Vars => &mut self.request_tabs,
             };
             if let Some(at) = list.find(&key) {
                 list.activate(at);
@@ -618,43 +915,41 @@ impl Workspace {
             (None, Some(Restore::Tool { .. })) => Section::Tools,
             _ => Section::Requests,
         };
-        self.error = plan.note.map(Into::into);
+        // A note from the plan is about a file that is *gone*, which outranks the
+        // per-source status `after_sources_changed` just worked out.
+        if let Some(note) = plan.note {
+            self.error = Some(note.into());
+        }
     }
 
-    /// A `.http` file yields many requests; a directory is a Bruno collection.
+    /// Close everything and open `path` — what "Open file…" does.
+    ///
+    /// The additive door is [`Self::add_source`]; this one exists because opening a
+    /// file from an empty window and adding a fifth one to four are different
+    /// intentions, and the dialog offers both.
     fn load(&mut self, path: &Path, cx: &mut Context<Self>) {
-        // Request tabs point at indices into the old `requests`, so they cannot
-        // survive a different file. The Tools strip is its own list and so is
-        // untouched by definition, where before it had to be filtered around.
+        self.sources.clear();
         self.request_tabs.close_all();
-        // The menu points at an index into the old list.
+        // The menu points at an index into the strip that just emptied.
         self.tab_menu = None;
-        self.error = None;
         self.captured.clear();
-        self.environments.clear();
-        self.selected_env = None;
-
-        match session::load(path) {
-            Ok(loaded) => {
-                self.source = path.display().to_string().into();
-                self.source_path = Some(path.to_path_buf());
-                self.requests = loaded.requests;
-                self.environments = loaded.environments;
-                self.selected_env = (!self.environments.is_empty()).then_some(0);
-                self.rebuild_var_rows(&loaded.declared, cx);
-                if self.requests.is_empty() {
-                    self.error = Some("no requests found in that file".into());
-                }
-            }
-            // Errors from `session::load` already name the file.
-            Err(e) => self.error = Some(e.to_string().into()),
-        }
-        cx.notify();
+        self.add_source(path, cx);
     }
 
     /// Rebuild the editable variable rows from the selected environment plus
     /// any in-file `@name = value` declarations.
-    fn rebuild_var_rows(&mut self, declared: &[(String, String)], cx: &mut Context<Self>) {
+    /// Rebuild the editable rows from the selected environment plus the loaded
+    /// file's declarations. Takes no argument: the declarations live on `self`, so
+    /// a caller cannot forget them the way the environment chip used to.
+    fn rebuild_var_rows(&mut self, cx: &mut Context<Self>) {
+        // Every open file's declarations, in file order, so the rows show what is
+        // actually in play. A name in two files appears once with the later file's
+        // value; sending still uses the request's own file — see `effective_vars`.
+        let declared: Vec<(String, String)> = self
+            .sources
+            .iter()
+            .flat_map(|s| s.declared.iter().cloned())
+            .collect();
         let mut seeded: Vec<(String, String)> = Vec::new();
         if let Some(env) = self.selected_env.and_then(|i| self.environments.get(i)) {
             for (name, value, _secret) in &env.vars {
@@ -662,7 +957,7 @@ impl Workspace {
             }
         }
         // File declarations override the environment, as in IntelliJ.
-        for (name, value) in declared {
+        for (name, value) in &declared {
             match seeded.iter_mut().find(|(n, _)| n == name) {
                 Some(slot) => slot.1 = value.clone(),
                 None => seeded.push((name.clone(), value.clone())),
@@ -681,10 +976,22 @@ impl Workspace {
     }
 
     /// What the executor actually gets: rows as edited, then captured values.
-    fn effective_vars(&self, cx: &gpui::App) -> Vars {
+    /// The variables a request in `path` resolves against.
+    ///
+    /// Its **own** file's declarations, not every open file's: `@baseUrl` in one
+    /// file has nothing to do with `@baseUrl` in the one next to it, and letting
+    /// them collide would make a request's behaviour depend on which other files
+    /// happen to be open. The edited rows and the captured values are shared,
+    /// because the environment is shared and a captured token is the point.
+    fn effective_vars(&self, path: &Path, cx: &gpui::App) -> Vars {
         let mut out = Vars::new();
         for (name, input) in &self.var_rows {
             out.insert(name.clone(), input.read(cx).text().to_string());
+        }
+        if let Some(source) = self.source_at(path) {
+            for (name, value) in &source.declared {
+                out.insert(name.clone(), value.clone());
+            }
         }
         for (name, value) in &self.captured {
             out.insert(name.clone(), value.clone());
@@ -721,8 +1028,7 @@ impl Workspace {
     /// that needs `Item::Request`'s path threaded through the flat sidebar,
     /// which is the change to make when folder editing lands.
     fn save(&mut self, cx: &mut Context<Self>) {
-        let (Some(path), Some((i, pane))) = (self.source_path.clone(), self.active_request())
-        else {
+        let Some((path, i, pane)) = self.active_request() else {
             return;
         };
         if path.is_dir() {
@@ -731,11 +1037,17 @@ impl Workspace {
             return;
         }
         let edited = pane.read(cx).edited(cx);
-        self.requests[i] = edited;
+        let Some(source) = self.sources.iter_mut().find(|s| s.path == path) else {
+            return;
+        };
+        if i >= source.requests.len() {
+            return;
+        }
+        source.requests[i] = edited;
         let text = if path.extension().is_some_and(|e| e == "bru") {
-            bru::serialize(&self.requests[i])
+            bru::serialize(&source.requests[i])
         } else {
-            httpfile::serialize(&self.requests)
+            httpfile::serialize(&source.requests)
         };
         match std::fs::write(&path, text) {
             Ok(()) => self.error = Some(format!("saved {}", path.display()).into()),
@@ -744,18 +1056,35 @@ impl Workspace {
         cx.notify();
     }
 
-    fn open_dialog(&mut self, directories: bool, cx: &mut Context<Self>) {
+    /// The file dialog. `add` keeps what is already open and appends; without it
+    /// the picked path replaces everything.
+    ///
+    /// Multi-select is on for the additive case only: picking three files to
+    /// *replace* one would have to silently drop two of them, and a dialog that
+    /// ignores two thirds of what you chose is worse than one that cannot offer it.
+    fn open_dialog(&mut self, directories: bool, add: bool, cx: &mut Context<Self>) {
         let rx = cx.prompt_for_paths(PathPromptOptions {
             files: !directories,
             directories,
-            multiple: false,
+            multiple: add,
             prompt: None,
         });
         cx.spawn(async move |this, cx| {
             if let Ok(Ok(Some(paths))) = rx.await
-                && let Some(path) = paths.into_iter().next()
+                && !paths.is_empty()
             {
-                this.update(cx, |this, cx| this.load(&path, cx)).ok();
+                this.update(cx, |this, cx| {
+                    for (n, path) in paths.iter().enumerate() {
+                        // The first path replaces when this is not an add; the rest
+                        // always append, or they would each undo the one before.
+                        if n == 0 && !add {
+                            this.load(path, cx);
+                        } else {
+                            this.add_source(path, cx);
+                        }
+                    }
+                })
+                .ok();
             }
         })
         .detach();
@@ -872,32 +1201,161 @@ impl Workspace {
             .child(gear(t))
     }
 
+    /// One group per open file, and a box that searches across all of them.
+    ///
+    /// The search looks at the request name, its method and its URL, so "post" and
+    /// "films" both find something — and it is over every open file at once, which
+    /// is the point of having several open. A group with no match disappears
+    /// entirely rather than sitting there as an empty header.
     fn requests_list(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let t = theme::theme(cx);
-        let mut rows = Vec::with_capacity(self.requests.len());
+        let query = self.request_query.read(cx).text().trim().to_lowercase();
         let open = self.request_tabs.active_key().cloned();
-        for (i, r) in self.requests.iter().enumerate() {
-            let active = open == Some(TabKey::Request(i));
-            rows.push(
-                sidebar_row(t, active)
-                    .id(i)
-                    .child(method_badge(t, &r.method))
+        let mut groups = Vec::new();
+        let mut shown = 0usize;
+        for source in &self.sources {
+            let path = source.path.clone();
+            let mut rows = Vec::new();
+            for (i, r) in source.requests.iter().enumerate() {
+                if !query.is_empty()
+                    && !r.name.to_lowercase().contains(&query)
+                    && !r.method.to_lowercase().contains(&query)
+                    && !r.url.to_lowercase().contains(&query)
+                {
+                    continue;
+                }
+                let active = open
+                    == Some(TabKey::Request {
+                        source: path.clone(),
+                        index: i,
+                    });
+                let full = SharedString::from(r.name.clone());
+                let at = path.clone();
+                rows.push(
+                    sidebar_row(t, active)
+                        // Unique across files: two files both have a request 0.
+                        .id(SharedString::from(format!("{}-{i}", path.display())))
+                        .tooltip({
+                            let full = full.clone();
+                            move |_, cx| cx.new(|_| Tip(full.clone())).into()
+                        })
+                        .child(method_badge(t, &r.method))
+                        .child(
+                            div()
+                                .flex_1()
+                                .truncate()
+                                .text_color(if active { t.accent } else { t.text })
+                                .child(full),
+                        )
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.open_request(&at, i, cx);
+                            cx.defer(save_session);
+                            cx.notify();
+                        })),
+                );
+            }
+            shown += rows.len();
+            // A search that matches nothing in this file hides the file; without a
+            // search an empty file still shows, so "it opened and holds nothing" is
+            // visible rather than looking like it failed to open.
+            if rows.is_empty() && !query.is_empty() {
+                continue;
+            }
+            let collapsed = source.collapsed;
+            let count = source.requests.len();
+            let closing = path.clone();
+            let toggling = path.clone();
+            groups.push(
+                div()
+                    .flex()
+                    .flex_col()
                     .child(
                         div()
-                            .flex_1()
-                            .truncate()
-                            .text_color(if active { t.accent } else { t.text })
-                            .child(SharedString::from(r.name.clone())),
+                            .id(SharedString::from(format!("group-{}", path.display())))
+                            .flex()
+                            .items_center()
+                            .gap(theme::space::S1)
+                            .h(theme::control::MD)
+                            .px(theme::space::S3)
+                            .text_size(theme::text::LABEL)
+                            .text_color(t.text_label())
+                            .cursor_pointer()
+                            .hover(|s| s.bg(t.hover()))
+                            .tooltip({
+                                let full = SharedString::from(path.display().to_string());
+                                move |_, cx| cx.new(|_| Tip(full.clone())).into()
+                            })
+                            .child(theme::icon_tinted(
+                                if collapsed {
+                                    "chevron_right"
+                                } else {
+                                    "chevron_left"
+                                },
+                                theme::text::SMALL,
+                                t.text_muted(),
+                            ))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .truncate()
+                                    .child(source.label.clone()),
+                            )
+                            .child(
+                                div()
+                                    .flex_none()
+                                    .text_size(theme::text::TINY)
+                                    .text_color(t.text_meta())
+                                    .child(SharedString::from(count.to_string())),
+                            )
+                            // Closing one file must not be reachable by accident,
+                            // so it is its own target rather than part of the row.
+                            .child(
+                                div()
+                                    .id(SharedString::from(format!("close-{}", path.display())))
+                                    .flex()
+                                    .flex_none()
+                                    .p(theme::space::S1 * 0.5)
+                                    .rounded(theme::radius::PILL)
+                                    .hover(|s| s.bg(t.active()))
+                                    .child(theme::icon_tinted(
+                                        "close",
+                                        theme::text::SMALL,
+                                        t.text_muted(),
+                                    ))
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.close_source(&closing, cx)
+                                    })),
+                            )
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                if let Some(source) =
+                                    this.sources.iter_mut().find(|s| s.path == toggling)
+                                {
+                                    source.collapsed = !source.collapsed;
+                                }
+                                cx.notify();
+                            })),
                     )
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.open_request(i, cx);
-                        cx.defer(save_session);
-                        cx.notify();
-                    })),
+                    .when(!collapsed, |d| d.children(rows))
+                    .when_some(source.error.clone(), |d, why| {
+                        d.child(
+                            div()
+                                .px(theme::space::S3)
+                                .pb(theme::space::S1)
+                                .text_size(theme::text::TINY)
+                                .text_color(t.danger())
+                                .child(why),
+                        )
+                    }),
             );
         }
-        let empty = self.requests.is_empty();
-        sidebar(t)
+        let empty = groups.is_empty();
+        let count: SharedString = if query.is_empty() {
+            format!("{} files", self.sources.len()).into()
+        } else {
+            format!("{shown} of {} files", self.sources.len()).into()
+        };
+        sidebar(t, self.sidebar_width)
             .child(section(cx, t, "Collection"))
             .child(
                 div()
@@ -910,15 +1368,35 @@ impl Workspace {
                         t,
                         "open-file",
                         "file",
-                        "Open file…",
-                        cx.listener(|this, _, _, cx| this.open_dialog(false, cx)),
+                        "Open…",
+                        cx.listener(|this, _, _, cx| this.open_dialog(false, false, cx)),
+                    ))
+                    // Adds instead of replacing, and takes several files at once —
+                    // "open" and "also open this" are different intentions and now
+                    // have different buttons.
+                    .child(button(
+                        t,
+                        "add-file",
+                        "plus",
+                        "Add…",
+                        cx.listener(|this, _, _, cx| this.open_dialog(false, true, cx)),
                     ))
                     .child(button(
                         t,
                         "open-dir",
                         "folder",
-                        "Collection…",
-                        cx.listener(|this, _, _, cx| this.open_dialog(true, cx)),
+                        "Folder…",
+                        cx.listener(|this, _, _, cx| this.open_dialog(true, true, cx)),
+                    ))
+                    .child(button(
+                        t,
+                        "open-vars",
+                        "settings",
+                        "Variables",
+                        cx.listener(|this, _, _, cx| {
+                            this.open_vars(cx);
+                            cx.defer(save_session);
+                        }),
                     ))
                     .child(primary_button(
                         t,
@@ -939,7 +1417,27 @@ impl Workspace {
                     } else {
                         t.text_meta()
                     })
-                    .child(self.error.clone().unwrap_or_else(|| self.source.clone())),
+                    .child(self.error.clone().unwrap_or(count)),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(theme::space::S2)
+                    .px(theme::space::S3)
+                    .pb(theme::space::S2)
+                    .child(theme::icon_tinted(
+                        "search",
+                        theme::text::CONTROL,
+                        t.text_muted(),
+                    ))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_1()
+                            .min_w_0()
+                            .child(self.request_query.clone()),
+                    ),
             )
             .child(theme::divider(&t))
             .child(
@@ -954,16 +1452,30 @@ impl Workspace {
                             cx,
                             t,
                             "folder",
-                            "Nothing loaded",
-                            "Open a .http file or a Bruno collection.",
+                            if self.sources.is_empty() {
+                                "Nothing loaded"
+                            } else {
+                                "No match"
+                            },
+                            if self.sources.is_empty() {
+                                "Open a .http file or a Bruno collection, and add more with Add…"
+                            } else {
+                                "Nothing in the open files matches that search."
+                            },
                         ))
                     })
-                    .children(rows),
+                    .children(groups),
             )
-            .child(self.vars_panel(cx))
     }
 
-    fn vars_panel(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    /// The variables tab: environments, the editable values, and what earlier
+    /// responses captured.
+    ///
+    /// A pane and no longer a strip under the request list. Two reasons, both
+    /// from the same screenshot: the list of requests was down to about nine
+    /// visible rows, and every value editor was as narrow as the sidebar. Here the
+    /// fields wrap into as many columns as the width allows.
+    fn vars_pane(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let t = theme::theme(cx);
         let mut env_chips = Vec::with_capacity(self.environments.len());
         for (i, env) in self.environments.iter().enumerate() {
@@ -989,15 +1501,16 @@ impl Workspace {
                     .child(SharedString::from(env.name.clone()))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.selected_env = Some(i);
-                        this.rebuild_var_rows(&[], cx);
+                        this.rebuild_var_rows(cx);
                         cx.notify();
                     })),
             );
         }
 
-        // `.field`: the label sits above its input, which is how the system
-        // states it — and it gives the value editor the sidebar's full width
-        // instead of squeezing it into whatever a name column leaves over.
+        // `.field`: the label sits above its input, which is how the system states
+        // it. Each field claims a column of at least `GRID_CELL` and then shares
+        // what is left, so a wide pane lays them out side by side instead of one
+        // long column of short boxes.
         let mut rows = Vec::with_capacity(self.var_rows.len());
         for (name, input) in &self.var_rows {
             rows.push(
@@ -1005,6 +1518,9 @@ impl Workspace {
                     .flex()
                     .flex_col()
                     .gap(theme::space::S1)
+                    .flex_basis(theme::size::GRID_CELL)
+                    .flex_grow()
+                    .min_w(theme::size::GRID_CELL_MIN)
                     .child(
                         div()
                             .truncate()
@@ -1029,14 +1545,15 @@ impl Workspace {
         }
 
         div()
+            .id("vars-pane")
             .flex()
             .flex_col()
-            .gap(theme::space::S2)
-            .pb(theme::space::S3)
-            .px(theme::space::S3)
-            .border_t_1()
-            .border_color(t.divider)
-            .child(section(cx, t, "Variables").px_0())
+            .gap(theme::space::S3)
+            .size_full()
+            .min_w_0()
+            .p(theme::space::S4)
+            .overflow_y_scroll()
+            .child(section(cx, t, "Environment").px_0().pt_0())
             .when(!env_chips.is_empty(), |d| {
                 d.child(
                     div()
@@ -1046,7 +1563,16 @@ impl Workspace {
                         .children(env_chips),
                 )
             })
-            .children(rows)
+            .child(section(cx, t, "Variables").px_0().pt_0())
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap_x(theme::space::S4)
+                    .gap_y(theme::space::S3)
+                    .min_w_0()
+                    .children(rows),
+            )
             .when(self.var_rows.is_empty(), |d| {
                 d.child(
                     div()
@@ -1056,7 +1582,8 @@ impl Workspace {
                 )
             })
             .when(!caught.is_empty(), |d| {
-                d.child(section(cx, t, "Captured").px_0()).children(caught)
+                d.child(section(cx, t, "Captured from responses").px_0().pt_0())
+                    .children(caught)
             })
     }
 
@@ -1072,7 +1599,7 @@ impl Workspace {
             rows.push(self.tool_row(tool, selected == Some(TabKey::Tool(tool.id)), cx));
         }
         let t = theme::theme(cx);
-        sidebar(t)
+        sidebar(t, self.sidebar_width)
             .child(section(cx, t, "Tools"))
             .child(
                 div()
@@ -1119,6 +1646,8 @@ impl Workspace {
         let (fill, ink) = t.tag_neutral();
         sidebar_row(t, active)
             .id(tool.id)
+            // Tool names run long too — "Encode/decode url formatted strings".
+            .tooltip(move |_, cx| cx.new(|_| Tip(tool.name.into())).into())
             .child(
                 div()
                     .flex_1()
@@ -1159,15 +1688,15 @@ impl Workspace {
             return;
         };
         let section = match tab.key {
-            TabKey::Request(_) => Section::Requests,
+            TabKey::Request { .. } | TabKey::Vars => Section::Requests,
             TabKey::Tool(_) => Section::Tools,
         };
         // The new window shares the request/variable state, so a detached
         // request can still be sent with the same environment. `var_rows` holds
         // entities, so both windows edit the same value editors.
-        let requests = self.requests.clone();
-        let source = self.source.clone();
-        let source_path = self.source_path.clone();
+        // The new window shares the open files, so a detached request can still be
+        // sent — and saved back to the file it came from.
+        let sources = self.sources.clone();
         let environments = self.environments.clone();
         let selected_env = self.selected_env;
         let var_rows = self.var_rows.clone();
@@ -1182,9 +1711,7 @@ impl Workspace {
                 cx.new(move |cx| {
                     let mut ws = Workspace::new(cx);
                     ws.section = section;
-                    ws.requests = requests;
-                    ws.source = source;
-                    ws.source_path = source_path;
+                    ws.sources = sources;
                     ws.environments = environments;
                     ws.selected_env = selected_env;
                     ws.captured = captured;
@@ -1198,7 +1725,7 @@ impl Workspace {
                     }
                     match tab.key {
                         TabKey::Tool(_) => ws.tool_tabs.open(tab),
-                        TabKey::Request(_) => ws.request_tabs.open(tab),
+                        TabKey::Request { .. } | TabKey::Vars => ws.request_tabs.open(tab),
                     }
                     ws
                 })
@@ -1832,6 +2359,31 @@ fn method_badge(t: theme::Theme, method: &str) -> impl IntoElement + use<> {
 /// The shared geometry of a sidebar list row, so requests and tools cannot
 /// drift apart. Selected is an accent wash in the pill; hover is a plain ink
 /// wash, which is visibly a different thing.
+/// A one-line tooltip.
+///
+/// gpui takes an `AnyView` for a tooltip, so the smallest thing that works is a
+/// view holding a string. It exists because a truncated row is unreadable even
+/// after the sidebar has been widened — a long enough name still ends in an
+/// ellipsis, and then the only way to read it is to hover.
+struct Tip(SharedString);
+
+impl Render for Tip {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let t = theme::theme(cx);
+        div()
+            .px(theme::space::S2)
+            .py(theme::space::S1)
+            .rounded(theme::radius::MD)
+            .bg(t.surface)
+            .border_1()
+            .border_color(t.divider)
+            .shadow_md()
+            .text_size(theme::text::SMALL)
+            .text_color(t.text)
+            .child(self.0.clone())
+    }
+}
+
 fn sidebar_row(t: theme::Theme, selected: bool) -> gpui::Div {
     div()
         .flex()
@@ -1848,11 +2400,12 @@ fn sidebar_row(t: theme::Theme, selected: bool) -> gpui::Div {
 }
 
 /// The sidebar column itself: both lists are the same box.
-fn sidebar(t: theme::Theme) -> gpui::Div {
+fn sidebar(t: theme::Theme, width: Pixels) -> gpui::Div {
     div()
         .flex()
         .flex_col()
-        .w(theme::size::SIDEBAR)
+        .flex_none()
+        .w(width)
         .h_full()
         .bg(t.bg)
         .border_r_1()
@@ -1901,8 +2454,8 @@ impl Render for Workspace {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         // Variable edits are typed into their own editors, so push the current
         // set into the pane before it can be sent.
-        if let Some((_, pane)) = self.active_request() {
-            let vars = self.effective_vars(cx);
+        if let Some((path, _, pane)) = self.active_request() {
+            let vars = self.effective_vars(&path, cx);
             pane.update(cx, |pane, _| pane.set_vars(vars));
         }
         let t = theme::theme(cx);
@@ -1926,6 +2479,7 @@ impl Render for Workspace {
                 Some(Content::Generic(pane)) => pane.clone().into_any_element(),
                 Some(Content::Custom(view)) => view.clone().into_any_element(),
                 Some(Content::Request(pane)) => pane.clone().into_any_element(),
+                Some(Content::Vars) => self.vars_pane(cx).into_any_element(),
                 Some(Content::Unavailable(reason)) => div()
                     .flex()
                     .flex_1()
@@ -1957,6 +2511,7 @@ impl Render for Workspace {
                 .min_w_0()
                 .h_full()
                 .child(list)
+                .child(self.sidebar_handle(t, cx))
                 .child(
                     div()
                         .flex()
@@ -1997,6 +2552,27 @@ impl Render for Workspace {
             .text_size(theme::text::BODY)
             .line_height(theme::text::BODY_LINE)
             .text_color(t.text)
+            // The move and release listeners sit on the root, not on the handle:
+            // a pointer dragging a 9-px strip leaves it immediately, and an
+            // element only hears about moves over itself. Only while a drag is
+            // live, so the rest of the time the root has no mouse listeners at
+            // all.
+            .when(self.resizing.is_some(), |d| {
+                d.on_mouse_move(cx.listener(|this, ev: &gpui::MouseMoveEvent, _, cx| {
+                    this.resize_sidebar(ev.position.x, cx)
+                }))
+                .on_mouse_up(
+                    gpui::MouseButton::Left,
+                    cx.listener(|this, _, _, cx| this.end_sidebar_drag(cx)),
+                )
+                // A release outside the window never arrives as `on_mouse_up`, so
+                // without this the sidebar would still be following the pointer
+                // after the button was let go.
+                .on_mouse_up_out(
+                    gpui::MouseButton::Left,
+                    cx.listener(|this, _, _, cx| this.end_sidebar_drag(cx)),
+                )
+            })
             .child(self.title_bar(cx))
             .child(
                 div()
@@ -2007,6 +2583,41 @@ impl Render for Workspace {
                     .child(body),
             )
             .when_some(tab_menu, |d, menu| d.child(menu))
+    }
+}
+
+/// How often the open files are stat'ed for an outside change.
+///
+/// ponytail: polling, not a platform watcher. A handful of `stat` calls a second
+/// is nothing, it behaves the same on every platform, and it needs no dependency.
+/// The upgrade path if someone opens hundreds of files is the `notify` crate.
+const WATCH_INTERVAL_MS: u64 = 900;
+
+/// Where the dragged sidebar width is remembered, and the bounds it is held to.
+///
+/// The floor is the width of the two buttons in the list header; the ceiling is
+/// generous but finite, because a sidebar that can eat the whole window is a way
+/// to lose the pane behind it with no way back.
+const SIDEBAR_WIDTH_KEY: &str = "ui.sidebar_width";
+const SIDEBAR_MIN: Pixels = px(200.);
+const SIDEBAR_MAX: Pixels = px(720.);
+
+fn clamp_sidebar(width: Pixels) -> Pixels {
+    width.max(SIDEBAR_MIN).min(SIDEBAR_MAX)
+}
+
+/// The remembered width, or the design's own. A stored value that no longer
+/// parses, or that a smaller screen has made absurd, is clamped rather than
+/// honoured — the alternative is a window that opens unusable.
+fn stored_sidebar_width(cx: &App) -> Pixels {
+    let stored = cx
+        .try_global::<Persist>()
+        .and_then(|p| p.store.as_ref())
+        .and_then(|store| store.get(SIDEBAR_WIDTH_KEY).ok().flatten())
+        .and_then(|v| v.parse::<f32>().ok());
+    match stored {
+        Some(w) => clamp_sidebar(px(w)),
+        None => theme::size::SIDEBAR,
     }
 }
 

@@ -79,6 +79,43 @@ pub fn load(path: &Path) -> Result<Loaded> {
     }
 }
 
+/// Every `.http` file directly inside `dir`, sorted by name.
+///
+/// **Two `.http` files in one directory are two sources, not one.** That is
+/// JetBrains' own model: the `@name = value` declarations belong to the file, so
+/// two files are two unrelated sets of requests. What the *directory* shares is
+/// `http-client.env.json`, which [`load`] already picks up by walking the
+/// ancestors. A Bruno collection is the other case and stays a tree.
+///
+/// Not recursive: a directory of directories of `.http` files is a project layout
+/// nobody has asked for, and walking into `node_modules` by accident is the sort
+/// of thing that makes an app feel broken.
+pub fn http_files_in(dir: &Path) -> Vec<std::path::PathBuf> {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut out: Vec<std::path::PathBuf> = entries
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .filter(|p| {
+            p.is_file()
+                && p.extension()
+                    .is_some_and(|e| e.eq_ignore_ascii_case("http"))
+        })
+        .collect();
+    out.sort();
+    out
+}
+
+/// When `path` last changed, for the watcher.
+///
+/// `None` for a path that cannot be stat'ed — a file that has been deleted or a
+/// platform without mtimes. The watcher treats `None` as "no news", so a missing
+/// file does not reload in a loop.
+pub fn stamp(path: &Path) -> Option<std::time::SystemTime> {
+    std::fs::metadata(path).and_then(|m| m.modified()).ok()
+}
+
 /// Read as UTF-8, replacing invalid sequences rather than refusing the file.
 ///
 /// A request file with one stray byte in a comment is still worth opening, and
@@ -286,6 +323,41 @@ mod tests {
             Ok(loaded) => assert!(loaded.requests.is_empty()),
             Err(e) => assert!(e.to_string().contains("rp-session-notacoll"), "{e}"),
         }
+    }
+
+    #[test]
+    fn a_directory_of_http_files_yields_one_source_per_file_sorted() {
+        let t = Tmp::new("many-http");
+        t.write("b.http", "GET https://example.com/b\n");
+        t.write("a.http", "GET https://example.com/a\n");
+        t.write("notes.txt", "not a request file");
+        t.write("nested/c.http", "GET https://example.com/c\n");
+        let found = http_files_in(&t.0);
+        let names: Vec<String> = found
+            .iter()
+            .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, ["a.http", "b.http"], "sorted, and only .http");
+        // Each is its own source, with its own declarations.
+        for path in &found {
+            assert_eq!(load(path).unwrap().requests.len(), 1);
+        }
+        // A directory with no .http files is not an error, just empty.
+        assert!(http_files_in(&t.0.join("nested/missing")).is_empty());
+    }
+
+    #[test]
+    fn a_stamp_changes_when_the_file_does_and_is_none_when_it_is_gone() {
+        let t = Tmp::new("stamp");
+        let path = t.write("a.http", "GET https://example.com/\n");
+        let first = stamp(&path).expect("a written file has a stamp");
+        // Filesystem timestamps are coarse, so force the change rather than
+        // waiting on the clock — what matters is that a rewrite is detectable.
+        std::fs::write(&path, "GET https://example.com/changed\n").unwrap();
+        let second = stamp(&path).expect("still there");
+        assert!(second >= first);
+        std::fs::remove_file(&path).unwrap();
+        assert_eq!(stamp(&path), None, "a deleted file has no stamp");
     }
 
     #[test]

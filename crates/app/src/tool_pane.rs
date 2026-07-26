@@ -12,6 +12,7 @@
 //! * **Radio list** — a wrapped set of dot-and-label choices, for a `Select`
 //!   with too many options to segment.
 use crate::editor::Editor;
+use crate::reference;
 use crate::text_input::TextInput;
 use crate::theme::{self, Theme, control, radius, size, space, text};
 use gpui::{
@@ -482,6 +483,48 @@ impl ToolPane {
         rows
     }
 
+    /// A reference page, set as structured text.
+    ///
+    /// The tool's own filter field has already narrowed `text` if it has one;
+    /// filtering the parsed blocks as well is what keeps a hit's heading with it
+    /// and a matched table row under its header, which no amount of filtering
+    /// lines of text can do.
+    fn reference_page(
+        &self,
+        text: &str,
+        t: &Theme,
+        cx: &Context<Self>,
+    ) -> impl IntoElement + use<> {
+        let blocks = reference::parse(text);
+        let query = self
+            .tool
+            .fields
+            .first()
+            .filter(|f| f.key == FILTER_KEY)
+            .and_then(|f| self.inputs.iter().find(|(g, _)| g.key == f.key))
+            .map(|(_, input)| input.text(cx))
+            .unwrap_or_default();
+        let blocks = reference::filter(&blocks, &query);
+        let empty = blocks.is_empty();
+        div()
+            .id("reference-page")
+            .flex()
+            .flex_col()
+            .gap(space::S2)
+            .flex_1()
+            .min_h_0()
+            .overflow_y_scroll()
+            .when(empty, |d| {
+                d.child(
+                    div()
+                        .text_size(text::BODY)
+                        .text_color(t.text_muted())
+                        .child("Nothing on this page matches that search."),
+                )
+            })
+            .children(reference::page(&blocks, t))
+    }
+
     /// Result or error, in a card with a copy affordance. An error is styled as
     /// one, so a failure never reads as output.
     fn result_panel(&self, t: &Theme, cx: &mut Context<Self>) -> impl IntoElement + use<> {
@@ -608,6 +651,12 @@ impl Render for ToolPane {
                     )
                     .children(rows),
             )
-            .child(self.result_panel(&t, cx))
+            // A reference page is text to read, so it is set as one: headings,
+            // prose, code and tables. Only computed output goes in the result
+            // card, where "Result" and a copy button mean something.
+            .map(|d| match (self.is_reference(), &self.output) {
+                (true, Ok(text)) => d.child(self.reference_page(text, &t, cx)),
+                _ => d.child(self.result_panel(&t, cx)),
+            })
     }
 }

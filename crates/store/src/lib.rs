@@ -87,6 +87,19 @@ const MIGRATIONS: &[&str] = &[
     r#"
     ALTER TABLE session_tab ADD COLUMN active INTEGER NOT NULL DEFAULT 0;
     "#,
+    // v5: the request files a window has open.
+    //
+    // Which files are open used to be inferred from the tabs, since a request tab
+    // records its own path. That loses a file with no tab open in it — and adding
+    // four files, opening one and restarting is exactly how someone uses this.
+    r#"
+    CREATE TABLE session_source (
+        window_id INTEGER NOT NULL REFERENCES session_window(id) ON DELETE CASCADE,
+        position  INTEGER NOT NULL,
+        path      TEXT    NOT NULL,
+        PRIMARY KEY (window_id, position)
+    );
+    "#,
 ];
 
 /// What a restored tab needs in order to be rebuilt.
@@ -111,6 +124,9 @@ pub struct TabRecord {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct WindowSession {
+    /// Every request file the window has open, in order. Independent of `tabs`: a
+    /// file with nothing open in it is still open.
+    pub sources: Vec<String>,
     pub tabs: Vec<TabRecord>,
     /// Kept for databases written before v4, where one index per window was the
     /// whole story. New writers set [`TabRecord::active`] per kind instead; this
@@ -202,6 +218,12 @@ impl Store {
                 params![w as i64, window.active_tab.map(|i| i as i64)],
             )?;
             let window_id = tx.last_insert_rowid();
+            for (n, path) in window.sources.iter().enumerate() {
+                tx.execute(
+                    "INSERT INTO session_source (window_id, position, path) VALUES (?1, ?2, ?3)",
+                    params![window_id, n as i64, path],
+                )?;
+            }
             for (t, tab) in window.tabs.iter().enumerate() {
                 tx.execute(
                     "INSERT INTO session_tab \
@@ -233,6 +255,12 @@ impl Store {
             .collect::<rusqlite::Result<_>>()?;
 
         for (id, active) in rows {
+            let mut source_stmt = self.conn.prepare(
+                "SELECT path FROM session_source WHERE window_id = ?1 ORDER BY position",
+            )?;
+            let sources: Vec<String> = source_stmt
+                .query_map([id], |r| r.get(0))?
+                .collect::<rusqlite::Result<_>>()?;
             let mut tab_stmt = self.conn.prepare(
                 "SELECT kind, key, detail, pinned, active FROM session_tab \
                  WHERE window_id = ?1 ORDER BY position",
@@ -254,7 +282,11 @@ impl Store {
                 .map(|i| i as usize)
                 .filter(|i| *i < tabs.len())
                 .or(if tabs.is_empty() { None } else { Some(0) });
-            windows.push(WindowSession { tabs, active_tab });
+            windows.push(WindowSession {
+                sources,
+                tabs,
+                active_tab,
+            });
         }
         Ok(windows)
     }
@@ -314,6 +346,7 @@ mod tests {
             let mut store = Store::open_at(&path).unwrap();
             store
                 .save_session(&[WindowSession {
+                    sources: Vec::new(),
                     tabs: vec![tab("tool", "base64-string-converter")],
                     active_tab: Some(0),
                 }])
@@ -332,6 +365,7 @@ mod tests {
         let mut store = Store::open_in_memory().unwrap();
         let windows = vec![
             WindowSession {
+                sources: Vec::new(),
                 tabs: vec![
                     tab("tool", "base64-string-converter"),
                     TabRecord {
@@ -345,6 +379,7 @@ mod tests {
                 active_tab: Some(1),
             },
             WindowSession {
+                sources: Vec::new(),
                 tabs: vec![tab("tool", "chronometer")],
                 active_tab: Some(0),
             },
@@ -358,12 +393,14 @@ mod tests {
         let mut store = Store::open_in_memory().unwrap();
         store
             .save_session(&[WindowSession {
+                sources: Vec::new(),
                 tabs: vec![tab("tool", "a")],
                 active_tab: Some(0),
             }])
             .unwrap();
         store
             .save_session(&[WindowSession {
+                sources: Vec::new(),
                 tabs: vec![tab("tool", "b")],
                 active_tab: Some(0),
             }])
@@ -382,6 +419,7 @@ mod tests {
         let mut store = Store::open_in_memory().unwrap();
         store
             .save_session(&[WindowSession {
+                sources: Vec::new(),
                 tabs: vec![tab("tool", "a")],
                 active_tab: Some(0),
             }])
@@ -403,6 +441,7 @@ mod tests {
         let mut store = Store::open_in_memory().unwrap();
         store
             .save_session(&[WindowSession {
+                sources: Vec::new(),
                 tabs: vec![tab("tool", "a"), tab("tool", "b")],
                 active_tab: Some(1),
             }])
@@ -422,6 +461,7 @@ mod tests {
         let mut store = Store::open_in_memory().unwrap();
         store
             .save_session(&[WindowSession {
+                sources: Vec::new(),
                 tabs: vec![],
                 active_tab: Some(3),
             }])
@@ -444,6 +484,7 @@ mod tests {
         let plain = tab("tool", "chronometer");
         store
             .save_session(&[WindowSession {
+                sources: Vec::new(),
                 tabs: vec![pinned.clone(), plain.clone()],
                 active_tab: Some(0),
             }])

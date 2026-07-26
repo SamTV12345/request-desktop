@@ -12,18 +12,65 @@ use std::path::Path;
 
 const SHARED: &str = "http-client.env.json";
 const PRIVATE: &str = "http-client.private.env.json";
+const PREFIX: &str = "http-client.";
+const SUFFIX: &str = ".env.json";
+
+/// The environment files in `dir`, in the order they are applied.
+///
+/// **Exactly the two names IntelliJ knows**, and no others: `http-client.env.json`
+/// is the one you check in, `http-client.private.env.json` the one you do not, and
+/// the private file's values override the shared file's.
+///
+/// Reading any `http-client.<anything>.env.json` as a third overlay was tried here
+/// and reverted: a file that resolves variables in this app and not in IntelliJ is
+/// a worse outcome than one that loads nowhere, because the divergence only shows
+/// up when someone else opens the project. [`stray_env_files`] is the answer
+/// instead — such a file is still not read, but nobody has to guess why.
+///
+/// The `bool` is "treat this as a secret", which is what the private file is for.
+fn env_files_in(dir: &Path) -> [(std::path::PathBuf, bool); 2] {
+    [(dir.join(SHARED), false), (dir.join(PRIVATE), true)]
+}
+
+/// Files next to `http_file` that look like environment files but are not read.
+///
+/// A `http-client.secret.env.json` is a reasonable thing to have invented, and
+/// before this it simply did nothing: no error, no note, just variables that never
+/// resolved. Naming it beats guessing. Searches the same directories as
+/// [`load_env_files`], nearest first, so the closest surprise is reported first.
+pub fn stray_env_files(http_file: &Path) -> Vec<String> {
+    let dir = http_file.parent().unwrap_or(Path::new("."));
+    let mut out = Vec::new();
+    for d in dir.ancestors() {
+        let Ok(entries) = std::fs::read_dir(d) else {
+            continue;
+        };
+        let mut here: Vec<String> = entries
+            .filter_map(Result::ok)
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|name| {
+                name.starts_with(PREFIX)
+                    && name.ends_with(SUFFIX)
+                    && name != SHARED
+                    && name != PRIVATE
+            })
+            .collect();
+        here.sort();
+        out.extend(here);
+    }
+    out
+}
 
 /// Environments for a `.http` file: `{ "dev": { "baseUrl": "..." } }`, read from
 /// the file's directory and every parent, nearer directories winning, and the
-/// `.private.` file winning over the shared one. Missing files are not an error.
+/// overlay files winning over the shared one. Missing files are not an error.
 pub fn load_env_files(http_file: &Path) -> Result<Vec<Environment>> {
     let dir = http_file.parent().unwrap_or(Path::new("."));
     let mut envs: BTreeMap<String, BTreeMap<String, (String, bool)>> = BTreeMap::new();
     let mut dirs: Vec<&Path> = dir.ancestors().collect();
     dirs.reverse(); // root first, so a nearer directory overrides it
     for d in dirs {
-        for (file, secret) in [(SHARED, false), (PRIVATE, true)] {
-            let path = d.join(file);
+        for (path, secret) in env_files_in(d) {
             let Ok(text) = std::fs::read_to_string(&path) else {
                 continue;
             };
@@ -207,6 +254,165 @@ fn body_path(json: &serde_json::Value, mut p: &str) -> Option<String> {
         } else {
             return None; // something we don't understand: skip it
         }
+    }
+}
+
+#[cfg(test)]
+mod env_file_tests {
+    use super::*;
+
+    struct Tmp(std::path::PathBuf);
+
+    impl Tmp {
+        fn new(tag: &str) -> Self {
+            let dir = std::env::temp_dir().join(format!("rp-env-{tag}"));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).unwrap();
+            Tmp(dir)
+        }
+        fn write(&self, name: &str, body: &str) -> std::path::PathBuf {
+            let p = self.0.join(name);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(&p, body).unwrap();
+            p
+        }
+    }
+
+    impl Drop for Tmp {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn value(envs: &[Environment], env: &str, key: &str) -> Option<(String, bool)> {
+        envs.iter()
+            .find(|e| e.name == env)
+            .and_then(|e| e.vars.iter().find(|(k, _, _)| k == key))
+            .map(|(_, v, secret)| (v.clone(), *secret))
+    }
+
+    /// The split the pair of files is *for*: URLs checked in, passwords beside them
+    /// in the untracked file, and the untracked value winning.
+    #[test]
+    fn the_private_file_overrides_the_checked_in_one_and_is_marked_secret() {
+        let t = Tmp::new("private");
+        t.write(
+            "http-client.env.json",
+            r#"{"dev":{"baseUrl":"https://dev.example","password":"placeholder"}}"#,
+        );
+        t.write(
+            "http-client.private.env.json",
+            r#"{"dev":{"password":"s3cret"}}"#,
+        );
+        let file = t.write(
+            "api.http",
+            "GET {{baseUrl}}/x
+",
+        );
+        let envs = load_env_files(&file).unwrap();
+
+        assert_eq!(
+            value(&envs, "dev", "baseUrl"),
+            Some(("https://dev.example".into(), false)),
+            "the shared file's value, and not marked secret"
+        );
+        assert_eq!(
+            value(&envs, "dev", "password"),
+            Some(("s3cret".into(), true)),
+            "the private file wins, and its values are secrets"
+        );
+    }
+
+    /// Exactly two names, as in IntelliJ. A third file under a name of one's own is
+    /// **not** read — and is reported rather than ignored, which is the whole
+    /// difference between this and the silence it replaces.
+    #[test]
+    fn a_file_under_another_name_is_not_read_but_is_named() {
+        let t = Tmp::new("stray");
+        t.write("http-client.env.json", r#"{"dev":{"token":"shared"}}"#);
+        t.write(
+            "http-client.secret.env.json",
+            r#"{"dev":{"token":"secret"}}"#,
+        );
+        let file = t.write("api.http", "GET {{token}}\n");
+
+        let envs = load_env_files(&file).unwrap();
+        assert_eq!(
+            value(&envs, "dev", "token"),
+            Some(("shared".into(), false)),
+            "a name IntelliJ does not know must not resolve variables here either"
+        );
+        assert_eq!(stray_env_files(&file), ["http-client.secret.env.json"]);
+
+        // Renaming it to the name IntelliJ uses makes it work, and the report goes
+        // away — which is the fix the report points at.
+        std::fs::rename(
+            t.0.join("http-client.secret.env.json"),
+            t.0.join("http-client.private.env.json"),
+        )
+        .unwrap();
+        assert_eq!(
+            value(&load_env_files(&file).unwrap(), "dev", "token"),
+            Some(("secret".into(), true))
+        );
+        assert!(stray_env_files(&file).is_empty());
+    }
+
+    /// Only `http-client.*.env.json` is even a candidate for the report. A directory
+    /// holds all sorts of JSON, and calling `package.json` a stray environment file
+    /// would be noise nobody can act on.
+    #[test]
+    fn unrelated_json_files_are_neither_read_nor_reported() {
+        let t = Tmp::new("unrelated");
+        t.write("http-client.env.json", r#"{"dev":{"a":"1"}}"#);
+        t.write("package.json", r#"{"dev":{"a":"stolen"}}"#);
+        t.write("env.json", r#"{"dev":{"a":"stolen"}}"#);
+        t.write("http-client.env.json.bak", r#"{"dev":{"a":"stolen"}}"#);
+        t.write("secret.env.json", r#"{"dev":{"a":"stolen"}}"#);
+        let file = t.write(
+            "api.http",
+            "GET {{a}}
+",
+        );
+        let envs = load_env_files(&file).unwrap();
+        assert_eq!(value(&envs, "dev", "a"), Some(("1".into(), false)));
+        assert!(
+            stray_env_files(&file).is_empty(),
+            "{:?}",
+            stray_env_files(&file)
+        );
+    }
+
+    /// A nearer directory wins, and an overlay up the tree still applies where a
+    /// nearer file does not mention the name.
+    #[test]
+    fn a_nearer_directory_overrides_a_parent_but_does_not_erase_it() {
+        let t = Tmp::new("nested");
+        t.write(
+            "http-client.env.json",
+            r#"{"dev":{"baseUrl":"https://root","shared":"root"}}"#,
+        );
+        t.write("http-client.private.env.json", r#"{"dev":{"pw":"rootpw"}}"#);
+        t.write(
+            "deep/http-client.env.json",
+            r#"{"dev":{"baseUrl":"https://deep"}}"#,
+        );
+        let file = t.write(
+            "deep/api.http",
+            "GET {{baseUrl}}
+",
+        );
+        let envs = load_env_files(&file).unwrap();
+        assert_eq!(
+            value(&envs, "dev", "baseUrl"),
+            Some(("https://deep".into(), false))
+        );
+        assert_eq!(value(&envs, "dev", "shared"), Some(("root".into(), false)));
+        assert_eq!(
+            value(&envs, "dev", "pw"),
+            Some(("rootpw".into(), true)),
+            "a secret from a parent still applies"
+        );
     }
 }
 
