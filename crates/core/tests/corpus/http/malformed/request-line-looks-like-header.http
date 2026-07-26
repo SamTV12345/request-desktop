@@ -1,0 +1,2 @@
+# defect: the only request line parses as a header (Name: value)
+weird:thing

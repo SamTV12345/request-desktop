@@ -1,0 +1,3 @@
+# defect: a {{ placeholder that is never closed
+GET https://example.com/{{oops
+Authorization: Bearer {{alsoOpen

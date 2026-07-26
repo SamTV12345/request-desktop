@@ -1,0 +1,432 @@
+//! SQLite-backed persistence.
+//!
+//! Its own crate rather than a module in the app, because the dependency
+//! direction has to stay `app -> store` and `core -> store`; a module inside
+//! the GUI crate could never be reached from `rp-core`.
+//!
+//! Two things matter more than the current feature set:
+//!
+//! 1. **Migrations from the first release.** The schema is versioned via
+//!    SQLite's own `user_version` and upgraded by [`MIGRATIONS`], so the next
+//!    feature adds a step instead of breaking existing databases. A database
+//!    written by a *newer* build is refused rather than silently mangled.
+//! 2. **Persistence is never load-bearing.** Every call can fail, and the
+//!    caller is expected to carry on without it. A corrupt database must cost
+//!    the user their restored tabs, never their ability to start the app.
+pub mod track;
+pub use track::{DaySummary, Entry, Task};
+
+use anyhow::{Context, Result, bail};
+use rusqlite::{Connection, OptionalExtension, params};
+use std::path::{Path, PathBuf};
+
+/// One statement batch per schema version, applied in order. Append only —
+/// never edit a shipped entry, or existing databases diverge from new ones.
+const MIGRATIONS: &[&str] = &[
+    // v1: window/tab session plus a general key-value bucket.
+    r#"
+    CREATE TABLE session_window (
+        id          INTEGER PRIMARY KEY,
+        position    INTEGER NOT NULL,
+        active_tab  INTEGER
+    );
+    CREATE TABLE session_tab (
+        window_id   INTEGER NOT NULL REFERENCES session_window(id) ON DELETE CASCADE,
+        position    INTEGER NOT NULL,
+        kind        TEXT    NOT NULL,
+        key         TEXT    NOT NULL,
+        detail      TEXT,
+        PRIMARY KEY (window_id, position)
+    );
+    CREATE TABLE kv (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+    );
+    "#,
+    // v2: local time tracking. Written by the desktop app AND by the MCP
+    // server, i.e. two processes on one file, which is why the "only one timer
+    // may run" rule is a database constraint rather than application code.
+    r#"
+    CREATE TABLE track_task (
+        id         INTEGER PRIMARY KEY,
+        name       TEXT    NOT NULL UNIQUE,
+        created_at INTEGER NOT NULL
+    );
+    CREATE TABLE track_entry (
+        id         INTEGER PRIMARY KEY,
+        task_id    INTEGER NOT NULL REFERENCES track_task(id) ON DELETE CASCADE,
+        note       TEXT,
+        -- Unix seconds, UTC. Local-day grouping happens in SQL via the
+        -- 'localtime' modifier, so no timezone database is needed.
+        started_at INTEGER NOT NULL,
+        stopped_at INTEGER,
+        -- 'app' or 'mcp', so a summary can say where the time came from.
+        source     TEXT    NOT NULL,
+        CHECK (stopped_at IS NULL OR stopped_at >= started_at)
+    );
+    CREATE INDEX track_entry_started ON track_entry (started_at);
+    CREATE INDEX track_entry_task ON track_entry (task_id);
+    -- At most one running entry, enforced in the schema. A plain UNIQUE on
+    -- `stopped_at` would not do it: SQLite treats NULLs as distinct. Indexing
+    -- the constant expression over just the running rows does.
+    CREATE UNIQUE INDEX track_entry_single_running
+        ON track_entry ((1)) WHERE stopped_at IS NULL;
+    "#,
+];
+
+/// What a restored tab needs in order to be rebuilt.
+///
+/// Deliberately stringly-typed: the store must not depend on the UI's enums, or
+/// every tab-model change would become a schema change.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TabRecord {
+    /// `"tool"` or `"request"` today; the store does not interpret it.
+    pub kind: String,
+    /// Tool id, or the path of the file a request came from.
+    pub key: String,
+    /// Anything the caller needs to disambiguate, e.g. a request's index.
+    pub detail: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct WindowSession {
+    pub tabs: Vec<TabRecord>,
+    pub active_tab: Option<usize>,
+}
+
+pub struct Store {
+    conn: Connection,
+}
+
+impl Store {
+    /// Open the database in the user's data directory, creating it if needed.
+    pub fn open_default() -> Result<Self> {
+        let path = default_path()?;
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("cannot create {}", parent.display()))?;
+        }
+        Self::open_at(&path)
+    }
+
+    pub fn open_at(path: &Path) -> Result<Self> {
+        let conn = Connection::open(path)
+            .with_context(|| format!("cannot open database {}", path.display()))?;
+        Self::prepare(conn)
+    }
+
+    /// For tests: a throwaway database with the same schema.
+    pub fn open_in_memory() -> Result<Self> {
+        Self::prepare(Connection::open_in_memory()?)
+    }
+
+    fn prepare(conn: Connection) -> Result<Self> {
+        // Foreign keys are off by default in SQLite, so the cascade that keeps
+        // orphaned tabs out would silently not happen.
+        conn.execute_batch("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;")?;
+        let mut store = Self { conn };
+        store.migrate()?;
+        Ok(store)
+    }
+
+    fn migrate(&mut self) -> Result<()> {
+        let version: u32 = self
+            .conn
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .unwrap_or(0);
+        let target = MIGRATIONS.len() as u32;
+        if version > target {
+            bail!(
+                "database schema is version {version}, but this build only knows {target}. \
+                 It was written by a newer version of the app; refusing to touch it."
+            );
+        }
+        for (i, sql) in MIGRATIONS.iter().enumerate().skip(version as usize) {
+            let tx = self.conn.transaction()?;
+            tx.execute_batch(sql)
+                .with_context(|| format!("migration to version {} failed", i + 1))?;
+            // `user_version` does not accept a bound parameter.
+            tx.pragma_update(None, "user_version", (i + 1) as i64)?;
+            tx.commit()?;
+        }
+        Ok(())
+    }
+
+    pub fn schema_version(&self) -> Result<u32> {
+        Ok(self
+            .conn
+            .query_row("PRAGMA user_version", [], |r| r.get(0))?)
+    }
+
+    /// Replace the stored session wholesale.
+    ///
+    /// One transaction, so a crash mid-save leaves the previous session intact
+    /// rather than half of each.
+    pub fn save_session(&mut self, windows: &[WindowSession]) -> Result<()> {
+        let tx = self.conn.transaction()?;
+        tx.execute("DELETE FROM session_window", [])?;
+        for (w, window) in windows.iter().enumerate() {
+            tx.execute(
+                "INSERT INTO session_window (position, active_tab) VALUES (?1, ?2)",
+                params![w as i64, window.active_tab.map(|i| i as i64)],
+            )?;
+            let window_id = tx.last_insert_rowid();
+            for (t, tab) in window.tabs.iter().enumerate() {
+                tx.execute(
+                    "INSERT INTO session_tab (window_id, position, kind, key, detail) \
+                     VALUES (?1, ?2, ?3, ?4, ?5)",
+                    params![window_id, t as i64, tab.kind, tab.key, tab.detail],
+                )?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn load_session(&self) -> Result<Vec<WindowSession>> {
+        let mut windows = Vec::new();
+        let mut stmt = self
+            .conn
+            .prepare("SELECT id, active_tab FROM session_window ORDER BY position")?;
+        let rows: Vec<(i64, Option<i64>)> = stmt
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
+            .collect::<rusqlite::Result<_>>()?;
+
+        for (id, active) in rows {
+            let mut tab_stmt = self.conn.prepare(
+                "SELECT kind, key, detail FROM session_tab WHERE window_id = ?1 \
+                 ORDER BY position",
+            )?;
+            let tabs: Vec<TabRecord> = tab_stmt
+                .query_map([id], |r| {
+                    Ok(TabRecord {
+                        kind: r.get(0)?,
+                        key: r.get(1)?,
+                        detail: r.get(2)?,
+                    })
+                })?
+                .collect::<rusqlite::Result<_>>()?;
+            // A stored index can be stale if a tab failed to restore; clamp it
+            // rather than handing the UI an out-of-bounds selection.
+            let active_tab = active
+                .map(|i| i as usize)
+                .filter(|i| *i < tabs.len())
+                .or(if tabs.is_empty() { None } else { Some(0) });
+            windows.push(WindowSession { tabs, active_tab });
+        }
+        Ok(windows)
+    }
+
+    pub fn get(&self, key: &str) -> Result<Option<String>> {
+        Ok(self
+            .conn
+            .query_row("SELECT value FROM kv WHERE key = ?1", [key], |r| r.get(0))
+            .optional()?)
+    }
+
+    pub fn set(&self, key: &str, value: &str) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO kv (key, value) VALUES (?1, ?2) \
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            params![key, value],
+        )?;
+        Ok(())
+    }
+}
+
+/// `%APPDATA%\request-pilot\state.db` and its equivalents.
+pub fn default_path() -> Result<PathBuf> {
+    let dir = dirs::data_dir().context("cannot determine the user's data directory")?;
+    Ok(dir.join("request-pilot").join("state.db"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tab(kind: &str, key: &str) -> TabRecord {
+        TabRecord {
+            kind: kind.into(),
+            key: key.into(),
+            detail: None,
+        }
+    }
+
+    #[test]
+    fn a_fresh_database_is_migrated_to_the_latest_version() {
+        let store = Store::open_in_memory().unwrap();
+        assert_eq!(store.schema_version().unwrap(), MIGRATIONS.len() as u32);
+        assert!(store.load_session().unwrap().is_empty());
+    }
+
+    #[test]
+    fn migrating_an_already_current_database_is_a_no_op() {
+        let dir = std::env::temp_dir().join("rp-store-idempotent");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("state.db");
+
+        {
+            let mut store = Store::open_at(&path).unwrap();
+            store
+                .save_session(&[WindowSession {
+                    tabs: vec![tab("tool", "base64-string-converter")],
+                    active_tab: Some(0),
+                }])
+                .unwrap();
+        }
+        // Reopening must not re-run migrations or lose data.
+        let store = Store::open_at(&path).unwrap();
+        assert_eq!(store.schema_version().unwrap(), MIGRATIONS.len() as u32);
+        assert_eq!(store.load_session().unwrap().len(), 1);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_session_round_trips_across_windows_and_order() {
+        let mut store = Store::open_in_memory().unwrap();
+        let windows = vec![
+            WindowSession {
+                tabs: vec![
+                    tab("tool", "base64-string-converter"),
+                    TabRecord {
+                        kind: "request".into(),
+                        key: "C:/x/api.http".into(),
+                        detail: Some("2".into()),
+                    },
+                ],
+                active_tab: Some(1),
+            },
+            WindowSession {
+                tabs: vec![tab("tool", "chronometer")],
+                active_tab: Some(0),
+            },
+        ];
+        store.save_session(&windows).unwrap();
+        assert_eq!(store.load_session().unwrap(), windows);
+    }
+
+    #[test]
+    fn saving_replaces_the_previous_session_rather_than_appending() {
+        let mut store = Store::open_in_memory().unwrap();
+        store
+            .save_session(&[WindowSession {
+                tabs: vec![tab("tool", "a")],
+                active_tab: Some(0),
+            }])
+            .unwrap();
+        store
+            .save_session(&[WindowSession {
+                tabs: vec![tab("tool", "b")],
+                active_tab: Some(0),
+            }])
+            .unwrap();
+        let loaded = store.load_session().unwrap();
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].tabs, [tab("tool", "b")]);
+
+        // And an empty save clears it.
+        store.save_session(&[]).unwrap();
+        assert!(store.load_session().unwrap().is_empty());
+    }
+
+    #[test]
+    fn closing_a_window_takes_its_tabs_with_it() {
+        let mut store = Store::open_in_memory().unwrap();
+        store
+            .save_session(&[WindowSession {
+                tabs: vec![tab("tool", "a")],
+                active_tab: Some(0),
+            }])
+            .unwrap();
+        store
+            .conn
+            .execute("DELETE FROM session_window", [])
+            .unwrap();
+        // Relies on `PRAGMA foreign_keys = ON`, which SQLite does not default to.
+        let orphans: i64 = store
+            .conn
+            .query_row("SELECT count(*) FROM session_tab", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(orphans, 0);
+    }
+
+    #[test]
+    fn an_out_of_range_active_index_is_clamped_not_returned() {
+        let mut store = Store::open_in_memory().unwrap();
+        store
+            .save_session(&[WindowSession {
+                tabs: vec![tab("tool", "a"), tab("tool", "b")],
+                active_tab: Some(1),
+            }])
+            .unwrap();
+        // Simulate a tab that failed to restore.
+        store
+            .conn
+            .execute("DELETE FROM session_tab WHERE position = 1", [])
+            .unwrap();
+        let loaded = store.load_session().unwrap();
+        assert_eq!(loaded[0].tabs.len(), 1);
+        assert_eq!(loaded[0].active_tab, Some(0), "stale index must be clamped");
+    }
+
+    #[test]
+    fn a_window_with_no_tabs_has_no_active_tab() {
+        let mut store = Store::open_in_memory().unwrap();
+        store
+            .save_session(&[WindowSession {
+                tabs: vec![],
+                active_tab: Some(3),
+            }])
+            .unwrap();
+        assert_eq!(store.load_session().unwrap()[0].active_tab, None);
+    }
+
+    #[test]
+    fn key_value_bucket_reads_writes_and_overwrites() {
+        let store = Store::open_in_memory().unwrap();
+        assert_eq!(store.get("theme").unwrap(), None);
+        store.set("theme", "dark").unwrap();
+        assert_eq!(store.get("theme").unwrap().as_deref(), Some("dark"));
+        store.set("theme", "light").unwrap();
+        assert_eq!(store.get("theme").unwrap().as_deref(), Some("light"));
+    }
+
+    #[test]
+    fn a_database_from_a_newer_build_is_refused_not_mangled() {
+        let store = Store::open_in_memory().unwrap();
+        store
+            .conn
+            .pragma_update(None, "user_version", (MIGRATIONS.len() + 5) as i64)
+            .unwrap();
+        let mut store = store;
+        let err = store.migrate().unwrap_err().to_string();
+        assert!(err.contains("newer version"), "{err}");
+    }
+
+    #[test]
+    fn a_corrupt_file_errors_instead_of_panicking() {
+        let dir = std::env::temp_dir().join("rp-store-corrupt");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("state.db");
+        std::fs::write(&path, b"this is definitely not a sqlite database").unwrap();
+
+        assert!(
+            Store::open_at(&path).is_err(),
+            "a corrupt file must be an Err, not a panic"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_default_path_lands_under_the_app_name() {
+        let path = default_path().unwrap();
+        assert!(
+            path.ends_with("request-pilot/state.db") || path.ends_with("request-pilot\\state.db"),
+            "{path:?}"
+        );
+    }
+}

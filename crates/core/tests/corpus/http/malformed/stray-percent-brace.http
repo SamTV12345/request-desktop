@@ -1,0 +1,4 @@
+# defect: a stray %} in the body with no opening {%
+GET https://example.com/x
+
+%}

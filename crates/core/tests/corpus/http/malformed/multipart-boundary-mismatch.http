@@ -1,0 +1,9 @@
+# defect: the boundary in the Content-Type does not match the one in the body
+POST https://example.com/upload
+Content-Type: multipart/form-data; boundary=AAA
+
+--BBB
+Content-Disposition: form-data; name="a"
+
+one
+--BBB--

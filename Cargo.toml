@@ -1,0 +1,18 @@
+[workspace]
+resolver = "2"
+members = ["crates/core", "crates/devtools", "crates/store", "crates/app", "crates/mcp"]
+# The old Tauri app stays buildable on its own until the GPUI port replaces it.
+# `fuzz` is its own crate: cargo-fuzz needs nightly and its own profile.
+exclude = ["src-tauri", "fuzz"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+
+[workspace.dependencies]
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+# `preserve_order` is enabled deliberately and workspace-wide: gpui turns it on
+# anyway, and cargo features are additive, so without it here a crate's tests
+# and its behaviour inside the app disagree about JSON key order.
+serde_json = { version = "1", features = ["preserve_order"] }

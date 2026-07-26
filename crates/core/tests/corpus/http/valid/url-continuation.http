@@ -1,0 +1,10 @@
+# spec: a long URL split across indented continuation lines
+### split-path
+GET https://api.example.com
+    /v1/organisations/42
+    /repositories
+Accept: application/json
+### split-with-query
+GET https://api.example.com/v1/search
+    ?q=parser
+    &limit=50

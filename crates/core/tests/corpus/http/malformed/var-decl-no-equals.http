@@ -1,0 +1,3 @@
+# defect: an @var declaration with no `=`
+@baseUrl http://localhost:8080
+GET https://example.com/x

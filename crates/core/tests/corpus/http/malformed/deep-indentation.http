@@ -1,0 +1,6 @@
+# defect: everything indented by eight spaces
+        ### deep
+        GET https://example.com/deep
+            Accept: application/json
+
+            {"a":1}

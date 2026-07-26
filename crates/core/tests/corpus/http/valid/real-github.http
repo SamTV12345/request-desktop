@@ -1,0 +1,36 @@
+# spec: real-world -- GitHub REST v3, modelled on docs.github.com examples
+@gh = https://api.github.com
+
+### list-my-repos
+GET {{gh}}/user/repos
+    ?visibility=public
+    &affiliation=owner
+    &sort=pushed
+    &per_page=30
+Accept: application/vnd.github+json
+Authorization: Bearer {{githubToken}}
+X-GitHub-Api-Version: 2022-11-28
+
+> {%
+    client.global.set("firstRepo", response.body[0].full_name);
+%}
+
+### create-gist
+POST {{gh}}/gists
+Accept: application/vnd.github+json
+Authorization: Bearer {{githubToken}}
+Content-Type: application/json
+
+{
+  "description": "Example of a gist",
+  "public": false,
+  "files": {
+    "README.md": {
+      "content": "Hello world"
+    }
+  }
+}
+
+### rate-limit
+GET {{gh}}/rate_limit
+Accept: application/vnd.github+json

@@ -1,0 +1,9 @@
+# spec: plain text body kept verbatim, including an internal blank line
+### plain
+POST https://example.com/notes
+Content-Type: text/plain; charset=utf-8
+
+first line
+second line
+
+fourth line after a blank one

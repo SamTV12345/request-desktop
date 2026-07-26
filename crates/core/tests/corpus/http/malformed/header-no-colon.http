@@ -1,0 +1,5 @@
+# defect: a header line with no colon at all
+GET https://example.com/x
+Accept application/json
+
+body

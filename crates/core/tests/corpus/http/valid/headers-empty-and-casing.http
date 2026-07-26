@@ -1,0 +1,8 @@
+# spec: empty header values and non-canonical header name casing
+### empty-and-casing
+GET https://example.com/x
+X-Empty:
+x-lower-case: 1
+CONTENT-LENGTH: 0
+If-None-Match: "etag-123"
+User_Agent_Legacy: probe/1.0

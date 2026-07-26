@@ -1,0 +1,9 @@
+# spec: bare ### separators; the request name falls back to its URL
+GET https://example.com/a
+###
+GET https://example.com/b
+###
+POST https://example.com/c
+Content-Type: application/json
+
+{"n":1}

@@ -1,0 +1,9 @@
+# defect: multipart part with no Content-Disposition, so it has no field name
+POST https://example.com/upload
+Content-Type: multipart/form-data; boundary=X
+
+--X
+Content-Type: text/plain
+
+orphan
+--X--

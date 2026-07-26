@@ -1,0 +1,5 @@
+# defect: `<` body-file marker with no path after it
+POST https://example.com/x
+Content-Type: application/json
+
+<

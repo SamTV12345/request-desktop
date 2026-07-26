@@ -1,0 +1,36 @@
+# Differential test: our Rust `.bru` parser vs Bruno's own JS parser.
+name: differential
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  bru-vs-bruno:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: scripts/bru_reference/package-lock.json
+
+      - name: Install the reference parser
+        run: npm ci
+        working-directory: scripts/bru_reference
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      # RP_DIFFERENTIAL=1 turns the test from a skip into the real comparison;
+      # --nocapture so the match counts, the named exclusions and the known
+      # divergences all land in the log.
+      - name: Compare against Bruno
+        run: cargo test -p rp-core --test differential_bru -- --nocapture
+        env:
+          RP_DIFFERENTIAL: '1'

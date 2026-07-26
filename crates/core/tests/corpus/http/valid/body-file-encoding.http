@@ -1,0 +1,11 @@
+# spec: `<@ encoding ./path` picks the charset used to read the body file
+### latin1
+POST https://api.example.com/v1/import
+Content-Type: text/csv
+
+<@ latin1 ./legacy.csv
+### no-encoding
+POST https://api.example.com/v1/import
+Content-Type: application/octet-stream
+
+<@ ./blob.bin

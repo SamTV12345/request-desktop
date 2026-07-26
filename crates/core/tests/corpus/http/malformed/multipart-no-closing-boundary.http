@@ -1,0 +1,8 @@
+# defect: multipart body whose closing --boundary-- is missing
+POST https://example.com/upload
+Content-Type: multipart/form-data; boundary=X
+
+--X
+Content-Disposition: form-data; name="a"
+
+one

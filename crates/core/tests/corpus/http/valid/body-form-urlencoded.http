@@ -1,0 +1,7 @@
+# spec: x-www-form-urlencoded body split into key/value pairs (Twilio Messages API)
+### send-sms
+POST https://api.twilio.com/2010-04-01/Accounts/{{accountSid}}/Messages.json
+Authorization: Basic {{basicAuth}}
+Content-Type: application/x-www-form-urlencoded
+
+To=%2B15558675310&From=%2B15017122661&Body=Hi+there

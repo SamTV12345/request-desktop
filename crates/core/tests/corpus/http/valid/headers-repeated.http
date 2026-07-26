@@ -1,0 +1,8 @@
+# spec: repeated header names are kept in order, never collapsed
+### repeated
+GET https://example.com/cookies
+Cookie: a=1
+Cookie: b=2
+X-Forwarded-For: 10.0.0.1
+X-Forwarded-For: 10.0.0.2
+Accept: application/json

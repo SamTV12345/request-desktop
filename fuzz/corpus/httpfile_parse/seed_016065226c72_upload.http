@@ -1,0 +1,40 @@
+# A collection of the less common request shapes.
+
+### Login form
+POST https://api.example.com/login
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=password&username={{user}}&password={{pass}}
+
+### Upload avatar
+POST https://api.example.com/avatars
+Content-Type: multipart/form-data; boundary=WebAppBoundary
+Authorization: Bearer {{token}}
+
+--WebAppBoundary
+Content-Disposition: form-data; name="caption"
+
+my holiday photo
+--WebAppBoundary
+Content-Disposition: form-data; name="file"; filename="avatar.png"
+Content-Type: image/png
+
+< ./assets/avatar.png
+--WebAppBoundary--
+
+### SOAP call
+POST https://api.example.com/soap
+Content-Type: application/xml
+
+<?xml version="1.0"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <GetThing><Id>{{thingId}}</Id></GetThing>
+  </soap:Body>
+</soap:Envelope>
+
+### Raw text ping
+// no method given on purpose, defaults to GET
+https://api.example.com/ping
+
+<> previous-response.200.json

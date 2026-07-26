@@ -1,0 +1,55 @@
+### Login
+# baseUrl and userName come from http-client.env.json next to this file.
+POST {{baseUrl}}/api/v1/login
+Content-Type: application/json
+
+{
+  "username": "{{userName}}",
+  "password": "hunter2"
+}
+
+> {%
+    client.global.set("authToken", response.body.token);
+%}
+
+### List users
+# @no-cookie-jar
+GET {{baseUrl}}/api/v1/users
+  ?page=1
+  &per_page=25
+  &sort=created_at
+Accept: application/json
+Authorization: Bearer {{authToken}}
+
+> {%
+    client.test("ok", function() {
+        client.assert(response.status === 200, "expected 200");
+    });
+    client.global.set("firstUserId", response.body[0].id);
+%}
+
+### Create user
+POST {{baseUrl}}/api/v1/users HTTP/1.1
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+
+{
+  "name": "{{userName}}",
+  "email": "{{userName}}@example.com",
+  "roles": ["admin"]
+}
+
+> {%
+    client.global.set("newUserId", response.body.id);
+%}
+
+### Update user
+# @name updateUser
+PATCH {{baseUrl}}/api/v1/users/{{newUserId}}
+Content-Type: application/json
+
+< ./payload/patch-user.json
+
+### Delete user
+DELETE {{baseUrl}}/api/v1/users/{{newUserId}}
+Authorization: Bearer {{authToken}}

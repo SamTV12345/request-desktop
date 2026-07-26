@@ -1,0 +1,16 @@
+# spec: request directives land in `extra` keyed by @name
+### no-redirect
+# @no-redirect
+GET https://example.com/redirects
+### no-cookie-jar
+# @no-cookie-jar
+GET https://example.com/session
+### timeout
+# @timeout 600
+GET https://example.com/slow
+### several
+# @no-log
+# @no-auto-encoding
+# @connection-timeout 2 m
+# @timeout 30 s
+GET https://example.com/many

@@ -1,0 +1,87 @@
+# cargo-deny configuration. Gates: advisories, bans, licenses, sources.
+#
+# Policy: every exception below is scoped to a specific crate and carries a reason.
+# There are no blanket ignores and no license exceptions. If a new advisory or license shows up, the job goes
+# red and somebody makes a decision -- that is the point of the gate.
+
+[graph]
+# The workspace only ever ships these three. Checking all targets would drag in
+# every platform's transitive tree (gpui alone pulls separate wayland/x11, metal
+# and windows stacks) and turn a policy failure on one OS into noise on all of them.
+targets = [
+    { triple = "x86_64-unknown-linux-gnu" },
+    { triple = "x86_64-pc-windows-msvc" },
+    { triple = "x86_64-apple-darwin" },
+]
+all-features = false
+
+[advisories]
+version = 2
+# Unmaintained advisories are informational here rather than fatal: several gpui
+# transitives are flagged as unmaintained, and none of them has a drop-in
+# replacement that does not mean a code change in crates we do not own.
+# Security *vulnerabilities* remain hard failures.
+unmaintained = "workspace"
+yanked = "deny"
+
+ignore = [
+    { id = "RUSTSEC-2023-0071", reason = """
+The Marvin attack: `rsa` 0.9.x leaks private-key information through timing. \
+There is no patched release -- RustCrypto has no constant-time implementation \
+published yet, so this cannot be resolved by bumping. rp-devtools uses `rsa` \
+only in the offline "RSA keypair / encrypt / decrypt" developer tool, on keys \
+the user supplies locally; nothing here serves RSA operations to a network \
+peer, which is the attack precondition. Revisit when rsa 0.10 ships.""" },
+]
+
+[licenses]
+version = 2
+# Permissive licenses, plus the weak/file-level copyleft ones that do not reach
+# into our own source. Anything not on this list fails the build.
+allow = [
+    "0BSD",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "CC0-1.0",
+    "ISC",
+    "MIT",
+    "MIT-0",
+    # MPL-2.0 is per-file copyleft: modifying an MPL file means publishing that
+    # file, but linking it does not affect our code. Reached via cbindgen (build
+    # dependency), dwrote (Windows font backend) and option-ext (via dirs-sys).
+    "MPL-2.0",
+    # Required by the ICU crates that `idna`/`url` pull in.
+    "Unicode-3.0",
+    "Unlicense",
+    "Zlib",
+]
+
+# Our own crates are unpublished and carry no `license` field yet.
+private = { ignore = true }
+
+[bans]
+# The gpui + reqwest + RustCrypto trees legitimately disagree on versions of
+# rand, base64, sha1/2, digest, bitflags, windows-sys and others. Making that
+# fatal would mean pinning dependencies we do not control, so duplicates are
+# reported but not gated. `deny` below is what actually blocks a merge.
+multiple-versions = "warn"
+# `wildcards` would otherwise fire on `rp-core = { path = "../core" }` in
+# crates/app. cargo-deny only exempts path dependencies for crates it considers
+# private, and privacy is derived solely from `publish = false`, which none of
+# our three crates set. Until they do, "deny" here would fail on a completely
+# ordinary intra-workspace path dependency, so this is reported not gated.
+wildcards = "warn"
+allow-wildcard-paths = true
+
+deny = [
+    # Unmaintained TLS stack; reqwest here uses rustls/native-tls instead.
+    { crate = "openssl-src", reason = "avoid vendoring OpenSSL into the binary" },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

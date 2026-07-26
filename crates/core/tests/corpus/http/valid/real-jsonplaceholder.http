@@ -1,0 +1,30 @@
+# spec: real-world -- JSONPlaceholder CRUD walk-through
+@api = https://jsonplaceholder.typicode.com
+
+### list-posts
+GET {{api}}/posts?_limit=5
+### one-post
+GET {{api}}/posts/1
+### create-post
+POST {{api}}/posts
+Content-Type: application/json; charset=UTF-8
+
+{
+  "title": "foo",
+  "body": "bar",
+  "userId": 1
+}
+### update-post
+PUT {{api}}/posts/1
+Content-Type: application/json; charset=UTF-8
+
+{ "id": 1, "title": "foo", "body": "bar", "userId": 1 }
+### patch-post
+PATCH {{api}}/posts/1
+Content-Type: application/json; charset=UTF-8
+
+{ "title": "updated" }
+### delete-post
+DELETE {{api}}/posts/1
+### nested
+GET {{api}}/posts/1/comments

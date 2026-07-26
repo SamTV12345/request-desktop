@@ -1,0 +1,76 @@
+# Fuzz targets for rp-core's parsers and the rp-devtools registry.
+#
+#   cargo +nightly fuzz run --no-include-main-msvc <target> -- -max_total_time=60 -rss_limit_mb=4096
+#
+# Two Windows-only notes (both no-ops elsewhere, so the line above is portable):
+#  * `--no-include-main-msvc` is required; see build.rs for why.
+#  * the ASan runtime is a DLL and is not on PATH by default, so the target
+#    exits with STATUS_DLL_NOT_FOUND (0xc0000135) unless you add e.g.
+#    "%VCToolsInstallDir%bin\HostX64\x64" (holds clang_rt.asan_dynamic-x86_64.dll)
+#    to PATH first.
+#
+# Seed corpora under corpus/<target>/ are copies of the .bru/.http files already
+# in crates/core/tests/{fixtures,corpus}; regenerate by copying more of those in,
+# they are plain input files. Anything libFuzzer discovers itself is gitignored.
+[package]
+name = "rp-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+rp-core = { path = "../crates/core" }
+rp-devtools = { path = "../crates/devtools" }
+
+[[bin]]
+name = "bru_parse"
+path = "fuzz_targets/bru_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "bru_roundtrip"
+path = "fuzz_targets/bru_roundtrip.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "httpfile_parse"
+path = "fuzz_targets/httpfile_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "httpfile_roundtrip"
+path = "fuzz_targets/httpfile_roundtrip.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "bru_env"
+path = "fuzz_targets/bru_env.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "vars_capture"
+path = "fuzz_targets/vars_capture.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "tools_run"
+path = "fuzz_targets/tools_run.rs"
+test = false
+doc = false
+bench = false

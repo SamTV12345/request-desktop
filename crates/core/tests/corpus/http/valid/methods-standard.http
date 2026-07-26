@@ -1,0 +1,30 @@
+# spec: every method the client recognises by name, one request each
+### get
+GET https://api.example.com/things
+### post
+POST https://api.example.com/things
+Content-Type: application/json
+
+{"a":1}
+### put
+PUT https://api.example.com/things/1
+Content-Type: application/json
+
+{"a":2}
+### patch
+PATCH https://api.example.com/things/1
+Content-Type: application/json
+
+{"a":3}
+### delete
+DELETE https://api.example.com/things/1
+### head
+HEAD https://api.example.com/things
+### options
+OPTIONS https://api.example.com/things
+### trace
+TRACE https://api.example.com/things
+### connect
+CONNECT proxy.example.com:8443
+### websocket
+WEBSOCKET wss://echo.example.com/socket

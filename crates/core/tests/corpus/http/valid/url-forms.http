@@ -1,0 +1,11 @@
+# spec: ports, userinfo, IPv6 literals and percent-encoded characters
+### port
+GET http://localhost:3000/api/items
+### userinfo
+GET http://admin:s3cret@legacy.example.com:8080/status
+### ipv6
+GET http://[2001:db8::1]:9200/_cluster/health
+### ipv6-loopback
+GET http://[::1]:8080/ping
+### percent-encoded
+GET https://example.com/files/My%20Report%20(final).pdf?path=%2Fusr%2Flocal&q=a%2Bb

@@ -1,0 +1,8 @@
+# spec: query parameters on their own lines with leading ? and &
+### query-lines
+GET https://api.example.com/v1/issues
+?state=open
+&labels=bug,parser
+&per_page=100
+&draft
+Accept: application/vnd.github+json

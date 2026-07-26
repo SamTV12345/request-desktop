@@ -1,0 +1,24 @@
+# spec: real-world -- Stripe API, form-encoded bodies and bracketed parameter names
+@stripe = https://api.stripe.com/v1
+
+### create-customer
+POST {{stripe}}/customers
+Authorization: Bearer {{stripeSecretKey}}
+Content-Type: application/x-www-form-urlencoded
+
+name=Jenny+Rosen&email=jenny.rosen%40example.com&description=Test+customer
+
+> {%
+    client.global.set("customerId", response.body.id);
+%}
+
+### create-payment-intent
+POST {{stripe}}/payment_intents
+Authorization: Bearer {{stripeSecretKey}}
+Content-Type: application/x-www-form-urlencoded
+
+amount=2000&currency=eur&customer={{customerId}}&automatic_payment_methods[enabled]=true
+
+### list-charges
+GET {{stripe}}/charges?limit=3
+Authorization: Bearer {{stripeSecretKey}}

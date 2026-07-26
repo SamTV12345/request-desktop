@@ -1,0 +1,14 @@
+[package]
+name = "rp-core"
+version.workspace = true
+edition.workspace = true
+# Not published to a registry; cargo-deny infers "private crate" from this.
+publish = false
+
+[dependencies]
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+reqwest = { version = "0.12", features = ["json", "cookies", "gzip", "stream"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+base64 = "0.22"

@@ -1,0 +1,10 @@
+# spec: optional HTTP-Version suffix after the request URI
+### v11
+GET https://example.com/a HTTP/1.1
+### v10
+POST https://example.com/b HTTP/1.0
+Content-Type: text/plain
+
+hello
+### v2
+GET https://example.com/c HTTP/2

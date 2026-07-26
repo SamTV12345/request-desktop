@@ -1,0 +1,7 @@
+#	defect: tabs everywhere instead of spaces
+###	tabbed
+GET	https://example.com/tabs
+Accept:	application/json
+X-A:	1
+
+{"tab":"x"}

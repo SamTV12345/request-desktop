@@ -1,0 +1,5 @@
+# defect: response handler script is never closed with %}
+GET https://example.com/x
+
+> {%
+    client.log("this never ends");

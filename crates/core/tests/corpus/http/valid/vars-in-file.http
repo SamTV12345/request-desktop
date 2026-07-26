@@ -1,0 +1,13 @@
+# spec: in-file @name = value declarations, one of them referring to another
+@host = https://api.example.com
+@version = v2
+@base = {{host}}/{{version}}
+@authHeader = Bearer {{apiToken}}
+
+### list
+GET {{base}}/widgets
+Authorization: {{authHeader}}
+Accept: application/json
+### get-one
+GET {{base}}/widgets/{{widgetId}}
+Authorization: {{authHeader}}

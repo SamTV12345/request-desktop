@@ -1,0 +1,7 @@
+# spec: a request line with no method is a GET
+### absolute
+https://example.com/status
+### relative
+/api/v1/health
+### with-query
+https://example.com/search?q=rust

@@ -1,0 +1,21 @@
+# spec: multipart/form-data with a plain field, a typed field and a file part
+### upload-avatar
+POST https://api.example.com/v1/users/{{userId}}/avatar
+Authorization: Bearer {{authToken}}
+Content-Type: multipart/form-data; boundary=WebAppBoundary
+
+--WebAppBoundary
+Content-Disposition: form-data; name="caption"
+
+my holiday photo
+--WebAppBoundary
+Content-Disposition: form-data; name="tags"
+Content-Type: application/json
+
+["beach","2024"]
+--WebAppBoundary
+Content-Disposition: form-data; name="avatar"; filename="portrait.png"
+Content-Type: image/png
+
+< ./portrait.png
+--WebAppBoundary--

@@ -1,0 +1,23 @@
+### Fetch viewer
+< {%
+    request.variables.set("requestId", "req-1");
+%}
+GRAPHQL https://api.example.com/graphql
+Authorization: Bearer {{githubToken}}
+X-Request-Id: {{requestId}}
+
+query Viewer($login: String!) {
+  user(login: $login) {
+    name
+    repositories(first: 5) { nodes { name } }
+  }
+}
+
+{
+  "login": "{{login}}"
+}
+
+### Health check
+GET https://api.example.com/health
+
+> ./scripts/check-health.js

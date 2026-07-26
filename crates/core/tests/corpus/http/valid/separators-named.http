@@ -1,0 +1,9 @@
+# spec: ### separators -- named, padded, with trailing hashes, and all hashes
+### plain name
+GET https://example.com/1
+###   spaced name
+GET https://example.com/2
+### trailing hashes ###
+GET https://example.com/3
+######
+GET https://example.com/4

@@ -1,0 +1,26 @@
+[package]
+name = "rp-mcp"
+version.workspace = true
+edition.workspace = true
+# Not published to a registry; cargo-deny infers "private crate" from this.
+publish = false
+
+[lib]
+name = "rp_mcp"
+path = "src/lib.rs"
+
+[[bin]]
+name = "rp-mcp"
+path = "src/main.rs"
+
+[dependencies]
+rp-store = { path = "../store" }
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+# Already in the tree via rp-store, so this adds no crate and no build time. It
+# is here for its date functions: SQLite's 'localtime' modifier is how the store
+# groups entries into days, so parsing "today" the same way is the only way the
+# two cannot disagree about where a day boundary is. The alternative -- chrono or
+# jiff -- would be a new dependency *and* a second timezone implementation.
+rusqlite = { version = "0.40", features = ["bundled"] }

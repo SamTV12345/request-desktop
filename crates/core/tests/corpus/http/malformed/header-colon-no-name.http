@@ -1,0 +1,3 @@
+# defect: a header line whose name is missing before the colon
+GET https://example.com/x
+: application/json

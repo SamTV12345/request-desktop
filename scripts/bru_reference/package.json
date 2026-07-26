@@ -1,0 +1,10 @@
+{
+  "name": "bru-reference-harness",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Emits Bruno's own parse of .bru files, for differential testing against the Rust parser.",
+  "main": "index.js",
+  "dependencies": {
+    "@usebruno/lang": "0.38.0"
+  }
+}

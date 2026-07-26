@@ -1,0 +1,25 @@
+# spec: real-world -- Kubernetes API server, +json patch content types
+@k8s = https://kubernetes.default.svc
+@ns = default
+
+### list-pods
+GET {{k8s}}/api/v1/namespaces/{{ns}}/pods?limit=100
+Authorization: Bearer {{serviceAccountToken}}
+Accept: application/json
+### strategic-merge-patch
+PATCH {{k8s}}/apis/apps/v1/namespaces/{{ns}}/deployments/web
+Authorization: Bearer {{serviceAccountToken}}
+Content-Type: application/strategic-merge-patch+json
+
+{"spec":{"replicas":3}}
+### watch-events
+GET {{k8s}}/api/v1/namespaces/{{ns}}/events
+    ?watch=true
+    &timeoutSeconds=30
+Authorization: Bearer {{serviceAccountToken}}
+### delete-pod
+DELETE {{k8s}}/api/v1/namespaces/{{ns}}/pods/web-0
+Authorization: Bearer {{serviceAccountToken}}
+Content-Type: application/json
+
+{"gracePeriodSeconds":0}

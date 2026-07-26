@@ -1,0 +1,4 @@
+# defect: `<@` body-file marker with no encoding and no path
+POST https://example.com/x
+
+<@

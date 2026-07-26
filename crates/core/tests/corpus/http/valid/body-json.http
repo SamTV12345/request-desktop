@@ -1,0 +1,14 @@
+# spec: inline JSON body, Content-Type selects the body kind
+### create-issue
+POST https://api.github.com/repos/octocat/hello-world/issues
+Accept: application/vnd.github+json
+Authorization: Bearer {{githubToken}}
+Content-Type: application/json
+
+{
+  "title": "Found a bug",
+  "body": "I am having a problem with this.",
+  "assignees": ["octocat"],
+  "milestone": 1,
+  "labels": ["bug"]
+}

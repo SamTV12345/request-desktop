@@ -1,0 +1,5 @@
+# defect: multipart Content-Type with no boundary parameter and no -- lines
+POST https://example.com/upload
+Content-Type: multipart/form-data
+
+field=value

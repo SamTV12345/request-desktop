@@ -1,0 +1,13 @@
+# spec: pre-request handler `< {% ... %}` above the request line
+### signed
+< {%
+    const now = Date.now();
+    request.variables.set("timestamp", now);
+%}
+POST https://example.com/signed
+Content-Type: application/json
+
+{"ts": "{{timestamp}}"}
+### short-pre-request
+< {% request.variables.set("nonce", "abc"); %}
+GET https://example.com/nonce

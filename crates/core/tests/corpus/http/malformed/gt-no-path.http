@@ -1,0 +1,4 @@
+# defect: `>` response-handler marker with no path after it
+GET https://example.com/x
+
+>

@@ -1,0 +1,10 @@
+# spec: custom / WebDAV verbs the client is expected to pass through verbatim
+### purge
+PURGE https://cdn.example.com/asset.css
+### lock
+LOCK https://dav.example.com/doc.txt
+### mkcol
+MKCOL https://dav.example.com/newdir/
+### propfind
+PROPFIND https://dav.example.com/
+Depth: 1

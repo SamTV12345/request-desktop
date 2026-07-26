@@ -1,0 +1,8 @@
+# spec: # and // comments interleaved between header lines
+### interleaved
+GET https://example.com/api
+# the accept header decides the representation
+Accept: application/json
+// authorization is injected by the pre-request script
+Authorization: Bearer {{token}}
+# trailing comment before the blank line

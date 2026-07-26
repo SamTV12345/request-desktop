@@ -1,0 +1,19 @@
+# spec: real-world -- Keycloak OpenID token endpoint then an authenticated call.
+# spec: drives the end-to-end chaining test (env file -> @var -> handler capture).
+@realm = master
+
+### login
+POST {{authBase}}/realms/{{realm}}/protocol/openid-connect/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=password&client_id={{clientId}}&username={{userName}}&password={{password}}
+
+> {%
+    client.global.set("accessToken", response.body.access_token);
+    client.global.set("refreshToken", response.body.refresh_token);
+%}
+
+### whoami
+GET {{authBase}}/realms/{{realm}}/protocol/openid-connect/userinfo
+Authorization: Bearer {{accessToken}}
+Accept: application/json

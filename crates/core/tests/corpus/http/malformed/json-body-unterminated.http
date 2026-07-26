@@ -1,0 +1,5 @@
+# defect: JSON body that is not valid JSON (unterminated object)
+POST https://example.com/x
+Content-Type: application/json
+
+{"a": 1, "b": [2, 3

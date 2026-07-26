@@ -1,0 +1,3 @@
+# defect: nested / doubled placeholder braces
+GET https://example.com/{{{{a}}}}?q={{{{b}}
+X-H: {{{ c }}}

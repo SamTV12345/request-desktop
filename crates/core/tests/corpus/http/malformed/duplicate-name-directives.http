@@ -1,0 +1,5 @@
+### separator name
+# defect: two conflicting @name directives on the same request
+# @name firstName
+# @name secondName
+GET https://example.com/x

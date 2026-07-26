@@ -1,0 +1,4 @@
+# defect: pre-request handler script is never closed with %}
+< {%
+    request.variables.set("x", 1);
+GET https://example.com/x

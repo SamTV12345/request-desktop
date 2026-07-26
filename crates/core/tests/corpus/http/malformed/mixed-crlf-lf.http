@@ -1,0 +1,7 @@
+### one
+GET https://example.com/a
+Accept: */*
+
+### two
+GET https://example.com/b
+X-A: 1

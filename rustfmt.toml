@@ -1,0 +1,7 @@
+# Deliberately close to stock rustfmt. max_width = 100 is rustfmt's own default and
+# already matches how this codebase is written; it is spelled out here only so the
+# number is reviewable rather than implicit.
+max_width = 100
+
+# The workspace is edition 2024, so format with the matching style edition.
+style_edition = "2024"

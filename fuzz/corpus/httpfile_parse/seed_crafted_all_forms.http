@@ -1,0 +1,24 @@
+### login
+# @no-cookie-jar
+POST {{host}}/login
+Content-Type: application/json
+
+{"user":"a","pw":"b"}
+
+> {%
+client.global.set("tok", response.body.token);
+%}
+
+### upload
+POST {{host}}/up
+Content-Type: multipart/form-data; boundary=X
+
+< ./file.bin
+
+### graphql
+GRAPHQL {{host}}/gql
+Authorization: Bearer {{tok}}
+
+query Q($a: String!) { u(a: $a) { id } }
+
+{ "a": "1" }

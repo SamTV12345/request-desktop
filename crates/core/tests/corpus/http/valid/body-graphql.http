@@ -1,0 +1,26 @@
+# spec: GraphQL body -- query, blank line, JSON variables; and the GRAPHQL method form
+### repo-issues
+POST https://api.github.com/graphql
+Authorization: Bearer {{githubToken}}
+Content-Type: application/graphql
+
+query($owner: String!, $name: String!) {
+  repository(owner: $owner, name: $name) {
+    issues(first: 5, states: OPEN) {
+      nodes { number title }
+    }
+  }
+}
+
+{
+  "owner": "octocat",
+  "name": "hello-world"
+}
+### graphql-method
+GRAPHQL https://spacex-production.up.railway.app/
+
+query Launches($limit: Int!) {
+  launchesPast(limit: $limit) { mission_name launch_date_local }
+}
+
+{ "limit": 3 }

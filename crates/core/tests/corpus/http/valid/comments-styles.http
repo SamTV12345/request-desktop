@@ -1,0 +1,12 @@
+# spec: both comment styles, padded and unpadded, none of them a separator
+# a hash comment
+// a double-slash comment
+#not padded
+//also not padded
+### first
+GET https://example.com/a
+# comment inside the request
+Accept: */*
+### second
+// leading slash comment
+GET https://example.com/b

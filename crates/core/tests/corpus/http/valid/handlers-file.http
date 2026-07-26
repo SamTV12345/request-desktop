@@ -1,0 +1,11 @@
+# spec: response handler in a separate .js file, plus a saved-response reference
+### handler-file
+GET https://example.com/data
+
+> ./handlers/check-data.js
+### handler-file-and-response-ref
+GET https://example.com/data2
+
+> handlers/other.js
+
+<> ./cached/data2.200.json

@@ -23,3 +23,8 @@ dist-ssr
 *.sln
 *.sw?
 database
+
+# Rust / coverage
+/target
+/target-app
+lcov.info

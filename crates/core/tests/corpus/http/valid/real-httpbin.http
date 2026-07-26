@@ -1,0 +1,22 @@
+# spec: real-world -- httpbin.org, one request per body kind and a @no-redirect
+### get-with-args
+GET https://httpbin.org/get?foo=bar&baz=qux
+Accept: application/json
+### post-json
+POST https://httpbin.org/post
+Content-Type: application/json
+
+{"hello":"world"}
+### post-form
+POST https://httpbin.org/post
+Content-Type: application/x-www-form-urlencoded
+
+a=1&b=2
+### basic-auth
+GET https://httpbin.org/basic-auth/user/passwd
+Authorization: Basic dXNlcjpwYXNzd2Q=
+### status-code
+GET https://httpbin.org/status/418
+### redirect
+# @no-redirect
+GET https://httpbin.org/redirect/3

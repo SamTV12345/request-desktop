@@ -1,0 +1,21 @@
+meta {
+  name: nested
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{host}}/nested
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{tok}}
+}
+
+body:json {
+  {
+    "a": 1
+  }
+}

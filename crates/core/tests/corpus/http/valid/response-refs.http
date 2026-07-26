@@ -1,0 +1,12 @@
+# spec: `<>` references a previously saved response file
+### with-ref
+GET https://example.com/users/1
+
+<> users-1.200.json
+### ref-after-body
+POST https://example.com/users
+Content-Type: application/json
+
+{"name":"ada"}
+
+<> create-user.201.json

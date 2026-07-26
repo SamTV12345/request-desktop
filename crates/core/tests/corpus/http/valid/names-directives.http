@@ -1,0 +1,12 @@
+# spec: `# @name` and `// @name` override the separator-derived name
+### separator-name-is-overridden
+# @name loginUser
+POST https://example.com/login
+Content-Type: application/json
+
+{"u":"a"}
+### another
+// @name fetchProfile
+GET https://example.com/profile
+### no-directive-here
+GET https://example.com/plain

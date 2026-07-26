@@ -1,0 +1,8 @@
+# spec: header values folded onto indented continuation lines
+### folded
+GET https://example.com/resource
+Accept: text/html,
+    application/xhtml+xml,
+    application/xml;q=0.9
+X-Note: first part
+  second part

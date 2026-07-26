@@ -1,0 +1,4 @@
+# defect: body glued to the headers with no separating blank line
+POST https://example.com/x
+Content-Type: application/json
+{"a":1}

@@ -1,0 +1,11 @@
+# spec: request body read from an external file with `< ./path`
+### from-file
+POST https://api.example.com/v1/bulk
+Content-Type: application/json
+
+< ./payload.json
+### from-file-relative-parent
+PUT https://api.example.com/v1/config
+Content-Type: application/json
+
+< ../fixtures/config.json

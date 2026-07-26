@@ -1,0 +1,16 @@
+[package]
+name = "request-pilot"
+version.workspace = true
+edition.workspace = true
+# Not published to a registry; cargo-deny infers "private crate" from this.
+publish = false
+
+[dependencies]
+anyhow.workspace = true
+rp-core = { path = "../core" }
+rp-devtools = { path = "../devtools" }
+gpui = "0.2"
+unicode-segmentation = "1.13.3"
+tokio = { version = "1.53.1", features = ["rt-multi-thread"] }
+serde_json.workspace = true
+rp-store = { version = "0.1.0", path = "../store" }

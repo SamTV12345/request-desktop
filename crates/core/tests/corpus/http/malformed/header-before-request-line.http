@@ -1,0 +1,5 @@
+# defect: a header line where the request line should be
+Content-Type: application/json
+Accept: application/json
+
+{"a":1}
