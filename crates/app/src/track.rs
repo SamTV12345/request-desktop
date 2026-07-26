@@ -1693,6 +1693,7 @@ impl Track {
                     // height: it shrinks on a short window and never grows past
                     // what it needs.
                     .flex_1()
+                    .min_w_0()
                     .min_h(space::S8 * 3.)
                     .max_h(SUMMARY_MAX_H)
                     .gap(space::S3)
@@ -2419,6 +2420,12 @@ impl Render for Track {
         div()
             .flex()
             .flex_1()
+            // The link that was missing: this row holds a fixed-width rail and a
+            // flexible pane, and without being allowed to shrink it keeps the sum
+            // of their content widths. Everything on the right — the total, the
+            // Sunday column, the CSV button — was then pushed off the window by
+            // exactly the overflow.
+            .min_w_0()
             .h_full()
             .bg(t.bg)
             .text_size(text::CONTROL)
