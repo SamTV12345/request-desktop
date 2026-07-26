@@ -24,6 +24,33 @@ cargo deny check -A unlicensed                      # advisories, bans, licenses
 `rustfmt.toml` — stock rustfmt at `max_width = 100`, which is already what the
 codebase is written to.
 
+### Windows: "Failed to find fxc.exe"
+
+gpui compiles its HLSL shaders with `fxc.exe` from the Windows SDK, and its build
+script looks in `PATH` and then at exactly **one hard-coded SDK version**. With any
+other version installed the build panics with `Failed to find fxc.exe`. It is easy
+to miss, because a cached `target/debug` keeps working and only a clean build — or
+`--release`, which has its own directory — trips over it.
+
+Point gpui at the copy you have:
+
+```powershell
+$env:GPUI_FXC_PATH = (Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin' `
+    -Filter fxc.exe -Recurse | Where-Object FullName -like '*\x64\*' |
+    Sort-Object FullName -Descending | Select-Object -First 1).FullName
+cargo build --release -p request-pilot
+```
+
+`.github/workflows/release.yml` does the same discovery, so the release job does
+not depend on which SDK version a runner happens to ship.
+
+## Releases
+
+Push a `v*` tag. `release.yml` runs fmt, clippy and the whole test suite, builds
+`request-pilot.exe` and `rp-mcp.exe`, checks that both are real binaries and that
+the app's icon actually got embedded, and attaches them to a GitHub Release. A tag
+that fails a gate publishes nothing.
+
 ### Coverage
 
 Branch coverage needs a nightly toolchain, because `--branch` is gated on

@@ -12,6 +12,7 @@
 //! **stdout carries the protocol** for the stdio transport. Nothing in this crate
 //! may write to it except [`serve`]. All diagnostics go to stderr.
 pub mod http;
+pub mod prompts;
 pub mod proto;
 pub mod time;
 pub mod tools;

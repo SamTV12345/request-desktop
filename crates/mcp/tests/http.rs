@@ -41,7 +41,8 @@ fn temp_db(tag: &str) -> PathBuf {
 /// Port 0: the OS picks, and the test reads back what it got.
 fn live(tag: &str) -> Live {
     let db = temp_db(tag);
-    let handle = http::start(0, Some(db.clone())).expect("the server must start");
+    let handle =
+        http::start(0, http::Bind::Loopback, Some(db.clone())).expect("the server must start");
     Live {
         handle,
         db,
@@ -237,12 +238,13 @@ fn a_json_reply_says_it_is_json() {
 #[test]
 fn a_token_from_a_previous_run_still_works_after_a_restart() {
     let db = temp_db("token-persists");
-    let first = http::start(0, Some(db.clone())).expect("the server must start");
+    let first =
+        http::start(0, http::Bind::Loopback, Some(db.clone())).expect("the server must start");
     let token = first.token();
     drop(first);
 
     let live = Live {
-        handle: http::start(0, Some(db.clone())).expect("restart"),
+        handle: http::start(0, http::Bind::Loopback, Some(db.clone())).expect("restart"),
         db,
         client: reqwest::blocking::Client::builder()
             .timeout(Duration::from_secs(10))
@@ -284,7 +286,7 @@ fn regenerating_replaces_the_token_persists_it_and_locks_out_the_old_one() {
     assert_eq!(live.send(req).0, 200, "the new one takes over");
 
     // Stored, so the next run agrees with what the user just copied.
-    let again = http::start(0, Some(live.db.clone())).expect("restart");
+    let again = http::start(0, http::Bind::Loopback, Some(live.db.clone())).expect("restart");
     assert_eq!(again.token(), fresh);
 }
 
@@ -342,26 +344,43 @@ fn a_wrong_token_is_refused() {
     assert_eq!(live.send(req).0, 401);
 }
 
+/// The `Origin` check is aimed at DNS rebinding — a page on `evil.com` resolving
+/// to loopback — so a foreign *web* origin is refused even with the right token.
+///
+/// `null` and app schemes used to be refused too, and that was wrong: they are not
+/// browsers, the bearer token is what guards this server, and turning them away
+/// only ever cost a native client its tool list. That is why they are in the
+/// allowed list below rather than the forbidden one.
 #[test]
-fn a_foreign_origin_is_forbidden_even_with_the_right_token() {
+fn a_foreign_web_origin_is_forbidden_but_a_non_browser_one_is_not() {
     let live = live("origin");
     let session = live.initialize();
-    for origin in [
-        "http://evil.example",
-        "https://localhost.evil.example",
-        "null",
-    ] {
+    let list = |origin: &str| {
         let mut req = Req::post(r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#);
         req.session = Some(&session);
         req.origin = Some(origin);
-        let (status, body, _) = live.send(req);
+        live.send(req)
+    };
+    for origin in [
+        "http://evil.example",
+        "https://localhost.evil.example",
+        "http://127.0.0.1.evil.example",
+    ] {
+        let (status, body, _) = list(origin);
         assert_eq!(status, 403, "{origin} was allowed: {body}");
     }
-    // A local page is fine.
-    let mut req = Req::post(r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#);
-    req.session = Some(&session);
-    req.origin = Some("http://127.0.0.1:5173");
-    assert_eq!(live.send(req).0, 200);
+    for origin in [
+        // A local page.
+        "http://127.0.0.1:5173",
+        "http://localhost",
+        // Not browsers: a sandboxed context, an editor, an app scheme.
+        "null",
+        "vscode-file://vscode-app",
+        "app://obsidian.md",
+    ] {
+        let (status, body, _) = list(origin);
+        assert_eq!(status, 200, "{origin} was refused: {body}");
+    }
 }
 
 #[test]
@@ -491,7 +510,8 @@ fn a_taken_port_is_an_error_rather_than_a_panic_or_a_silent_move() {
     let squatter = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
     let port = squatter.local_addr().unwrap().port();
     let db = temp_db("taken-port");
-    let err = http::start(port, Some(db.clone())).expect_err("that port is taken");
+    let err =
+        http::start(port, http::Bind::Loopback, Some(db.clone())).expect_err("that port is taken");
     let message = format!("{err:#}");
     assert!(message.contains(&port.to_string()), "{message}");
     let _ = std::fs::remove_file(&db);
@@ -500,7 +520,7 @@ fn a_taken_port_is_an_error_rather_than_a_panic_or_a_silent_move() {
 #[test]
 fn stopping_releases_the_port() {
     let db = temp_db("release");
-    let first = http::start(0, Some(db.clone())).unwrap();
+    let first = http::start(0, http::Bind::Loopback, Some(db.clone())).unwrap();
     let port = first.port;
     let first_token = first.token();
     // Occupied while it runs.
@@ -513,7 +533,8 @@ fn stopping_releases_the_port() {
     drop(taken);
 
     // And it can be started again on the same port.
-    let again = http::start(port, Some(db.clone())).expect("restart on the same port");
+    let again = http::start(port, http::Bind::Loopback, Some(db.clone()))
+        .expect("restart on the same port");
     assert_eq!(again.port, port);
     assert_eq!(
         again.token(),
@@ -528,6 +549,79 @@ fn stopping_releases_the_port() {
 fn a_bad_database_path_is_reported_rather_than_bound() {
     // A directory is not a database file.
     let dir = std::env::temp_dir();
-    let err = http::start(0, Some(dir)).expect_err("a directory cannot be a database");
+    let err = http::start(0, http::Bind::Loopback, Some(dir))
+        .expect_err("a directory cannot be a database");
     assert!(!format!("{err:#}").is_empty());
+}
+
+/// The bind is what makes the server reachable from a container, so it is checked
+/// on a real socket rather than by reading the setting back.
+///
+/// `Bind::Any` is not tested by connecting from another machine — there is no
+/// second machine here. What is checked is the part that was actually wrong: a
+/// loopback listener does not answer on this host's own routable address, which is
+/// the address a container's `host.docker.internal` resolves to.
+#[test]
+fn a_loopback_bind_does_not_answer_on_a_routable_address_and_a_wide_one_does() {
+    let dir = std::env::temp_dir().join("rp-mcp-bind");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let db = dir.join("state.db");
+
+    // A non-loopback address of this machine, if it has one. Without a network
+    // there is nothing to prove, so the test says so instead of failing.
+    let routable = std::net::UdpSocket::bind("0.0.0.0:0")
+        .and_then(|s| {
+            // No packet is sent; connect() just picks the outbound interface.
+            s.connect("192.0.2.1:9")?;
+            s.local_addr()
+        })
+        .map(|a| a.ip())
+        .ok()
+        .filter(|ip| !ip.is_loopback());
+    let Some(routable) = routable else {
+        eprintln!("no routable address on this machine; nothing to check");
+        return;
+    };
+
+    let handle = http::start(0, http::Bind::Loopback, Some(db.clone())).expect("start");
+    let port = handle.port;
+    assert!(
+        handle.url().contains("127.0.0.1"),
+        "a loopback server must hand out a loopback URL: {}",
+        handle.url()
+    );
+    // The listener is up on loopback...
+    std::net::TcpStream::connect(("127.0.0.1", port)).expect("loopback must answer");
+    // ...and not on the address a container would dial.
+    assert!(
+        std::net::TcpStream::connect_timeout(
+            &std::net::SocketAddr::new(routable, port),
+            std::time::Duration::from_millis(400),
+        )
+        .is_err(),
+        "a loopback bind must not answer on {routable} — that is the whole bug"
+    );
+    drop(handle);
+
+    let handle = http::start(0, http::Bind::Any, Some(db)).expect("start wide");
+    let port = handle.port;
+    assert!(
+        handle.url().contains("host.docker.internal"),
+        "a wide server must hand out an address a container can reach: {}",
+        handle.url()
+    );
+    assert!(
+        handle.local_url().contains("127.0.0.1"),
+        "and still offer the local one: {}",
+        handle.local_url()
+    );
+    std::net::TcpStream::connect_timeout(
+        &std::net::SocketAddr::new(routable, port),
+        std::time::Duration::from_millis(400),
+    )
+    .expect("a wide bind must answer on the routable address");
+    std::net::TcpStream::connect(("127.0.0.1", port)).expect("and on loopback too");
+
+    let _ = std::fs::remove_dir_all(&dir);
 }

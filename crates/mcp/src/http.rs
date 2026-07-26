@@ -15,12 +15,17 @@
 //!   carry it (400 without, 404 for one we do not know); `DELETE` ends it.
 //! * `MCP-Protocol-Version`, when sent, must be a revision this server speaks,
 //!   or the request is a 400.
-//! * The spec's security warning is followed to the letter and then some: the
-//!   listener is bound to loopback, the `Origin` header is validated (403), and
-//!   a bearer token is required (401). Without the token any other process on
-//!   the machine — including a web page's `fetch` to `127.0.0.1` — could read,
-//!   book and delete the user's time entries. The token is stored in the
-//!   database and reused across restarts; see [`TOKEN_KEY`] for what that costs.
+//! * The spec's security warning is followed: the listener is bound to loopback
+//!   unless [`Bind::Any`] was asked for — see there for why a container needs it,
+//!   a bearer token is required (401), and a *web* `Origin` that is not loopback
+//!   is refused (403) — see [`origin_allowed`] for why only web origins. Without
+//!   the token any other process on the machine — including a web page's `fetch`
+//!   to `127.0.0.1` — could read, book and delete the user's time entries. The
+//!   token is stored in the database and reused across restarts; see [`TOKEN_KEY`]
+//!   for what that costs.
+//! * Every refusal is logged with the header that caused it. A client that is
+//!   turned away shows the user an empty tool list and nothing else, so a server
+//!   that refuses silently is a server nobody can debug.
 //!
 //! Not implemented, deliberately: SSE streams, resumability and `Last-Event-ID`.
 //! Nothing here sends server-initiated messages, so a stream would only ever
@@ -37,7 +42,7 @@ use axum::{
 };
 use rp_store::Store;
 use serde_json::{Value, json};
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use std::net::{Ipv4Addr, TcpListener};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -115,6 +120,32 @@ struct Shared {
     /// Live session ids. A session carries no state beyond its own existence:
     /// the database is the state, and it is shared on purpose.
     sessions: Mutex<HashSet<String>>,
+    /// The last few things that happened, newest last, for the UI to show.
+    ///
+    /// The refusals were being logged to stderr, which the desktop app does not
+    /// have: it runs windowed, so nobody ever saw a line of it. A client that is
+    /// turned away shows an empty tool list and no reason, so without this there is
+    /// no way to tell "the token is wrong" from "nothing has ever connected" —
+    /// which is exactly the hole someone falls into when their client is in a
+    /// container and cannot reach the port at all.
+    activity: Mutex<VecDeque<String>>,
+}
+
+/// How many entries the activity log keeps. Enough to hold a whole handshake plus
+/// the calls that follow; it is a debugging aid, not a history.
+const ACTIVITY_KEPT: usize = 24;
+
+impl Shared {
+    /// Record one line, and print it too — a terminal run still wants stderr.
+    fn note(&self, line: impl Into<String>) {
+        let line = line.into();
+        eprintln!("rp-mcp: {line}");
+        let mut log = self.activity.lock().unwrap();
+        if log.len() == ACTIVITY_KEPT {
+            log.pop_front();
+        }
+        log.push_back(line);
+    }
 }
 
 /// A running server. Dropping it stops the listener and releases the port.
@@ -122,6 +153,9 @@ pub struct Handle {
     /// The port actually bound, which is not the requested one when 0 was asked
     /// for.
     pub port: u16,
+    /// Which interfaces it is listening on, so [`Handle::url`] can hand out an
+    /// address the client can actually reach.
+    bind: Bind,
     state: Arc<Shared>,
     stop: Option<tokio::sync::oneshot::Sender<()>>,
     join: Option<tokio::task::JoinHandle<()>>,
@@ -129,8 +163,35 @@ pub struct Handle {
 
 impl Handle {
     /// The URL to put in a client configuration.
+    ///
+    /// Follows the bind: a server listening on every interface is being reached
+    /// from somewhere else, and `127.0.0.1` in that config would point the client
+    /// back at itself — which is exactly the mistake that makes a container's tool
+    /// list come up empty.
     pub fn url(&self) -> String {
+        format!("http://{}:{}{PATH}", self.bind.client_host(), self.port)
+    }
+
+    /// The URL for a client on this machine, whatever the bind is. Both are worth
+    /// showing: one config is for the sandbox, the other for anything local.
+    pub fn local_url(&self) -> String {
         format!("http://127.0.0.1:{}{PATH}", self.port)
+    }
+
+    pub fn bind(&self) -> Bind {
+        self.bind
+    }
+
+    /// The last few requests and refusals, oldest first. What the UI shows so a
+    /// silent client can be told apart from a refused one.
+    pub fn activity(&self) -> Vec<String> {
+        self.state
+            .activity
+            .lock()
+            .unwrap()
+            .iter()
+            .cloned()
+            .collect()
     }
 
     /// The bearer token currently required. Shown in the UI so the user can paste
@@ -206,7 +267,49 @@ impl Drop for Handle {
 ///
 /// Fails, rather than falling back to another port or panicking, when the port
 /// is taken or the database cannot be opened — the UI shows the message.
-pub fn start(port: u16, db: Option<PathBuf>) -> Result<Handle> {
+/// Which interfaces the server listens on.
+///
+/// The default is loopback and should stay the default: on a café network,
+/// `0.0.0.0` hands the user's timesheet to whoever else is on it.
+///
+/// [`Bind::Any`] exists because loopback is unreachable from a **container**.
+/// Claude Code running in a Docker sandbox has its own network namespace, so
+/// `127.0.0.1:4319` there is the container itself, not the host — nothing is
+/// listening and the tool list silently stays empty. Reaching the host means
+/// `host.docker.internal`, and a connection that arrives over the Docker bridge
+/// lands on the host's bridge interface, not on loopback. So the server has to be
+/// listening there too, or the address alone does not help.
+///
+/// What still guards it: the bearer token, required on every request. What is
+/// genuinely given up: the port is now reachable by anything that can route to
+/// this machine, so the token is the *only* thing in the way. That is the user's
+/// call to make, which is why it is a setting and not a default.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Bind {
+    #[default]
+    Loopback,
+    Any,
+}
+
+impl Bind {
+    fn address(self) -> Ipv4Addr {
+        match self {
+            Bind::Loopback => Ipv4Addr::LOCALHOST,
+            Bind::Any => Ipv4Addr::UNSPECIFIED,
+        }
+    }
+
+    /// The host an *external* client should dial. Loopback clients use
+    /// `127.0.0.1`; a container reaches the host by name.
+    pub fn client_host(self) -> &'static str {
+        match self {
+            Bind::Loopback => "127.0.0.1",
+            Bind::Any => "host.docker.internal",
+        }
+    }
+}
+
+pub fn start(port: u16, bind: Bind, db: Option<PathBuf>) -> Result<Handle> {
     let store = match &db {
         Some(path) => Store::open_at(path)
             .with_context(|| format!("cannot open the database at {}", path.display()))?,
@@ -215,11 +318,18 @@ pub fn start(port: u16, db: Option<PathBuf>) -> Result<Handle> {
     let token = token_for(&store).context("cannot obtain an access token")?;
     let server = Server::new(store)?;
 
-    // Loopback only. Never `0.0.0.0`: on a laptop on a café network that would
-    // hand the user's timesheet to the network.
-    let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, port)).with_context(|| {
-        format!("cannot listen on 127.0.0.1:{port} — is another program using that port?")
+    let address = bind.address();
+    let listener = TcpListener::bind((address, port)).with_context(|| {
+        format!("cannot listen on {address}:{port} — is another program using that port?")
     })?;
+    if bind == Bind::Any {
+        // Said out loud, every time: this is the one setting that takes the
+        // machine boundary away.
+        eprintln!(
+            "rp-mcp: listening on every interface — the bearer token is now the only thing \
+             stopping other machines on this network from reading and changing your time entries"
+        );
+    }
     let port = listener.local_addr()?.port();
     listener.set_nonblocking(true)?;
 
@@ -227,7 +337,9 @@ pub fn start(port: u16, db: Option<PathBuf>) -> Result<Handle> {
         token: Mutex::new(token),
         server: Mutex::new(server),
         sessions: Mutex::new(HashSet::new()),
+        activity: Mutex::new(VecDeque::new()),
     });
+    state.note(format!("listening on {address}:{port}"));
     let app = Router::new()
         .route(
             PATH,
@@ -257,6 +369,7 @@ pub fn start(port: u16, db: Option<PathBuf>) -> Result<Handle> {
     };
     Ok(Handle {
         port,
+        bind,
         state,
         stop: Some(stop),
         join: Some(join),
@@ -281,9 +394,18 @@ async fn handle_post(
     }
     // Non-UTF-8 is not JSON; let the protocol layer answer it as a parse error.
     let text = String::from_utf8_lossy(&body);
-    let method = serde_json::from_str::<Value>(&text)
-        .ok()
+    let parsed = serde_json::from_str::<Value>(&text).ok();
+    let method = parsed
+        .as_ref()
         .and_then(|v| v.get("method").and_then(Value::as_str).map(str::to_string));
+    // The tool name too: "tools/call" twelve times over says nothing, whereas
+    // "tools/call start_timer" is the thing the user is looking for.
+    let what = match (&method, parsed.as_ref().and_then(tool_name)) {
+        (Some(m), Some(tool)) => format!("{m} {tool}"),
+        (Some(m), None) => m.clone(),
+        (None, _) => "a body that is not a JSON-RPC message".to_string(),
+    };
+    state.note(what);
 
     // `initialize` is the one request that arrives without a session.
     if method.as_deref() == Some("initialize") {
@@ -352,28 +474,51 @@ fn handle(state: &Shared, text: &str) -> Option<String> {
 /// Origin, then token, then protocol revision — in that order, and *before* any
 /// session is looked at, so a refusal never says whether a session id was real.
 ///
+/// Every refusal is **logged**, with the header that caused it. A client whose
+/// connection is turned away shows the user nothing but an absent tool list, and
+/// this server used to refuse in total silence — there was no way to find out
+/// whether the token was wrong, the origin was rejected, or nothing had connected
+/// at all. The token is never logged; the value that caused the refusal is, since
+/// that is the whole point.
+///
 /// `Some(response)` is a refusal; `None` means carry on.
 fn guard(state: &Shared, headers: &HeaderMap) -> Option<Response> {
-    if let Some(origin) = headers.get(header::ORIGIN)
-        && !origin.to_str().is_ok_and(is_local_origin)
-    {
-        return Some(refuse(
-            StatusCode::FORBIDDEN,
-            "this server only accepts requests from the local machine",
-        ));
+    if let Some(origin) = headers.get(header::ORIGIN) {
+        let shown = origin.to_str().unwrap_or("<not text>");
+        if !origin.to_str().is_ok_and(origin_allowed) {
+            state.note(format!(
+                "refused: Origin {shown:?} — only loopback http(s) origins are accepted"
+            ));
+            return Some(refuse(
+                StatusCode::FORBIDDEN,
+                "this server only accepts requests from the local machine",
+            ));
+        }
     }
     if !authorised(state, headers) {
+        let how = match headers.get(header::AUTHORIZATION) {
+            None => "no Authorization header",
+            Some(_) => "the bearer token did not match",
+        };
+        state.note(format!("refused: {how}"));
         return Some(unauthorised());
     }
     if let Some(version) = headers.get(VERSION_HEADER)
         && !version.to_str().is_ok_and(supported_version)
     {
+        let shown = version.to_str().unwrap_or("<not text>");
+        state.note(format!("refused: MCP-Protocol-Version {shown:?}"));
         return Some(refuse(
             StatusCode::BAD_REQUEST,
             "unsupported MCP-Protocol-Version",
         ));
     }
     None
+}
+
+/// The `params.name` of a `tools/call`, for the activity line.
+fn tool_name(message: &Value) -> Option<&str> {
+    message.get("params")?.get("name")?.as_str()
 }
 
 /// `Authorization: Bearer <token>`, compared without an early exit.
@@ -422,10 +567,22 @@ fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
 
 /// Only a loopback web origin may talk to us; the spec calls out DNS rebinding
 /// against local servers specifically, and a rebound name never looks like this.
-fn is_local_origin(origin: &str) -> bool {
+/// Whether `Origin` may proceed.
+///
+/// The header exists here to stop **DNS rebinding**: a page on `evil.com` that
+/// resolves to `127.0.0.1` and fetches this endpoint. That attack always arrives
+/// with an `http(s)` origin, so those are checked against loopback.
+///
+/// Anything else — `null` from a sandboxed or `file:` context, `vscode-file://`,
+/// an Electron or app scheme — is **not** that attack and is allowed through. It
+/// used to be a 403, which locked out native clients for no security gained: the
+/// bearer token is what actually guards this server, and a web page cannot obtain
+/// it. Refusing a non-browser origin only ever cost a real user their tool list.
+fn origin_allowed(origin: &str) -> bool {
     let rest = match origin.split_once("://") {
         Some(("http" | "https", rest)) => rest,
-        _ => return false,
+        // Not a web origin, so not the threat this check is for.
+        _ => return true,
     };
     // Strip the port, keeping an IPv6 literal's brackets intact.
     let host = match rest.strip_prefix('[') {
@@ -493,29 +650,38 @@ fn random_hex(bytes: usize) -> Result<String> {
 mod tests {
     use super::*;
 
+    /// The check is aimed at DNS rebinding, so it refuses exactly the shape that
+    /// attack has — a *web* origin that is not loopback — and lets everything else
+    /// through. A native client that sends `Origin: null` used to be turned away
+    /// with a 403 and no explanation, which bought nothing: the bearer token is
+    /// what guards this server, and a web page cannot get hold of it.
     #[test]
-    fn only_a_loopback_web_origin_is_accepted() {
+    fn a_web_origin_must_be_loopback_and_anything_else_is_not_this_check_s_business() {
         for good in [
             "http://localhost",
             "http://localhost:5173",
             "http://127.0.0.1:4319",
             "https://127.0.0.1",
             "http://[::1]:8080",
+            // Not web origins: a sandboxed page, an editor, an app scheme, junk.
+            "null",
+            "file://",
+            "vscode-file://vscode-app",
+            "app://obsidian.md",
+            "",
         ] {
-            assert!(is_local_origin(good), "{good} should be accepted");
+            assert!(origin_allowed(good), "{good} should be accepted");
         }
         for bad in [
             "http://evil.example",
             // The classic rebinding shape: a name that resolves to loopback.
             "http://localhost.evil.example",
             "http://127.0.0.1.evil.example",
-            "null",
-            "file://",
-            "ws://localhost",
+            "https://evil.example:4319",
+            // A malformed IPv6 literal must not read as loopback.
             "http://[::1",
-            "",
         ] {
-            assert!(!is_local_origin(bad), "{bad} should be refused");
+            assert!(!origin_allowed(bad), "{bad} should be refused");
         }
     }
 

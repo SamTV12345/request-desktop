@@ -1,6 +1,8 @@
 mod assets;
+mod calendar;
 mod custom;
 mod editor;
+mod filters;
 mod reference;
 mod request_pane;
 mod session;
@@ -9,6 +11,7 @@ mod text_input;
 mod theme;
 mod tool_pane;
 mod track;
+mod year_strip;
 
 use gpui::{
     App, Application, Bounds, Context, Entity, Global, IntoElement, ParentElement,
@@ -272,6 +275,13 @@ fn save_session(cx: &mut App) {
 /// The kv keys for the agent-facing HTTP server.
 const MCP_ENABLED_KEY: &str = "mcp.enabled";
 const MCP_PORT_KEY: &str = "mcp.port";
+/// Whether the server listens on every interface instead of loopback only.
+///
+/// Needed for a client in a **container**: Claude Code in a Docker sandbox has its
+/// own network namespace, so `127.0.0.1` there is the container, not the host. It
+/// reaches the host as `host.docker.internal`, and that connection arrives on the
+/// host's bridge interface — where a loopback-only listener is not.
+const MCP_BIND_ALL_KEY: &str = "mcp.bind_all";
 
 /// The embedded MCP server, off until the user turns it on.
 ///
@@ -283,6 +293,7 @@ const MCP_PORT_KEY: &str = "mcp.port";
 struct Mcp {
     /// The port to bind. After a successful start this is the port actually bound.
     port: u16,
+    bind: rp_mcp::http::Bind,
     /// Which database the server should open. `None` is the app's own; the tests
     /// point it at a temporary file so they never touch the real one.
     db: Option<std::path::PathBuf>,
@@ -293,9 +304,10 @@ struct Mcp {
 impl Global for Mcp {}
 
 impl Mcp {
-    fn new(port: u16) -> Self {
+    fn new(port: u16, bind: rp_mcp::http::Bind) -> Self {
         Self {
             port,
+            bind,
             db: None,
             server: None,
             error: None,
@@ -308,7 +320,7 @@ impl Mcp {
         if self.server.is_some() {
             return;
         }
-        match rp_mcp::http::start(self.port, self.db.clone()) {
+        match rp_mcp::http::start(self.port, self.bind, self.db.clone()) {
             Ok(handle) => {
                 self.port = handle.port;
                 self.server = Some(handle);
@@ -329,6 +341,56 @@ impl Mcp {
     fn running(&self) -> bool {
         self.server.is_some()
     }
+
+    /// Change the bind, restarting the listener if one is up — the address is
+    /// fixed when the socket is created, so there is no way to apply it in place.
+    fn set_bind(&mut self, bind: rp_mcp::http::Bind) {
+        if self.bind == bind {
+            return;
+        }
+        let was_running = self.running();
+        self.stop();
+        self.bind = bind;
+        if was_running {
+            self.start();
+        }
+    }
+}
+
+/// Was the server told to listen beyond loopback?
+fn stored_bind(store: Option<&Store>) -> rp_mcp::http::Bind {
+    match store
+        .and_then(|s| s.get(MCP_BIND_ALL_KEY).ok().flatten())
+        .as_deref()
+    {
+        Some("1") => rp_mcp::http::Bind::Any,
+        // Anything else, including a value that no longer parses: loopback. This
+        // setting opens a socket to the network, so it fails closed.
+        _ => rp_mcp::http::Bind::Loopback,
+    }
+}
+
+/// Flip the bind and remember it.
+fn toggle_mcp_bind(cx: &mut App) {
+    let next = cx.global_mut::<Mcp>().bind;
+    let next = match next {
+        rp_mcp::http::Bind::Loopback => rp_mcp::http::Bind::Any,
+        rp_mcp::http::Bind::Any => rp_mcp::http::Bind::Loopback,
+    };
+    cx.global_mut::<Mcp>().set_bind(next);
+    if let Some(store) = cx.try_global::<Persist>().and_then(|p| p.store.as_ref())
+        && let Err(e) = store.set(
+            MCP_BIND_ALL_KEY,
+            if next == rp_mcp::http::Bind::Any {
+                "1"
+            } else {
+                "0"
+            },
+        )
+    {
+        eprintln!("request-pilot: could not remember the MCP bind: {e:#}");
+    }
+    cx.refresh_windows();
 }
 
 /// Was the server on when the app last closed?
@@ -2063,6 +2125,19 @@ fn mcp_card(copied: Option<SharedString>, cx: &mut Context<Settings>) -> impl In
         .unwrap_or_default();
     let error = mcp.and_then(|m| m.error.clone());
     let port = mcp.map_or(rp_mcp::http::DEFAULT_PORT, |m| m.port);
+    let wide = mcp.map(|m| m.bind) == Some(rp_mcp::http::Bind::Any);
+    // What the server has actually seen. The one thing that tells "the client
+    // never reached me" apart from "it reached me and I turned it away" — and
+    // without it the only place that answer existed was a stderr stream a
+    // windowed app does not have.
+    let activity: Vec<SharedString> = mcp
+        .and_then(|m| m.server.as_ref())
+        .map(|h| h.activity())
+        .unwrap_or_default()
+        .into_iter()
+        .rev()
+        .map(SharedString::from)
+        .collect();
     let (fill, ink) = if running {
         (t.accent_wash_strong(), t.accent)
     } else {
@@ -2092,13 +2167,63 @@ fn mcp_card(copied: Option<SharedString>, cx: &mut Context<Settings>) -> impl In
             div()
                 .text_size(theme::text::SMALL)
                 .text_color(t.text_meta())
-                .child(if running {
-                    "Claude can reach the nine time-tracking tools over HTTP. \
-                     Loopback only, and the token is required."
-                } else {
-                    "Off. Starting it lets Claude book time over HTTP instead of \
-                     launching the rp-mcp binary."
+                .child(match (running, wide) {
+                    (true, false) => {
+                        "Claude can reach the nine time-tracking tools over HTTP. \
+                         This machine only, and the token is required."
+                    }
+                    (true, true) => {
+                        "Reachable from containers and from other machines on this \
+                         network. The token is the only thing in the way."
+                    }
+                    (false, _) => {
+                        "Off. Starting it lets Claude book time over HTTP instead of \
+                         launching the rp-mcp binary."
+                    }
                 }),
+        )
+        // The one setting that takes the machine boundary away, so it says what it
+        // costs rather than hiding behind a label.
+        .child(
+            div()
+                .id("mcp-bind")
+                .flex()
+                .items_start()
+                .gap(theme::space::S2)
+                .cursor_pointer()
+                .child(
+                    div()
+                        .flex_none()
+                        .mt(theme::space::S1 * 0.5)
+                        .child(theme::check_box(&t, wide)),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .flex_1()
+                        .min_w_0()
+                        .gap(theme::space::S1 * 0.5)
+                        .child(
+                            div()
+                                .text_size(theme::text::CONTROL)
+                                .text_color(t.text)
+                                .child("Reachable from containers"),
+                        )
+                        .child(
+                            div()
+                                .text_size(theme::text::SMALL)
+                                .text_color(if wide { t.warning() } else { t.text_meta() })
+                                .child(
+                                    "A client in a Docker sandbox has its own network, so \
+                                     127.0.0.1 there is the container and not this machine. \
+                                     This listens on every interface so host.docker.internal \
+                                     reaches it — which also means anything that can route \
+                                     here can try, with only the token in the way.",
+                                ),
+                        ),
+                )
+                .on_click(cx.listener(|_, _: &gpui::ClickEvent, _, cx| toggle_mcp_bind(cx))),
         )
         // The address, or the port it will try.
         .child(
@@ -2122,12 +2247,48 @@ fn mcp_card(copied: Option<SharedString>, cx: &mut Context<Settings>) -> impl In
                         .text_color(t.text)
                         .child(url.clone().unwrap_or_else(|| {
                             SharedString::from(format!(
-                                "http://127.0.0.1:{port}{} (when started)",
+                                "http://{}:{port}{} (when started)",
+                                if wide {
+                                    "host.docker.internal"
+                                } else {
+                                    "127.0.0.1"
+                                },
                                 rp_mcp::http::PATH
                             ))
                         })),
                 ),
         )
+        // With a wide bind the config above is the container's address, which does
+        // not work from this machine — so the local one is shown as well rather
+        // than leaving the user to work out that they need a second URL.
+        .when(running && wide, |d| {
+            let local = mcp
+                .and_then(|m| m.server.as_ref())
+                .map(|h| SharedString::from(h.local_url()))
+                .unwrap_or_default();
+            d.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(theme::space::S2)
+                    .text_size(theme::text::SMALL)
+                    .child(
+                        div()
+                            .flex_none()
+                            .w(theme::size::LABEL)
+                            .text_color(t.text_label())
+                            .child("From this machine"),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .truncate()
+                            .font_family(mono.clone())
+                            .text_color(t.text_muted())
+                            .child(local),
+                    ),
+            )
+        })
         // The token is shown but no longer has a copy button of its own: on its
         // own it is not enough to configure anything, which was the complaint.
         // The three buttons below carry it inside something pasteable.
@@ -2231,6 +2392,54 @@ fn mcp_card(copied: Option<SharedString>, cx: &mut Context<Settings>) -> impl In
                         "The token is stored, so the config keeps working after a restart. \
                          Regenerate it to lock out anything still holding the old one — \
                          then copy the config again.",
+                    ),
+            )
+        })
+        // What the server has seen, newest first.
+        //
+        // This is the panel to look at when a client shows no tools. An empty list
+        // means nothing ever reached the port — a wrong address, or a client in a
+        // container while this is on loopback. A list of `refused:` lines means it
+        // arrived and was turned away, and says why. A `tools/list` line means the
+        // handshake worked and the problem is on the client's side, which is
+        // usually that `claude mcp add` was run inside a running session: servers
+        // are connected at startup, so the tools appear after a restart.
+        .when(running, |d| {
+            d.child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(theme::space::S1)
+                    .child(section(cx, t, "Recent requests").px_0().pt_0())
+                    .when(activity.is_empty(), |d| {
+                        d.child(
+                            div()
+                                .text_size(theme::text::SMALL)
+                                .text_color(t.text_meta())
+                                .child(
+                                    "Nothing has reached the server yet. If a client shows no \
+                                     tools, it never got here — check the address it is using, \
+                                     and remember that a client in a container cannot reach \
+                                     127.0.0.1 on this machine.",
+                                ),
+                        )
+                    })
+                    .child(
+                        div()
+                            .id("mcp-activity")
+                            .flex()
+                            .flex_col()
+                            .max_h(theme::space::S8 * 4.)
+                            .overflow_y_scroll()
+                            .font_family(fonts(cx).mono)
+                            .text_size(theme::text::TINY)
+                            .children(activity.into_iter().map(|line| {
+                                let refused = line.starts_with("refused:");
+                                div()
+                                    .truncate()
+                                    .text_color(if refused { t.danger() } else { t.text_muted() })
+                                    .child(line)
+                            })),
                     ),
             )
         })
@@ -2678,7 +2887,10 @@ fn main() {
             // Off unless the user turned it on last time — it opens a socket, so
             // it waits to be asked.
             let start_mcp = mcp_enabled(store.as_ref());
-            cx.set_global(Mcp::new(stored_port(store.as_ref())));
+            cx.set_global(Mcp::new(
+                stored_port(store.as_ref()),
+                stored_bind(store.as_ref()),
+            ));
             cx.set_global(Persist {
                 store,
                 windows: Vec::new(),
@@ -2750,7 +2962,7 @@ mod tests {
     #[test]
     fn starting_twice_keeps_one_listener_and_stopping_frees_the_port() {
         let db = temp_db("toggle");
-        let mut mcp = Mcp::new(0);
+        let mut mcp = Mcp::new(0, rp_mcp::http::Bind::Loopback);
         mcp.db = Some(db.clone());
 
         mcp.start();
@@ -2783,7 +2995,7 @@ mod tests {
         let squatter = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
         let port = squatter.local_addr().unwrap().port();
         let db = temp_db("taken");
-        let mut mcp = Mcp::new(port);
+        let mut mcp = Mcp::new(port, rp_mcp::http::Bind::Loopback);
         mcp.db = Some(db.clone());
 
         mcp.start();
@@ -2802,7 +3014,7 @@ mod tests {
 
     #[test]
     fn an_unopenable_database_is_reported_rather_than_bound() {
-        let mut mcp = Mcp::new(0);
+        let mut mcp = Mcp::new(0, rp_mcp::http::Bind::Loopback);
         // A directory is not a database file.
         mcp.db = Some(std::env::temp_dir());
         mcp.start();

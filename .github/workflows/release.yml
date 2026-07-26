@@ -1,0 +1,107 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build and publish (must already exist)'
+        required: true
+
+# Builds the Windows binaries and attaches them to a GitHub Release, so a tag is
+# all it takes to get a downloadable .exe.
+#
+# Windows only, deliberately: `crates/app/build.rs` embeds a Windows icon and
+# `crates/app/src/tabs.rs` shells out to `explorer` for "Reveal in Explorer".
+# Neither is a hard blocker for the other platforms, but neither has ever been
+# built or run there, and a release artifact nobody has started is worse than no
+# artifact. Add a platform to the matrix when someone has actually run it.
+permissions:
+  contents: write # required to create the release and upload to it
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+
+      # gpui compiles its HLSL shaders with `fxc.exe` from the Windows SDK. Its
+      # build script looks in `PATH` and then at exactly one hard-coded SDK
+      # version, so on a runner with any other version installed the build fails
+      # with "Failed to find fxc.exe" — which is what happened locally. Find it
+      # and hand gpui the path through the variable it documents for this.
+      - name: Locate the shader compiler
+        shell: pwsh
+        run: |
+          $fxc = Get-ChildItem -Path 'C:\Program Files (x86)\Windows Kits\10\bin' `
+                               -Filter fxc.exe -Recurse -ErrorAction SilentlyContinue |
+                 Where-Object { $_.FullName -like '*\x64\*' } |
+                 Sort-Object FullName -Descending |
+                 Select-Object -First 1
+          if (-not $fxc) { throw 'no fxc.exe in the Windows SDK on this runner' }
+          Write-Host "using $($fxc.FullName)"
+          "GPUI_FXC_PATH=$($fxc.FullName)" >> $env:GITHUB_ENV
+
+      # The gates, before anything is published. A tag that does not pass them
+      # should not produce a download.
+      - name: Check
+        run: |
+          cargo fmt --all --check
+          cargo clippy --workspace --all-targets -- -D warnings
+          cargo test --workspace
+
+      - name: Build
+        run: cargo build --release -p request-pilot -p rp-mcp
+
+      # A release asset that turns out to be a 0-byte file, or the wrong file, is
+      # only discovered by whoever downloads it. Check here instead.
+      - name: Verify the binaries
+        shell: pwsh
+        run: |
+          foreach ($exe in 'request-pilot.exe', 'rp-mcp.exe') {
+            $path = "target/release/$exe"
+            if (-not (Test-Path $path)) { throw "$exe was not built" }
+            $size = (Get-Item $path).Length
+            if ($size -lt 1MB) { throw "$exe is only $size bytes" }
+            Write-Host "$exe  $([math]::Round($size/1MB,1)) MB"
+          }
+          # `crates/app/build.rs` embeds the icon and the version resource with
+          # winresource. Asking Windows for the product name is the cheap way to
+          # prove that resource is really in there — a build where build.rs
+          # silently did nothing produces an .exe with a blank one, and it only
+          # looks wrong to whoever downloads it and sees a default icon.
+          $name = (Get-Item 'target/release/request-pilot.exe').VersionInfo.ProductName
+          if ($name -ne 'Toolbench') {
+            throw "the version resource is missing or wrong: ProductName is '$name'"
+          }
+          Write-Host "version resource ok: $name"
+
+      - name: Publish the release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          name: Toolbench ${{ inputs.tag || github.ref_name }}
+          draft: false
+          prerelease: ${{ contains(inputs.tag || github.ref_name, '-') }}
+          fail_on_unmatched_files: true
+          files: |
+            target/release/request-pilot.exe
+            target/release/rp-mcp.exe
+          body: |
+            Windows build of Toolbench.
+
+            **`request-pilot.exe`** is the app — download and run it, there is
+            nothing to install.
+
+            **`rp-mcp.exe`** is the time-tracker MCP server for the stdio
+            transport. You only need it if you are wiring an agent up over stdio;
+            the app hosts the same server over HTTP from its Settings window,
+            which is the easier route. See `README-mcp.md`.

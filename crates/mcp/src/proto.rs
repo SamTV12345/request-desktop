@@ -109,6 +109,10 @@ impl Server {
             "ping" => Ok(json!({})),
             "tools/list" => Ok(json!({ "tools": tools::definitions() })),
             "tools/call" => tools::call(self, params),
+            // Prompts are what a client turns into slash commands; the tools above
+            // can only be called by a model. See `crate::prompts`.
+            "prompts/list" => Ok(json!({ "prompts": crate::prompts::definitions() })),
+            "prompts/get" => crate::prompts::get(params),
             _ => Err((METHOD_NOT_FOUND, format!("Method not found: {method}"))),
         }
     }
@@ -127,7 +131,7 @@ impl Server {
         };
         json!({
             "protocolVersion": version,
-            "capabilities": { "tools": {} },
+            "capabilities": { "tools": {}, "prompts": {} },
             "serverInfo": {
                 "name": "rp-time-tracker",
                 "title": "Request Pilot time tracker",

@@ -15,14 +15,20 @@
 //! no local-time API and no date dependency is allowed, so probing the store is
 //! the only way both sides can agree on what "today" and "12:36" mean.
 use crate::editor::Editor;
+use crate::filters::{self, Filters};
 use crate::text_input::TextInput;
 use crate::theme::{Theme, control, radius, size, space, text};
+use crate::year_strip;
 use crate::{Persist, theme};
 use gpui::{
     App, ClipboardItem, Context, Div, Entity, IntoElement, ParentElement, Pixels, Rgba,
     SharedString, Stateful, Styled, Task, Window, div, prelude::*, px, relative,
 };
 use rp_store::{DaySummary, Entry, Store};
+
+/// The week's hour grid and its inspector. A child module so it can read this
+/// view's state and reuse its buttons rather than growing a second set.
+mod week_grid;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// How often the change counter is checked. Fast enough that an entry booked by
@@ -84,7 +90,7 @@ fn is_leap(y: i32) -> bool {
     y % 4 == 0 && (y % 100 != 0 || y % 400 == 0)
 }
 
-fn days_in_month(y: i32, m: u32) -> u32 {
+pub(crate) fn days_in_month(y: i32, m: u32) -> u32 {
     match m {
         1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
         4 | 6 | 9 | 11 => 30,
@@ -96,7 +102,7 @@ fn days_in_month(y: i32, m: u32) -> u32 {
 
 /// Days since 1970-01-01. Hinnant's `days_from_civil` — the standard
 /// no-dependency way to do date arithmetic, and correct for negative years.
-fn days_from_civil(date: Ymd) -> i64 {
+pub(crate) fn days_from_civil(date: Ymd) -> i64 {
     let (y, m, d) = (date.y as i64, date.m as i64, date.d as i64);
     let y = if m <= 2 { y - 1 } else { y };
     let era = if y >= 0 { y } else { y - 399 } / 400;
@@ -126,7 +132,7 @@ fn civil_from_days(z: i64) -> Ymd {
 }
 
 /// Move `delta` days, crossing month and year boundaries by construction.
-fn step_day(date: Ymd, delta: i64) -> Ymd {
+pub(crate) fn step_day(date: Ymd, delta: i64) -> Ymd {
     civil_from_days(days_from_civil(date) + delta)
 }
 
@@ -145,7 +151,7 @@ fn step_month(date: Ymd, delta: i64) -> Ymd {
 
 /// Day of the week, 0 = Monday. 1970-01-01 was a Thursday, which is where the
 /// `+ 3` comes from.
-fn weekday(date: Ymd) -> u32 {
+pub(crate) fn weekday(date: Ymd) -> u32 {
     (days_from_civil(date) + 3).rem_euclid(7) as u32
 }
 
@@ -155,7 +161,7 @@ fn is_weekend(date: Ymd) -> bool {
 
 /// The Monday of `date`'s week. ISO weeks, because this is a European
 /// timesheet: a week that starts on Sunday would split every working week.
-fn week_start(date: Ymd) -> Ymd {
+pub(crate) fn week_start(date: Ymd) -> Ymd {
     step_day(date, -(weekday(date) as i64))
 }
 
@@ -203,13 +209,19 @@ fn fmt_long_month(date: Ymd) -> String {
 }
 
 /// `20 – 26 July 2026`, collapsing whatever the two ends share.
+/// `29 Jun – 5 Jul 2026 · week 27`.
+///
+/// The week number is what the design's title carries, and it is the ISO one:
+/// early January belongs to the previous year's last week, and a title reading
+/// "week 1" over dates in December makes the whole screen look wrong.
 fn fmt_week(date: Ymd) -> String {
     let (a, b) = (week_start(date), step_day(week_start(date), 6));
+    let week = crate::calendar::iso_week(date);
     if a.m == b.m {
-        format!("{} – {} {} {}", a.d, b.d, month_name(b), b.y)
+        format!("{} – {} {} {} · week {week}", a.d, b.d, month_name(b), b.y)
     } else if a.y == b.y {
         format!(
-            "{} {} – {} {} {}",
+            "{} {} – {} {} {} · week {week}",
             a.d,
             month_name(a),
             b.d,
@@ -217,7 +229,8 @@ fn fmt_week(date: Ymd) -> String {
             b.y
         )
     } else {
-        format!("{} – {}", fmt_long_date(a), fmt_long_date(b))
+        // A week that crosses a new year, where both dates need their own year.
+        format!("{} – {} · week {week}", fmt_long_date(a), fmt_long_date(b))
     }
 }
 
@@ -318,6 +331,15 @@ fn local_day_start(date: Ymd, probe: impl Fn(i64) -> Option<String>) -> Option<i
         }
     }
     Some(hi)
+}
+
+/// The local day an instant falls in. `offset` is the shown day's local-midnight
+/// shift, so this is the inverse of `Track::day_start`: local midnight is
+/// `day * 86_400 + offset`, and the day is what is left once that shift comes back
+/// off the instant. Never derive a day from a UTC timestamp instead — see
+/// [`today`].
+fn entry_day_of(ts: i64, offset: i64) -> Ymd {
+    civil_from_days((ts - offset).div_euclid(86_400))
 }
 
 /// Should the view re-query? `None` for `current` means the counter could not
@@ -454,8 +476,26 @@ pub struct Track {
     source: usize,
     running: Option<Entry>,
     entries: Vec<Entry>,
+    /// Entry the hour grid's inspector shows, by id — an index or a clone would
+    /// go stale on the next poll.
+    ///
+    /// The grid itself reads `span`, which already holds every entry of the shown
+    /// span: for a week that *is* the week, so a second query for the same rows
+    /// would only be a second thing to keep in step.
+    selected: Option<i64>,
     week: Vec<DaySummary>,
     month: Vec<DaySummary>,
+    /// Every entry overlapping the shown span, whatever the scope. The rail's
+    /// facets are counted off this and a filtered week or month is listed from
+    /// it — a per-day summary carries no source and cannot be narrowed.
+    span: Vec<Entry>,
+    /// The shown year's twelve monthly totals, for the year strip. Loaded in
+    /// `reload` and only in Month scope: it is twelve queries, and nothing else
+    /// draws it.
+    year: [i64; 12],
+    /// Which project and kind the rail is narrowing to. Both empty is
+    /// everything.
+    filters: Filters,
     tasks: Vec<String>,
     hits: Vec<Entry>,
     draft: Option<Draft>,
@@ -506,8 +546,12 @@ impl Track {
             source: 0,
             running: None,
             entries: Vec::new(),
+            selected: None,
             week: Vec::new(),
             month: Vec::new(),
+            span: Vec::new(),
+            year: [0; 12],
+            filters: Filters::default(),
             tasks: Vec::new(),
             hits: Vec::new(),
             draft: None,
@@ -651,6 +695,17 @@ impl Track {
         if last != week_months[0] {
             week_months.push(last);
         }
+        // The span the rail's facets are counted over: whatever the scope shows.
+        let (span_start, span_days) = match self.scope {
+            Scope::Day => (self.date, 1),
+            Scope::Week => (wk, 7),
+            Scope::Month => (
+                Ymd { d: 1, ..self.date },
+                days_in_month(self.date.y, self.date.m) as i64,
+            ),
+        };
+        let month_scope = self.scope == Scope::Month;
+        let shown_year = self.date.y;
 
         let loaded = self.with_store(cx, |store| {
             let mut week = Vec::new();
@@ -664,6 +719,11 @@ impl Track {
                 }
                 week.sort_by(|a, b| a.date.cmp(&b.date));
             }
+            // The span is asked for in instants, so it needs the local midnight
+            // it starts at. A store that cannot say falls back to UTC, which is
+            // what every other clock face here does.
+            let base = local_day_start(span_start, |ts| store.local_date(ts).ok())
+                .unwrap_or_else(|| days_from_civil(span_start) * 86_400);
             Ok((
                 store.change_counter()?,
                 store.track_running()?,
@@ -679,10 +739,28 @@ impl Track {
                 week,
                 today(Some(store)),
                 local_day_start(shown, |ts| store.local_date(ts).ok()),
+                store.track_entries_between(base, base + span_days * 86_400)?,
+                if month_scope {
+                    year_strip::year_totals(shown_year, |m| store.track_summary_month(m, now))?
+                } else {
+                    [0; 12]
+                },
             ))
         });
-        let Some((counter, running, entries, day, month_days, tasks, hits, week, today, day_start)) =
-            loaded
+        let Some((
+            counter,
+            running,
+            entries,
+            day,
+            month_days,
+            tasks,
+            hits,
+            week,
+            today,
+            day_start,
+            span,
+            year,
+        )) = loaded
         else {
             return;
         };
@@ -702,6 +780,11 @@ impl Track {
         };
         self.week = week;
         self.month = month_days;
+        // Whatever the grid had selected keeps its place unless the row itself is
+        // gone — another process may have deleted it between two polls.
+        self.selected = week_grid::keep_selected(self.selected, &span);
+        self.span = span;
+        self.year = year;
         self.error = None;
         self.summary.update(cx, |e, cx| e.set_text(text, cx));
         // Stepping days must keep the date field showing the day it moved to.
@@ -1029,23 +1112,18 @@ impl Track {
             .into_any_element()
     }
 
+    /// The timer card: what is running, or the fields to start something.
+    ///
+    /// It used to end with a "Recent tasks" list of up to twenty pills. That list
+    /// is gone, for two reasons. It was **unbounded in a 308-px column**, so
+    /// everything below it — the mini-month, the scope switcher, the filters —
+    /// was pushed off the bottom of the rail and simply could not be found; and
+    /// `track_tasks` returns tasks *oldest* first, so the heading was a lie. The
+    /// design replaces it with the mini-month and the facet rows, which is what
+    /// this rail now holds. Reusing a name is the search box's job.
     fn timer_block(&self, t: Theme, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let now = now();
         let running = self.running.is_some();
-        let mut chips = Vec::new();
-        for (i, name) in self.tasks.iter().take(20).enumerate() {
-            let label = SharedString::from(name.clone());
-            let pick = label.clone();
-            chips.push(pill_button(
-                t,
-                SharedString::from(format!("task-{i}")),
-                label,
-                cx.listener(move |this, _, _, cx| {
-                    let pick = pick.clone();
-                    this.task.update(cx, |t, cx| t.set_text(pick, cx));
-                }),
-            ));
-        }
         theme::card(&t)
             .gap(space::S3)
             .child(self.hero(t, now, cx))
@@ -1076,15 +1154,114 @@ impl Track {
                         cx.listener(|this, _, _, cx| this.start_or_stop(cx)),
                     ))
             })
-            .when(!chips.is_empty(), |d| {
-                d.child(
-                    theme::section_label(&t, "Recent tasks")
-                        .px_0()
-                        .pt(space::S1)
-                        .pb_0(),
-                )
-                .child(div().flex().flex_wrap().gap(space::S1).children(chips))
-            })
+    }
+
+    /// The mini-month from the design's left rail: a whole-week grid of bare day
+    /// numbers, marked by whether anything is booked.
+    ///
+    /// It is what the design puts where the endless list of task pills used to be,
+    /// and it does a job the pills could not: showing at a glance which days of the
+    /// month have time on them. Clicking a day goes there.
+    ///
+    /// Deliberately not the big grid at a smaller size — no chips, no totals, no
+    /// hover cards. It is a locator, and everything else in it would compete with
+    /// the grid it locates you in.
+    fn mini_month(&self, t: Theme, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let grid = crate::calendar::month_grid(self.date);
+        let month = self.date.m;
+        let booked: std::collections::BTreeSet<&str> = self
+            .month
+            .iter()
+            .filter(|d| d.total_seconds > 0)
+            .map(|d| d.date.as_str())
+            .collect();
+
+        let mut head = div()
+            .flex()
+            .gap(space::S1 * 0.75)
+            .font_family(theme::FONT_MONO)
+            .text_size(text::TINY)
+            .text_color(t.text_meta());
+        for name in WEEKDAY_NAMES {
+            head = head.child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .text_center()
+                    // One letter: seven columns in a 308-px rail have no room for
+                    // "Mon", and the position carries most of the meaning anyway.
+                    .child(&name[..1]),
+            );
+        }
+
+        let mut weeks = Vec::with_capacity(grid.len() / 7);
+        for week in grid.chunks(7) {
+            let mut cells = Vec::with_capacity(7);
+            for date in week {
+                let date = *date;
+                let inside = date.m == month;
+                let today = date == self.today;
+                let shown = date == self.date;
+                let has_time = booked.contains(fmt_date(date).as_str());
+                let (fill, ink) = if today {
+                    (t.accent, t.on_accent())
+                } else if shown {
+                    (t.active(), t.text)
+                } else if has_time {
+                    t.tag_accent_2()
+                } else {
+                    (theme::alpha(t.divider, 0.), t.text)
+                };
+                cells.push(
+                    div()
+                        .id(SharedString::from(format!("mini-{}", fmt_date(date))))
+                        .flex()
+                        .flex_1()
+                        .min_w_0()
+                        .items_center()
+                        .justify_center()
+                        .py(space::S1 * 0.5)
+                        .rounded(radius::PILL)
+                        .bg(fill)
+                        .font_family(theme::FONT_MONO)
+                        .text_size(text::TINY)
+                        .cursor_pointer()
+                        .text_color(if inside { ink } else { t.text_disabled() })
+                        .when(!today && !shown, |d| d.hover(|s| s.bg(t.hover())))
+                        .child(SharedString::from(date.d.to_string()))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            // Keep the scope: clicking a day in the mini-month
+                            // while looking at a month is how you move the month,
+                            // not how you leave it.
+                            let scope = this.scope;
+                            this.go_to(date, scope, cx)
+                        })),
+                );
+            }
+            weeks.push(div().flex().min_w_0().gap(space::S1 * 0.75).children(cells));
+        }
+
+        theme::card(&t)
+            .gap(space::S2)
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(space::S2)
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .font_family(theme::FONT_HEADING)
+                            .text_size(text::H5)
+                            .child(SharedString::from(fmt_long_month(self.date))),
+                    )
+                    .child(mini_step(t, "chevron_left", -1, cx))
+                    .child(mini_step(t, "chevron_right", 1, cx)),
+            )
+            .child(head)
+            .children(weeks)
     }
 
     fn nav_block(&self, t: Theme, cx: &mut Context<Self>) -> impl IntoElement + use<> {
@@ -1162,6 +1339,65 @@ impl Track {
                         }),
                     )),
             )
+    }
+
+    /// The rail's facets and the search box, under the navigation.
+    ///
+    /// The two narrow different things: a facet narrows the shown span, the
+    /// search reaches past it into every day there is. Both end up replacing the
+    /// detail pane's list, which is why they live together.
+    fn filter_block(&self, t: Theme, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let now = now();
+        let mut projects = Vec::new();
+        for (source, total) in filters::source_totals(&self.span, &SOURCES, now) {
+            let active = self.filters.source.as_deref() == Some(source);
+            projects.push(filters::facet_row(
+                t,
+                SharedString::from(format!("project-{source}")),
+                filters::source_color(t, source),
+                SharedString::from(source),
+                SharedString::from(fmt_hm(total)),
+                active,
+                cx.listener(move |this, _, _, cx| {
+                    Filters::toggle(&mut this.filters.source, source);
+                    cx.notify();
+                }),
+            ));
+        }
+        let mut kinds = Vec::new();
+        for (i, (kind, count)) in filters::kind_counts(&self.span).into_iter().enumerate() {
+            let active = self.filters.kind.as_deref() == Some(kind.as_str());
+            let pick = kind.clone();
+            kinds.push(filters::facet_row(
+                t,
+                SharedString::from(format!("kind-{i}")),
+                filters::kind_color(t, i),
+                SharedString::from(kind),
+                SharedString::from(count.to_string()),
+                active,
+                cx.listener(move |this, _, _, cx| {
+                    Filters::toggle(&mut this.filters.kind, &pick);
+                    cx.notify();
+                }),
+            ));
+        }
+        theme::card(&t)
+            .flex_1()
+            .min_h_0()
+            .child(filters::section(t, "PROJECTS", projects))
+            .child(theme::divider(&t))
+            // The kinds are read out of task names, so there is no bound on how
+            // many there are; they scroll and the search box below stays put.
+            .child(
+                div()
+                    .id("track-kinds")
+                    .flex()
+                    .flex_col()
+                    .flex_1()
+                    .min_h_0()
+                    .overflow_y_scroll()
+                    .child(filters::section(t, "KINDS", kinds)),
+            )
             .child(self.search.clone())
     }
 
@@ -1176,45 +1412,8 @@ impl Track {
         self.go_to(date, scope, cx);
     }
 
-    /// The left column: timer, navigation, search results.
+    /// The left column: timer, navigation, facets and search.
     fn list(&self, t: Theme, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let needle = self.search.read(cx).text().trim().to_string();
-        let mut hits = Vec::with_capacity(self.hits.len());
-        for entry in &self.hits {
-            let date = fmt_date(civil_from_days((entry.started_at + self.offset) / 86_400));
-            let jump = parse_date(&date);
-            hits.push(
-                div()
-                    .id(SharedString::from(format!("hit-{}", entry.id)))
-                    .flex()
-                    .flex_col()
-                    .px(space::S2)
-                    .py(space::S2)
-                    .rounded(radius::SM)
-                    .hover(|s| s.bg(t.hover()))
-                    .child(
-                        div()
-                            .text_color(t.text)
-                            .truncate()
-                            .child(SharedString::from(entry.task.clone())),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .gap(space::S2)
-                            .font_family(theme::FONT_MONO)
-                            .text_size(text::SMALL)
-                            .text_color(t.text_meta())
-                            .child(SharedString::from(date))
-                            .child(SharedString::from(fmt_hm(entry.seconds(now())))),
-                    )
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        if let Some(date) = jump {
-                            this.go_to(date, Scope::Day, cx);
-                        }
-                    })),
-            );
-        }
         div()
             .flex()
             .flex_col()
@@ -1229,34 +1428,20 @@ impl Track {
             .h_full()
             .gap(space::S3)
             .p(space::S4)
-            .overflow_hidden()
+            // Scrolls, and that is not decoration: an unbounded child in here once
+            // pushed the mini-month, the scope switcher and the filter rows off the
+            // bottom, where there was no way to reach them and no sign they
+            // existed. Nothing in this column may be unreachable again.
+            .id("track-rail")
+            .overflow_y_scroll()
             .border_r_1()
             .border_color(t.divider)
             .child(self.timer_block(t, cx))
+            // The mini-month sits above the scope switcher, as the design has it:
+            // where in the month you are, then what span you are looking at.
+            .child(self.mini_month(t, cx))
             .child(self.nav_block(t, cx))
-            .child(
-                theme::card(&t)
-                    .flex_1()
-                    .min_h_0()
-                    .child(hint(
-                        t,
-                        SharedString::from(if needle.is_empty() {
-                            "Type to search every day".to_string()
-                        } else {
-                            format!("{} matching", self.hits.len())
-                        }),
-                    ))
-                    .child(
-                        div()
-                            .id("track-hits")
-                            .flex()
-                            .flex_col()
-                            .flex_1()
-                            .min_h_0()
-                            .overflow_y_scroll()
-                            .children(hits),
-                    ),
-            )
+            .child(self.filter_block(t, cx))
     }
 
     /// The detail pane: the day's entries, or the per-day totals of a week or
@@ -1264,19 +1449,45 @@ impl Track {
     fn detail(&self, t: Theme, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let now = now();
         let day_scope = self.scope == Scope::Day;
+
+        let searching = !self.search.read(cx).text().trim().is_empty();
+        // Two things put entries from outside the shown day in this list: a
+        // search, which is over all history, and a facet on a week or a month —
+        // the store's per-day summaries carry no source, so a narrowed span can
+        // only be shown as the entries themselves.
+        let listing = searching || (!day_scope && self.filters.any());
+        let history: Vec<Entry> = if searching {
+            self.hits.clone()
+        } else if listing {
+            filters::retain(&self.span, &self.filters)
+        } else {
+            Vec::new()
+        };
+        let entries = filters::retain(&self.entries, &self.filters);
         let days: &[DaySummary] = match self.scope {
+            _ if listing => &[],
             Scope::Day => &[],
             Scope::Week => &self.week,
             Scope::Month => &self.month,
         };
-        let total: i64 = match self.scope {
-            Scope::Day => self.entries.iter().map(|e| e.seconds(now)).sum(),
-            _ => days.iter().map(|d| d.total_seconds).sum(),
+        // The total is the total of what is on screen. A filtered view whose
+        // heading still showed the unfiltered month would be read as the answer
+        // to the question the filter asked.
+        let total: i64 = if listing {
+            history.iter().map(|e| e.seconds(now)).sum()
+        } else if day_scope {
+            entries.iter().map(|e| e.seconds(now)).sum()
+        } else {
+            days.iter().map(|d| d.total_seconds).sum()
         };
         let editing = self.draft.as_ref().and_then(|d| d.id);
         let mut rows = Vec::new();
-        if day_scope {
-            for entry in &self.entries {
+        if listing {
+            for entry in &history {
+                rows.push(self.history_row(t, entry, now, cx).into_any_element());
+            }
+        } else if day_scope {
+            for entry in &entries {
                 if editing == Some(entry.id) {
                     rows.push(self.draft_row(t, cx).into_any_element());
                 } else {
@@ -1360,12 +1571,20 @@ impl Track {
             }
         }
         let empty = match self.scope {
-            Scope::Day => self.entries.is_empty() && self.draft.is_none(),
+            _ if listing => rows.is_empty(),
+            Scope::Day => entries.is_empty() && self.draft.is_none(),
             _ => rows.is_empty(),
+        };
+        // An empty list after a search or a filter is not an empty day, and
+        // saying "start a timer" there points at the wrong control.
+        let empty_hint = if listing {
+            "Nothing matches — clear the search box, or the filter row in the rail."
+        } else {
+            "Start a timer, or step to another day with ‹ and ›."
         };
         // The `.table` header: the same columns the rows use, so the mono
         // figures below each sit under their name.
-        let head = if day_scope {
+        let head = if day_scope && !listing {
             table_head(t)
                 .child(col(COL_RANGE).child("WHEN"))
                 .child(
@@ -1458,45 +1677,15 @@ impl Track {
                     )
                     .when_some(self.error.clone(), |d, e| d.child(error_banner(t, e))),
             )
-            .child(
-                theme::card(&t)
-                    .flex_1()
-                    .min_h_0()
-                    .gap(space::S1)
-                    .child(head)
-                    .child(theme::divider(&t))
-                    .child(
-                        div()
-                            .id("track-rows")
-                            .flex()
-                            .flex_col()
-                            .flex_1()
-                            .min_h_0()
-                            .overflow_y_scroll()
-                            .when(empty, |d| {
-                                d.child(
-                                    div()
-                                        .flex()
-                                        .flex_col()
-                                        .items_center()
-                                        .justify_center()
-                                        .gap(space::S2)
-                                        .p(space::S8)
-                                        .child(theme::icon_tinted(
-                                            "clock",
-                                            text::H3,
-                                            t.text_disabled(),
-                                        ))
-                                        .child(heading(t, "Nothing booked here"))
-                                        .child(hint(
-                                            t,
-                                            "Start a timer, or step to another day with ‹ and ›.",
-                                        )),
-                                )
-                            })
-                            .children(rows),
-                    ),
-            )
+            // A month is a grid; a day and a week are a table. The design makes
+            // that switch, and it is the right one: a table of a whole month's
+            // days is a scroll, and the shape of the month is what you opened it
+            // for.
+            .map(|d| match self.scope {
+                Scope::Month => d.child(self.month_grid(t, cx)),
+                Scope::Week => d.child(self.week_view(t, cx)),
+                _ => d.child(self.day_table(t, head, rows, empty, empty_hint, cx)),
+            })
             .child(
                 div()
                     .flex()
@@ -1507,13 +1696,370 @@ impl Track {
                     .min_h(space::S8 * 3.)
                     .max_h(SUMMARY_MAX_H)
                     .gap(space::S3)
-                    .child(self.chart(t, cx))
+                    // A per-day chart under a table of the same month's days says
+                    // it twice; zoomed out to the year it says something the
+                    // table cannot.
+                    .child(if self.scope == Scope::Month {
+                        self.year_row(t, cx).into_any_element()
+                    } else {
+                        self.chart(t, cx).into_any_element()
+                    })
                     .child(self.summary_card(t, cx)),
             )
     }
 
-    /// The month at a glance: one bar a day, so a gap in the timesheet is seen
-    /// rather than counted.
+    /// The year strip and its row of affordances, in the place [`Track::chart`]
+    /// holds for a day or a week.
+    fn year_row(&self, t: Theme, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let mut links = Vec::new();
+        for back in 1..=2i64 {
+            let year = self.date.y - back as i32;
+            links.push(year_strip::year_link(
+                t,
+                year,
+                cx.listener(move |this, _, _, cx| {
+                    let scope = this.scope;
+                    // Through `step_month`, so 29 February does not land on a
+                    // date the target year does not have.
+                    let date = step_month(this.date, -12 * back);
+                    this.go_to(date, scope, cx);
+                }),
+            ));
+        }
+        let total: i64 = self.year.iter().sum();
+        theme::card(&t)
+            // The wide half of the 1.35:1 pair — see `CHART_SHARE`.
+            .flex_basis(relative(CHART_SHARE))
+            .flex_shrink()
+            .min_w_0()
+            .child(
+                div()
+                    .flex()
+                    .items_baseline()
+                    .gap(space::S2)
+                    .child(
+                        div()
+                            .flex_none()
+                            .font_family(theme::FONT_HEADING)
+                            .text_size(text::H5)
+                            .text_color(t.text)
+                            .child(SharedString::from(self.date.y.to_string())),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .text_size(text::SMALL)
+                            .text_color(t.text_meta())
+                            .child("by month"),
+                    )
+                    .child(
+                        div()
+                            .flex_none()
+                            .font_family(theme::FONT_MONO)
+                            .text_size(text::SMALL)
+                            .text_color(t.accent_ramp.s700)
+                            .child(SharedString::from(fmt_hm(total))),
+                    ),
+            )
+            .child(year_strip::strip(
+                t,
+                &self.year,
+                Some(self.date.m as usize - 1),
+            ))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(space::S3)
+                    .children(links)
+                    .child(div().flex_1().min_w_0())
+                    .child(year_strip::secondary_button(
+                        t,
+                        "export-month".into(),
+                        "copy",
+                        "Export month".into(),
+                        cx.listener(|this, _, _, cx| this.copy(true, cx)),
+                    )),
+            )
+    }
+
+    /// A row for an entry from outside the shown day — a search hit, or one entry
+    /// of a filtered week or month. It carries its date, because finding out
+    /// *when* is the reason the row is in front of the user.
+    fn history_row(
+        &self,
+        t: Theme,
+        entry: &Entry,
+        now: i64,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement + use<> {
+        // Local midnight is `day * 86_400 + offset` (see `day_start`), so the day
+        // an instant falls in takes that shift back *off* it. Adding it put every
+        // entry within the offset of midnight on the wrong date — in Berlin, the
+        // two hours after 22:00 UTC landed on tomorrow.
+        let date = fmt_date(entry_day_of(entry.started_at, self.offset));
+        let jump = parse_date(&date);
+        let (tag_bg, tag_ink) = if entry.source == "mcp" {
+            t.tag_accent_2()
+        } else {
+            t.tag_neutral()
+        };
+        table_row(t, SharedString::from(format!("hist-{}", entry.id)))
+            .child(
+                col(COL_DATE)
+                    .font_family(theme::FONT_MONO)
+                    .text_size(text::SMALL)
+                    .text_color(t.text_muted())
+                    .child(SharedString::from(date)),
+            )
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(space::S2)
+                    .flex_1()
+                    .min_w(size::TABLE_COL_MIN_W)
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .text_color(t.text)
+                            .child(SharedString::from(entry.task.clone())),
+                    )
+                    .child(tag(
+                        SharedString::from(entry.source.clone()),
+                        tag_bg,
+                        tag_ink,
+                    )),
+            )
+            .child(
+                col(COL_TOTAL)
+                    .text_right()
+                    .font_family(theme::FONT_MONO)
+                    .text_color(t.text)
+                    .child(SharedString::from(fmt_hm(entry.seconds(now)))),
+            )
+            .on_click(cx.listener(move |this, _, _, cx| {
+                if let Some(date) = jump {
+                    this.go_to(date, Scope::Day, cx);
+                }
+            }))
+    }
+
+    /// The entry table, for the Day and Week scopes.
+    ///
+    /// `empty_hint` rather than a fixed line: an empty list after a search or a
+    /// filter is not an empty day, and "start a timer" there points at the wrong
+    /// control.
+    fn day_table(
+        &self,
+        t: Theme,
+        head: Div,
+        rows: Vec<gpui::AnyElement>,
+        empty: bool,
+        empty_hint: &'static str,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement + use<> {
+        let _ = cx;
+        theme::card(&t)
+            .flex_1()
+            .min_h_0()
+            .gap(space::S1)
+            .child(head)
+            .child(theme::divider(&t))
+            .child(
+                div()
+                    .id("track-rows")
+                    .flex()
+                    .flex_col()
+                    .flex_1()
+                    .min_h_0()
+                    .overflow_y_scroll()
+                    .when(empty, |d| {
+                        d.child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .items_center()
+                                .justify_center()
+                                .gap(space::S2)
+                                .p(space::S8)
+                                .child(theme::icon_tinted("clock", text::H3, t.text_disabled()))
+                                .child(heading(t, "Nothing booked here"))
+                                .child(hint(t, empty_hint)),
+                        )
+                    })
+                    .children(rows),
+            )
+    }
+
+    /// The month as a calendar grid, from the `Time Calendar` design.
+    ///
+    /// Replaces the day table while the scope is Month: a table of one month's
+    /// entries is a scroll, whereas the shape of a month — which days are empty,
+    /// where the week boundaries fall — is the thing you open a month for.
+    ///
+    /// The measurements are the design's own and have no tokens in `theme.rs`,
+    /// which is why they are named here rather than dropped inline: 28-px card,
+    /// 18-px cells, 6-px gutters.
+    fn month_grid(&self, t: Theme, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        const CARD: Pixels = px(28.);
+        const CELL: Pixels = px(18.);
+        const GUTTER: Pixels = px(6.);
+        /// A cell below this is a day number and nothing else — the chips are the
+        /// point of the grid, so it stops shrinking here and the grid scrolls
+        /// instead. The design draws at 1080 px where six rows fit comfortably;
+        /// on a shorter window something has to give, and clipped cells are worse
+        /// than a scroll bar.
+        const ROW_MIN_H: Pixels = px(84.);
+        /// Chips per cell before the rest becomes "+N more". Four fits the cell
+        /// height at 1080; a fifth is clipped, and a clipped chip reads as a
+        /// rendering fault rather than as an overflow.
+        const CHIPS: usize = 4;
+
+        let grid = crate::calendar::month_grid(self.date);
+        let month = self.date.m;
+        // Day -> its summary, for the days this month actually has.
+        let find = |date: Ymd| -> Option<&DaySummary> {
+            let iso = fmt_date(date);
+            self.month.iter().find(|d| d.date == iso)
+        };
+
+        let mut rows = Vec::with_capacity(grid.len() / 7);
+        for week in grid.chunks(7) {
+            let mut cells = Vec::with_capacity(7);
+            for date in week {
+                let date = *date;
+                let inside = date.m == month;
+                let today = date == self.today;
+                let summary = find(date);
+                let total = summary.map_or(0, |d| d.total_seconds);
+
+                let mut cell = div()
+                    .id(SharedString::from(fmt_date(date)))
+                    .flex()
+                    .flex_col()
+                    .flex_1()
+                    .min_w_0()
+                    .min_h_0()
+                    .gap(space::S1)
+                    .px(space::S3)
+                    .py(space::S2)
+                    .rounded(CELL)
+                    .overflow_hidden()
+                    .cursor_pointer()
+                    // Today is the accent wash; a day of this month sits on the
+                    // window ground; a day belonging to a neighbouring month is
+                    // barely there, so the month's own shape reads first.
+                    .bg(if today {
+                        t.accent_wash_strong()
+                    } else if inside {
+                        t.bg
+                    } else {
+                        t.hover()
+                    })
+                    .when(!today, |d| d.hover(|s| s.bg(t.active())))
+                    .child(
+                        div()
+                            .flex()
+                            .items_baseline()
+                            .gap(space::S2)
+                            .child(
+                                div()
+                                    .font_family(theme::FONT_MONO)
+                                    .text_size(text::CONTROL)
+                                    .text_color(match (today, inside) {
+                                        (true, _) => t.accent,
+                                        (false, true) => t.text,
+                                        (false, false) => t.text_disabled(),
+                                    })
+                                    .child(SharedString::from(date.d.to_string())),
+                            )
+                            .when(total > 0, |d| {
+                                d.child(
+                                    div()
+                                        .font_family(theme::FONT_MONO)
+                                        .text_size(text::TINY)
+                                        .text_color(t.accent)
+                                        .child(SharedString::from(fmt_hm(total))),
+                                )
+                            }),
+                    )
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        // Clicking a day is how you get from the shape of the
+                        // month to the entries of one day.
+                        this.go_to(date, Scope::Day, cx)
+                    }));
+
+                if let Some(summary) = summary {
+                    for (task, seconds) in summary.per_task.iter().take(CHIPS) {
+                        cell = cell.child(chip(t, task, *seconds));
+                    }
+                    let rest = summary.per_task.len().saturating_sub(CHIPS);
+                    if rest > 0 {
+                        cell = cell.child(
+                            div()
+                                .text_size(text::TINY)
+                                .text_color(t.text_meta())
+                                .child(SharedString::from(format!("+{rest} more"))),
+                        );
+                    }
+                }
+                cells.push(cell);
+            }
+            rows.push(
+                div()
+                    .flex()
+                    .flex_1()
+                    .min_h(ROW_MIN_H)
+                    .gap(GUTTER)
+                    .children(cells),
+            );
+        }
+
+        // The weekday header, Monday first like the grid under it.
+        let mut head = div()
+            .flex()
+            .flex_none()
+            .min_w_0()
+            .gap(GUTTER)
+            .px(space::S2)
+            .pb(space::S2)
+            .text_size(text::LABEL)
+            .text_color(t.text_meta());
+        for name in WEEKDAY_NAMES {
+            head = head.child(div().flex_1().min_w_0().truncate().child(name));
+        }
+
+        div()
+            .flex()
+            .flex_col()
+            .flex_1()
+            .min_h_0()
+            .p(space::S2)
+            .rounded(CARD)
+            .bg(t.surface)
+            .overflow_hidden()
+            .child(head)
+            // The weeks scroll; the header does not. Six rows that will not go
+            // below `ROW_MIN_H` cannot be squeezed into a short window, and
+            // without this the card grew past the bottom of the screen instead.
+            .child(
+                div()
+                    .id("month-weeks")
+                    .flex()
+                    .flex_col()
+                    .flex_1()
+                    .min_h_0()
+                    .gap(GUTTER)
+                    .overflow_y_scroll()
+                    .children(rows),
+            )
+    }
+
     fn chart(&self, t: Theme, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let days = days_in_month(self.date.y, self.date.m);
         let max = self
@@ -1887,6 +2433,60 @@ impl Render for Track {
 // ---------------------------------------------------------------------------
 // Small building blocks, all of them token-only.
 // ---------------------------------------------------------------------------
+
+/// One entry chip in a month cell: the duration, then the task name.
+///
+/// Duration first and in mono, because a column of chips is scanned for "how long
+/// did that take", and a proportional number in a stack of them does not line up.
+/// The name truncates; the duration never does, or the chip says nothing.
+fn chip(t: Theme, task: &str, seconds: i64) -> Div {
+    let (fill, ink) = t.tag_accent_2();
+    div()
+        .flex()
+        .flex_none()
+        .items_center()
+        .gap(space::S1)
+        .px(space::S2)
+        .rounded(radius::PILL)
+        .bg(fill)
+        .text_color(ink)
+        .text_size(text::TINY)
+        .overflow_hidden()
+        .child(
+            div()
+                .flex_none()
+                .font_family(theme::FONT_MONO)
+                .child(SharedString::from(fmt_hm(seconds))),
+        )
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .truncate()
+                .child(SharedString::from(task.to_string())),
+        )
+}
+
+/// A month step for the mini-month's header. Steps whole months whatever the
+/// scope is — the card shows a month, so its arrows move a month.
+fn mini_step(t: Theme, glyph: &'static str, delta: i32, cx: &mut Context<Track>) -> Stateful<Div> {
+    div()
+        .id(SharedString::from(format!("mini-step{delta}")))
+        .flex()
+        .flex_none()
+        .items_center()
+        .justify_center()
+        .size(space::S6)
+        .rounded(radius::PILL)
+        .cursor_pointer()
+        .hover(|s| s.bg(t.hover()))
+        .child(theme::icon_tinted(glyph, text::SMALL, t.text_muted()))
+        .on_click(cx.listener(move |this, _, _, cx| {
+            let date = step_month(this.date, delta as i64);
+            let scope = this.scope;
+            this.go_to(date, scope, cx)
+        }))
+}
 
 fn heading(t: Theme, label: impl Into<SharedString>) -> Div {
     div()
@@ -2312,13 +2912,27 @@ mod tests {
     fn headings_spell_the_date_out() {
         assert_eq!(fmt_long_date(ymd(2026, 7, 26)), "26 July 2026");
         assert_eq!(fmt_long_month(ymd(2026, 7, 26)), "July 2026");
-        assert_eq!(fmt_week(ymd(2026, 7, 26)), "20 – 26 July 2026");
-        // A week that straddles two months, and two years.
-        assert_eq!(fmt_week(ymd(2026, 3, 1)), "23 February – 1 March 2026");
+        // The week number rides along, as the calendar design's title has it.
+        assert_eq!(fmt_week(ymd(2026, 7, 26)), "20 – 26 July 2026 · week 30");
+        // A week that straddles two months, and two years. The second is the case
+        // the ISO rule is for: these dates start in 2025 and are week 1 of 2026.
+        assert_eq!(
+            fmt_week(ymd(2026, 3, 1)),
+            "23 February – 1 March 2026 · week 9"
+        );
         assert_eq!(
             fmt_week(ymd(2026, 1, 1)),
-            "29 December 2025 – 4 January 2026"
+            "29 December 2025 – 4 January 2026 · week 1"
         );
+        // Every day of one week gets the same heading, so paging inside a week
+        // cannot change the title under the user.
+        for offset in 0..7 {
+            assert_eq!(
+                fmt_week(step_day(week_start(ymd(2026, 7, 26)), offset)),
+                fmt_week(ymd(2026, 7, 26)),
+                "day +{offset}"
+            );
+        }
     }
 
     #[test]
