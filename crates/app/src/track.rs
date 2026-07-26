@@ -510,7 +510,12 @@ impl Track {
                     .gap(space::XS)
                     // ponytail: the dot is the smallest step of the spacing
                     // scale used as a size; there is no dedicated dot token.
-                    .child(div().size(space::XS).rounded(radius::PILL).bg(theme::SUCCESS))
+                    .child(
+                        div()
+                            .size(space::XS)
+                            .rounded(radius::PILL)
+                            .bg(theme::SUCCESS),
+                    )
                     .child(
                         div()
                             .text_size(text::SMALL)
@@ -584,7 +589,11 @@ impl Track {
                 "track-toggle".into(),
                 if running { "stop" } else { "play" },
                 if running { "Stop" } else { "Start" }.into(),
-                if running { theme::DANGER } else { theme::ACCENT },
+                if running {
+                    theme::DANGER
+                } else {
+                    theme::ACCENT
+                },
                 if running {
                     theme::DANGER_HOVER
                 } else {
@@ -944,9 +953,7 @@ impl Track {
                                         .text_color(theme::TEXT_DISABLED),
                                 )
                                 .child(heading("Nothing booked here"))
-                                .child(hint(
-                                    "Start a timer, or step to another day with ‹ and ›.",
-                                )),
+                                .child(hint("Start a timer, or step to another day with ‹ and ›.")),
                         )
                     }),
             )
@@ -1033,7 +1040,11 @@ impl Track {
             )
             .child(badge(
                 SharedString::from(entry.source.clone()),
-                if mcp { theme::ACCENT } else { theme::TEXT_TERTIARY },
+                if mcp {
+                    theme::ACCENT
+                } else {
+                    theme::TEXT_TERTIARY
+                },
                 mcp,
             ))
             // The id is what the MCP server reports back, so it has to be
@@ -1058,19 +1069,16 @@ impl Track {
             )
             // Deleting is destructive, so the affordance is only there — and
             // only clickable — while the pointer is on its row.
-            .child(
-                div()
-                    .w(control::SM)
-                    .h(control::SM)
-                    .flex_none()
-                    .when(self.hovered == Some(id), |d| {
-                        d.child(icon_button(
-                            SharedString::from(format!("del-{id}")),
-                            "trash",
-                            cx.listener(move |this, _, _, cx| this.delete(id, cx)),
-                        ))
-                    }),
-            )
+            .child(div().w(control::SM).h(control::SM).flex_none().when(
+                self.hovered == Some(id),
+                |d| {
+                    d.child(icon_button(
+                        SharedString::from(format!("del-{id}")),
+                        "trash",
+                        cx.listener(move |this, _, _, cx| this.delete(id, cx)),
+                    ))
+                },
+            ))
     }
 }
 
@@ -1263,7 +1271,9 @@ fn error_banner(message: SharedString) -> Div {
             div().flex_1().child(
                 div()
                     .child("Time tracking is unavailable: the database could not be opened.")
-                    .child(hint("Everything else keeps working; nothing here can be saved.")),
+                    .child(hint(
+                        "Everything else keeps working; nothing here can be saved.",
+                    )),
             )
         } else {
             div().flex_1().child(message)

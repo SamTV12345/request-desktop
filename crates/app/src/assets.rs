@@ -76,13 +76,19 @@ mod tests {
                 .unwrap_or_else(|| panic!("{path} did not load"));
             let svg = std::str::from_utf8(&bytes).unwrap_or_else(|_| panic!("{path} is not UTF-8"));
             assert!(svg.starts_with("<svg"), "{path} is not an svg: {svg}");
-            assert!(svg.contains("viewBox"), "{path} has no viewBox, so it cannot scale");
+            assert!(
+                svg.contains("viewBox"),
+                "{path} has no viewBox, so it cannot scale"
+            );
             // Tinting only works if the drawing defers its colour to the caller.
             assert!(
                 svg.contains("currentColor"),
                 "{path} hardcodes a colour, so text_color cannot tint it"
             );
-            assert!(!svg.contains("<image"), "{path} embeds a raster, defeating the point");
+            assert!(
+                !svg.contains("<image"),
+                "{path} embeds a raster, defeating the point"
+            );
         }
     }
 
@@ -96,7 +102,13 @@ mod tests {
     fn listing_is_prefix_filtered() {
         assert_eq!(Assets.list("icons/").unwrap().len(), ICONS.len());
         assert!(Assets.list("nope/").unwrap().is_empty());
-        assert!(Assets.list("icons/se").unwrap().iter().any(|p| p.contains("send")));
+        assert!(
+            Assets
+                .list("icons/se")
+                .unwrap()
+                .iter()
+                .any(|p| p.contains("send"))
+        );
     }
 
     /// The icon names in `theme.rs`'s helpers have to exist, or a view renders
@@ -105,7 +117,10 @@ mod tests {
     fn icon_names_used_by_the_theme_exist() {
         for name in ["send", "play", "stop", "close", "search", "clock", "trash"] {
             let path = format!("icons/{name}.svg");
-            assert!(Assets.load(&path).unwrap().is_some(), "{path} is referenced but missing");
+            assert!(
+                Assets.load(&path).unwrap().is_some(),
+                "{path} is referenced but missing"
+            );
         }
     }
 }

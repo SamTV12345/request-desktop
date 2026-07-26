@@ -345,12 +345,7 @@ pub fn strip(ws: &Workspace, cx: &mut gpui::Context<Workspace>) -> impl IntoElem
                     cx.defer(crate::save_session);
                     cx.notify();
                 }))
-                .child(
-                    div()
-                        .max_w(TITLE_W)
-                        .truncate()
-                        .child(tab.title.clone()),
-                )
+                .child(div().max_w(TITLE_W).truncate().child(tab.title.clone()))
                 // Pull the tab out onto another monitor.
                 .child(tab_action(
                     SharedString::from(format!("{id}-detach")),

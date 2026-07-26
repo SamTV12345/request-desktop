@@ -31,17 +31,32 @@ use gpui::{ParentElement, Rgba, SharedString, Styled, div, px, svg};
 /// `gpui::rgb` is not const, so the conversion is inlined.
 const fn c(hex: u32) -> Rgba {
     let [_, r, g, b] = hex.to_be_bytes();
-    Rgba { r: r as f32 / 255.0, g: g as f32 / 255.0, b: b as f32 / 255.0, a: 1.0 }
+    Rgba {
+        r: r as f32 / 255.0,
+        g: g as f32 / 255.0,
+        b: b as f32 / 255.0,
+        a: 1.0,
+    }
 }
 
 /// White at the given opacity — Ant expresses foreground as translucent ink.
 const fn ink(alpha: f32) -> Rgba {
-    Rgba { r: 1.0, g: 1.0, b: 1.0, a: alpha }
+    Rgba {
+        r: 1.0,
+        g: 1.0,
+        b: 1.0,
+        a: alpha,
+    }
 }
 
 /// Black at the given opacity, for fills over a light-ish surface.
 const fn shade(alpha: f32) -> Rgba {
-    Rgba { r: 0.0, g: 0.0, b: 0.0, a: alpha }
+    Rgba {
+        r: 0.0,
+        g: 0.0,
+        b: 0.0,
+        a: alpha,
+    }
 }
 
 /// Daybreak Blue — the primary palette.
@@ -122,7 +137,12 @@ pub const ACCENT: Rgba = blue::S6;
 pub const ACCENT_HOVER: Rgba = blue::S5;
 pub const ACCENT_ACTIVE: Rgba = blue::S7;
 /// Tinted background for a selected/primary-tinted element.
-pub const ACCENT_WASH: Rgba = Rgba { r: 0.094, g: 0.565, b: 1.0, a: 0.16 };
+pub const ACCENT_WASH: Rgba = Rgba {
+    r: 0.094,
+    g: 0.565,
+    b: 1.0,
+    a: 0.16,
+};
 
 pub const SUCCESS: Rgba = hue::GREEN_6;
 pub const WARNING: Rgba = hue::GOLD_6;
@@ -144,7 +164,12 @@ pub const fn wash(base: Rgba) -> Rgba {
 ///
 /// Painting such a border in the surface colour behind it also works until the
 /// surface changes; this does not.
-pub const TRANSPARENT: Rgba = Rgba { r: 0., g: 0., b: 0., a: 0. };
+pub const TRANSPARENT: Rgba = Rgba {
+    r: 0.,
+    g: 0.,
+    b: 0.,
+    a: 0.,
+};
 
 /// A hairline. Named because `border_1()` and a manual `px(1.)` divider must
 /// agree, and because it is a border width, not a spacing value.

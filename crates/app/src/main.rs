@@ -11,8 +11,8 @@ mod track;
 
 use gpui::{
     App, Application, Bounds, Context, Entity, Global, IntoElement, ParentElement,
-    PathPromptOptions, Pixels, Render, Rgba, SharedString, Styled, WeakEntity, Window, WindowBounds,
-    WindowOptions, div, prelude::*, px, size,
+    PathPromptOptions, Pixels, Render, Rgba, SharedString, Styled, WeakEntity, Window,
+    WindowBounds, WindowOptions, div, prelude::*, px, size,
 };
 use request_pane::RequestPane;
 use rp_core::interp::Vars;
@@ -566,7 +566,11 @@ impl Workspace {
                     .line_height(theme::text::SMALL_LINE)
                     .border_1()
                     .border_color(if active { theme::ACCENT } else { theme::BORDER })
-                    .text_color(if active { theme::ACCENT } else { theme::TEXT_SECONDARY })
+                    .text_color(if active {
+                        theme::ACCENT
+                    } else {
+                        theme::TEXT_SECONDARY
+                    })
                     .when(active, |d| d.bg(theme::ACCENT_WASH))
                     .hover(|s| s.bg(theme::FILL))
                     .child(SharedString::from(env.name.clone()))
@@ -919,7 +923,11 @@ fn sidebar_row(selected: bool) -> gpui::Div {
         .text_size(theme::text::BODY)
         .line_height(theme::text::BODY_LINE)
         .border_l_2()
-        .border_color(if selected { theme::ACCENT } else { theme::SURFACE })
+        .border_color(if selected {
+            theme::ACCENT
+        } else {
+            theme::SURFACE
+        })
         .when(selected, |d| d.bg(theme::ACCENT_WASH))
         .hover(|s| s.bg(theme::FILL))
 }
@@ -938,11 +946,7 @@ fn sidebar() -> gpui::Div {
 
 /// A centred icon, a one-line heading and a quieter hint — for every "there is
 /// nothing here yet" in the shell.
-fn empty_state(
-    glyph: &'static str,
-    heading: &'static str,
-    hint: &'static str,
-) -> impl IntoElement {
+fn empty_state(glyph: &'static str, heading: &'static str, hint: &'static str) -> impl IntoElement {
     div()
         .flex()
         .flex_1()
@@ -1049,52 +1053,54 @@ fn unavailable(tool: &'static Tool) -> bool {
 
 fn main() {
     // Icons are compiled in; without an asset source `svg()` renders nothing.
-    Application::new().with_assets(assets::Assets).run(|cx: &mut App| {
-        text_input::bind_keys(cx);
-        editor::bind_keys(cx);
-        // Tabs can be pulled out into their own windows; the app lives until
-        // the last one is gone.
-        cx.on_window_closed(|cx| {
-            if cx.windows().is_empty() {
-                // Do not save here: the last snapshot still has this window in
-                // it, which is what should come back. Saving now would store an
-                // empty session and quitting would wipe the tabs.
-                cx.quit();
-            } else {
-                save_session(cx);
-            }
-        })
-        .detach();
-
-        // Opening the database must never stop the app from starting.
-        let store = match Store::open_default() {
-            Ok(store) => Some(store),
-            Err(e) => {
-                eprintln!("request-pilot: persistence disabled: {e:#}");
-                None
-            }
-        };
-        let session = store
-            .as_ref()
-            .map(|s| s.load_session())
-            .transpose()
-            .unwrap_or_else(|e| {
-                eprintln!("request-pilot: cannot read the stored session: {e:#}");
-                None
+    Application::new()
+        .with_assets(assets::Assets)
+        .run(|cx: &mut App| {
+            text_input::bind_keys(cx);
+            editor::bind_keys(cx);
+            // Tabs can be pulled out into their own windows; the app lives until
+            // the last one is gone.
+            cx.on_window_closed(|cx| {
+                if cx.windows().is_empty() {
+                    // Do not save here: the last snapshot still has this window in
+                    // it, which is what should come back. Saving now would store an
+                    // empty session and quitting would wipe the tabs.
+                    cx.quit();
+                } else {
+                    save_session(cx);
+                }
             })
-            .unwrap_or_default();
-        cx.set_global(Persist {
-            store,
-            windows: Vec::new(),
-        });
+            .detach();
 
-        if session.is_empty() {
-            open_workspace(None, cx);
-        } else {
-            for window in session {
-                open_workspace(Some(window), cx);
+            // Opening the database must never stop the app from starting.
+            let store = match Store::open_default() {
+                Ok(store) => Some(store),
+                Err(e) => {
+                    eprintln!("request-pilot: persistence disabled: {e:#}");
+                    None
+                }
+            };
+            let session = store
+                .as_ref()
+                .map(|s| s.load_session())
+                .transpose()
+                .unwrap_or_else(|e| {
+                    eprintln!("request-pilot: cannot read the stored session: {e:#}");
+                    None
+                })
+                .unwrap_or_default();
+            cx.set_global(Persist {
+                store,
+                windows: Vec::new(),
+            });
+
+            if session.is_empty() {
+                open_workspace(None, cx);
+            } else {
+                for window in session {
+                    open_workspace(Some(window), cx);
+                }
             }
-        }
-        cx.activate(true);
-    });
+            cx.activate(true);
+        });
 }
