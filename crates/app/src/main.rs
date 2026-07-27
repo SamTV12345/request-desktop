@@ -1,3 +1,20 @@
+// A release build is a GUI program, not a console one.
+//
+// Without this, Windows gives the binary a console because that is the default
+// subsystem, so double-clicking the `.exe` opened a terminal that then showed the
+// window beside it. Linux and macOS ignore the attribute; it is the Windows
+// linker's `/SUBSYSTEM` flag and nothing else.
+//
+// Only in release. A debug build keeps its console on purpose: that is where the
+// `eprintln!`s below and the MCP server's own logging go while developing, and
+// `cargo run` with no output would be worse than a stray window.
+//
+// The cost, stated plainly because it is invisible: in release there is no stderr,
+// so the fourteen "carried on without it" diagnostics in this file go nowhere, and
+// a panic takes the window with it silently. `rp-mcp` is a different crate and
+// keeps its console, which is right — it is a server.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 mod calendar;
 // The design system. Everything about how this app looks lives in `rp-ui`.
 use rp_ui::button::{Button, Tone, check_box};

@@ -84,6 +84,32 @@ jobs:
           }
           Write-Host "version resource ok: $name"
 
+          # The PE subsystem: 2 is GUI, 3 is console. A release build of the app
+          # must be 2, or Windows hands it a console and double-clicking the .exe
+          # opens a terminal beside the window. That shipped once. It cannot be
+          # caught by reading the source — `#![cfg_attr(not(debug_assertions),
+          # windows_subsystem = "windows")]` is correct *and* does nothing in a
+          # debug build, which is what everyone runs — so it is checked on the
+          # artefact that actually goes out.
+          #
+          # `rp-mcp.exe` is deliberately 3: it is a stdio server, and its output is
+          # the point.
+          function Get-Subsystem($path) {
+            $b = [System.IO.File]::ReadAllBytes($path)
+            $pe = [System.BitConverter]::ToInt32($b, 0x3C)
+            # COFF header is 20 bytes; Subsystem sits 68 bytes into the optional one.
+            return [System.BitConverter]::ToUInt16($b, $pe + 4 + 20 + 68)
+          }
+          $app = Get-Subsystem 'target/release/request-pilot.exe'
+          if ($app -ne 2) {
+            throw "request-pilot.exe is subsystem $app, not 2 (GUI) — it would open a console"
+          }
+          $mcp = Get-Subsystem 'target/release/rp-mcp.exe'
+          if ($mcp -ne 3) {
+            throw "rp-mcp.exe is subsystem $mcp, not 3 (console) — it is a stdio server"
+          }
+          Write-Host "subsystems ok: app is GUI, rp-mcp is console"
+
       - name: Publish the release
         uses: softprops/action-gh-release@v2
         with:
