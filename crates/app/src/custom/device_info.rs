@@ -11,7 +11,7 @@
 //! Everything comes from `std` and gpui; no new dependencies. The Rust target
 //! triple is *not* included: reaching it needs a `build.rs` to bake `TARGET`
 //! in, and os/arch/family/pointer-width already say the same thing.
-use super::{Note, Tone, button, header, meta_row, note};
+use super::{Button, MetaRow, Note, NoteKind, Tone, header};
 use gpui::{ClipboardItem, Context, Entity, SharedString, Window, div, prelude::*};
 use rp_ui::input::Editor;
 use rp_ui::layout::{card, divider, section_label};
@@ -214,7 +214,7 @@ impl Render for Pane {
             let group = div().flex().flex_col().child(section_label(t, heading));
             let mut body = div().flex().flex_col().px(space::S3);
             for (label, value) in rows {
-                body = body.child(meta_row(t, label, value, false));
+                body = body.child(MetaRow::new(label, value).render(t));
             }
             sections.push(group.child(body).pb(space::S3).into_any_element());
         }
@@ -243,15 +243,12 @@ impl Render for Pane {
                         .flex_1()
                         .min_w_0(),
                     )
-                    .child(button(
-                        t,
-                        "copy-device-info",
-                        "Copy all",
-                        "copy",
-                        Tone::Primary,
-                        true,
-                        cx.listener(|this, _, _, cx| this.copy_all(cx)),
-                    )),
+                    .child(
+                        Button::new("copy-device-info", "Copy all")
+                            .icon("copy")
+                            .tone(Tone::Primary)
+                            .render(t, cx.listener(|this, _, _, cx| this.copy_all(cx))),
+                    ),
             )
             .child(
                 card(t)
@@ -286,11 +283,15 @@ impl Render for Pane {
                             .child(self.view.clone()),
                     ),
             )
-            .child(note(
-                t,
-                self.status.clone(),
-                if self.copied { Note::Good } else { Note::Info },
-            ))
+            .child(
+                Note::new(self.status.clone())
+                    .kind(if self.copied {
+                        NoteKind::Good
+                    } else {
+                        NoteKind::Info
+                    })
+                    .render(t),
+            )
     }
 }
 

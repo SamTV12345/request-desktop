@@ -11,7 +11,7 @@ use rp_ui::tokens::{radius, size, space, text};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use super::{Note, Tone, button, header, meta_row, note};
+use super::{Button, MetaRow, Note, NoteKind, Tone, header};
 use gpui::{
     AppContext, ClipboardItem, Context, Entity, ExternalPaths, Image, ImageFormat,
     PathPromptOptions, SharedString, Window, div, img, prelude::*,
@@ -576,13 +576,12 @@ impl Render for Pane {
                                     .size_full()
                                     .id("preview-image")
                                     .with_fallback(move || {
-                                        note(
-                                            t,
+                                        Note::new(
                                             "Could not decode these bytes as an image — they may \
-                                             be truncated or corrupt."
-                                                .into(),
-                                            Note::Bad,
+                                             be truncated or corrupt.",
                                         )
+                                        .kind(NoteKind::Bad)
+                                        .render(t)
                                         .into_any_element()
                                     }),
                             ),
@@ -590,7 +589,8 @@ impl Render for Pane {
                     .into_any_element(),
             ),
             Preview::Unsupported(message) => Some(
-                note(t, message.clone(), Note::Info)
+                Note::new(message.clone())
+                    .render(t)
                     .px(space::S3)
                     .into_any_element(),
             ),
@@ -604,9 +604,9 @@ impl Render for Pane {
                 .py(space::S2)
                 .rounded(radius::MD)
                 .bg(t.bg)
-                .child(meta_row(t, "name", p.name.clone(), false))
-                .child(meta_row(t, "size", p.size.clone(), false))
-                .child(meta_row(t, "mime", p.mime.clone(), false))
+                .child(MetaRow::new("name", p.name.clone()).render(t))
+                .child(MetaRow::new("size", p.size.clone()).render(t))
+                .child(MetaRow::new("mime", p.mime.clone()).render(t))
         });
 
         div()
@@ -662,24 +662,25 @@ impl Render for Pane {
                                 div()
                                     .flex()
                                     .gap(space::S2)
-                                    .child(button(
-                                        t,
-                                        "pick-file",
-                                        "Choose file…",
-                                        "folder",
-                                        Tone::Primary,
-                                        ready,
-                                        cx.listener(|this, _, _, cx| this.pick_file(cx)),
-                                    ))
-                                    .child(button(
-                                        t,
-                                        "copy-base64",
-                                        "Copy",
-                                        "copy",
-                                        Tone::Default,
-                                        ready,
-                                        cx.listener(|this, _, _, cx| this.copy_encoded(cx)),
-                                    )),
+                                    .child(
+                                        Button::new("pick-file", "Choose file…")
+                                            .icon("folder")
+                                            .tone(Tone::Primary)
+                                            .enabled(ready)
+                                            .render(
+                                                t,
+                                                cx.listener(|this, _, _, cx| this.pick_file(cx)),
+                                            ),
+                                    )
+                                    .child(
+                                        Button::new("copy-base64", "Copy")
+                                            .icon("copy")
+                                            .enabled(ready)
+                                            .render(
+                                                t,
+                                                cx.listener(|this, _, _, cx| this.copy_encoded(cx)),
+                                            ),
+                                    ),
                             ),
                     )
                     // The drop target says so at rest, not only while a file is
@@ -727,24 +728,27 @@ impl Render for Pane {
                                 div()
                                     .flex()
                                     .gap(space::S2)
-                                    .child(button(
-                                        t,
-                                        "preview-base64",
-                                        "Preview",
-                                        "file",
-                                        Tone::Default,
-                                        ready,
-                                        cx.listener(|this, _, _, cx| this.preview_decoded(cx)),
-                                    ))
-                                    .child(button(
-                                        t,
-                                        "save-file",
-                                        "Save as…",
-                                        "save",
-                                        Tone::Primary,
-                                        ready,
-                                        cx.listener(|this, _, _, cx| this.save_decoded(cx)),
-                                    )),
+                                    .child(
+                                        Button::new("preview-base64", "Preview")
+                                            .icon("file")
+                                            .enabled(ready)
+                                            .render(
+                                                t,
+                                                cx.listener(|this, _, _, cx| {
+                                                    this.preview_decoded(cx)
+                                                }),
+                                            ),
+                                    )
+                                    .child(
+                                        Button::new("save-file", "Save as…")
+                                            .icon("save")
+                                            .tone(Tone::Primary)
+                                            .enabled(ready)
+                                            .render(
+                                                t,
+                                                cx.listener(|this, _, _, cx| this.save_decoded(cx)),
+                                            ),
+                                    ),
                             ),
                     )
                     .child(
@@ -756,11 +760,15 @@ impl Render for Pane {
                             .child(self.to_decode.clone()),
                     ),
             )
-            .child(note(
-                t,
-                self.status.clone(),
-                if self.failed { Note::Bad } else { Note::Info },
-            ))
+            .child(
+                Note::new(self.status.clone())
+                    .kind(if self.failed {
+                        NoteKind::Bad
+                    } else {
+                        NoteKind::Info
+                    })
+                    .render(t),
+            )
     }
 }
 

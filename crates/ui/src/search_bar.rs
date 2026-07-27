@@ -2,11 +2,17 @@
 //!
 //! # The props pattern
 //!
-//! This is the shape the rest of the crate is being moved to, and the reason is
-//! visible in the older components: `button` takes seven positional arguments, so a
-//! call site reads `button(t, "id", "Save", "save", Tone::Primary, true, cb)` and
-//! nobody can tell `true` from the next `bool` without opening the definition.
-//! Adding an eighth option means touching every call.
+//! This is the shape every component with an optional argument now has, and the
+//! reason is what it replaced: `button` took seven positional arguments, so a call
+//! site read `button(t, "id", "Save", "save", Tone::Primary, true, cb)` and nobody
+//! could tell `true` from the next `bool` without opening the definition. Adding an
+//! eighth option meant touching every call. [`crate::button::Button`],
+//! [`crate::data::Chip`], [`MetaRow`](crate::data::MetaRow), [`Note`](crate::feedback::Note)
+//! and [`ErrorBanner`](crate::feedback::ErrorBanner) follow it.
+//!
+//! Components with nothing optional to name stay functions — `check_box(t, checked)`,
+//! `table_row(t, id)`, `hint(t, label)`. Props pay for themselves against optional
+//! arguments, not against arguments.
 //!
 //! A props struct fixes both. Only `t` and the id are required; everything else has
 //! a default and is set by name:

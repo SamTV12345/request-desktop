@@ -10,7 +10,7 @@
 //! the same basis `Track::clock` and `Track::day_start` use. Deriving a day from
 //! the UTC clock was a real bug once (see `track::today`) and must not come back.
 use super::{
-    Entry, Scope, Track, Ymd, days_from_civil, entry_day_of, fmt_hm, heading, hint, icon_button,
+    Entry, IconButton, Scope, Track, Ymd, days_from_civil, entry_day_of, fmt_hm, heading, hint,
     now, pill_button, step_day, tag, week_start, weekday_name,
 };
 use crate::calendar::{HOUR_HEIGHT, MIN_BLOCK, block, hour_window};
@@ -378,12 +378,10 @@ impl Track {
                         ))
                     }),
                 )
-                .child(icon_button(
-                    t,
-                    "inspect-delete",
-                    "trash",
-                    cx.listener(move |this, _, _, cx| this.delete(id, cx)),
-                )),
+                .child(
+                    IconButton::new("inspect-delete", "trash")
+                        .render(t, cx.listener(move |this, _, _, cx| this.delete(id, cx))),
+                ),
         )
         .into_any_element()
     }

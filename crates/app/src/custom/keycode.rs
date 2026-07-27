@@ -8,7 +8,7 @@
 //! GPUI does not surface at all — so this panel reports them as unavailable
 //! rather than inventing numbers from a lookup table that would be wrong for
 //! every non-US layout.
-use super::{Note, chip, header, label_cell, meta_row, note};
+use super::{Chip, MetaRow, Note, header, label_cell};
 use gpui::{
     Context, FocusHandle, Focusable, IntoElement, KeyDownEvent, Keystroke, MouseButton,
     ParentElement, SharedString, Styled, Window, div, prelude::*,
@@ -134,17 +134,27 @@ impl Render for Pane {
         let mut rows = Vec::new();
         match &last {
             Some(s) => {
-                rows.push(meta_row(t, "key (gpui)", s.key.clone(), false));
-                rows.push(meta_row(
-                    t,
-                    "typed character",
-                    s.key_char.clone().unwrap_or_else(|| "—".into()),
-                    s.key_char.is_none(),
-                ));
-                rows.push(meta_row(t, "keystroke (keymap)", s.raw.clone(), false));
-                rows.push(meta_row(t, "auto-repeat", s.held.to_string(), !s.held));
+                rows.push(MetaRow::new("key (gpui)", s.key.clone()).render(t));
+                rows.push(
+                    MetaRow::new(
+                        "typed character",
+                        s.key_char.clone().unwrap_or_else(|| "—".into()),
+                    )
+                    .muted(s.key_char.is_none())
+                    .render(t),
+                );
+                rows.push(MetaRow::new("keystroke (keymap)", s.raw.clone()).render(t));
+                rows.push(
+                    MetaRow::new("auto-repeat", s.held.to_string())
+                        .muted(!s.held)
+                        .render(t),
+                );
             }
-            None => rows.push(meta_row(t, "key (gpui)", "waiting for a keystroke", true)),
+            None => rows.push(
+                MetaRow::new("key (gpui)", "waiting for a keystroke")
+                    .muted(true)
+                    .render(t),
+            ),
         }
 
         // Modifier state as chips: which ones are down is a glance, not a
@@ -155,7 +165,11 @@ impl Render for Pane {
             .unwrap_or_default();
         let mut modifier_chips = Vec::new();
         for name in MODIFIERS {
-            modifier_chips.push(chip(t, name, held.split(" + ").any(|m| m == name)));
+            modifier_chips.push(
+                Chip::new(name)
+                    .on(held.split(" + ").any(|m| m == name))
+                    .render(t),
+            );
         }
 
         // Honest about the gaps rather than guessing a number. The value slot
@@ -170,13 +184,13 @@ impl Render for Pane {
                     .gap(space::S3)
                     .py(space::S1)
                     .child(label_cell(t, field))
-                    .child(chip(t, "not exposed by gpui", false)),
+                    .child(Chip::new("not exposed by gpui").render(t)),
             );
         }
 
         let mut recent = Vec::new();
         for shown in self.history.iter().skip(1) {
-            recent.push(chip(t, shown.raw.clone(), false));
+            recent.push(Chip::new(shown.raw.clone()).render(t));
         }
 
         div()
@@ -286,14 +300,13 @@ impl Render for Pane {
                         .child(div().flex().flex_wrap().gap(space::S1).children(recent)),
                 )
             })
-            .child(note(
-                t,
-                SharedString::from(format!(
+            .child(
+                Note::new(format!(
                     "{} of the last {HISTORY} keystrokes kept.",
                     self.history.len()
-                )),
-                Note::Info,
-            ))
+                ))
+                .render(t),
+            )
     }
 }
 

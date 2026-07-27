@@ -10,9 +10,9 @@ use gpui::{AnyView, App, AppContext as _, Window};
 // The shared chrome the five panels used to keep here — button, header, note,
 // label_cell, meta_row, chip — is `rp_ui`'s now. Each panel imports what it draws
 // with; this file is back to being a registry.
-pub(crate) use rp_ui::button::{Tone, button};
-pub(crate) use rp_ui::data::{chip, label_cell, meta_row};
-pub(crate) use rp_ui::feedback::{Note, note};
+pub(crate) use rp_ui::button::{Button, Tone};
+pub(crate) use rp_ui::data::{Chip, MetaRow, label_cell};
+pub(crate) use rp_ui::feedback::{Note, NoteKind};
 pub(crate) use rp_ui::layout::header;
 
 mod base64_file;

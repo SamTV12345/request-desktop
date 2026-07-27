@@ -30,7 +30,7 @@
 //! | [`feedback`] | headings, hints, notes, banners, tooltips |
 //! | [`input`] | the single-line field and the multi-line editor |
 //! | [`shortcut`] | key chords, spelled per platform, label **and** binding |
-//! | [`search_bar`] | the "jump to anything" bar — and the props pattern to copy |
+//! | [`search_bar`] | the "jump to anything" bar — and the props pattern, explained |
 //! | [`fonts`] | the three design faces, resolved against what is installed |
 //!
 //! # Two rules that are not obvious and cost hours

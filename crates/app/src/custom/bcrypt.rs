@@ -14,7 +14,7 @@
 //!    string, so the answer arrived as the line `Compare string with hash: No`
 //!    inside a text area — with "No" also covering "that is not a bcrypt hash".
 //!    Here it is a badge, and a malformed hash says so.
-use super::{Note, Tone, button, header, note};
+use super::{Button, Note, NoteKind, Tone, header};
 use gpui::{
     AppContext, ClipboardItem, Context, Entity, IntoElement, ParentElement as _, SharedString,
     Styled as _, Window, div, prelude::*,
@@ -239,24 +239,18 @@ impl Render for Pane {
                             .flex_wrap()
                             .items_center()
                             .gap(space::S2)
-                            .child(button(
-                                t,
-                                "bcrypt-hash",
-                                "Hash",
-                                "play",
-                                Tone::Primary,
-                                true,
-                                cx.listener(|this, _, _, cx| this.hash_now(cx)),
-                            ))
-                            .child(button(
-                                t,
-                                "bcrypt-copy",
-                                "Copy",
-                                "copy",
-                                Tone::Default,
-                                hashed,
-                                cx.listener(|this, _, _, cx| this.copy_hash(cx)),
-                            )),
+                            .child(
+                                Button::new("bcrypt-hash", "Hash")
+                                    .icon("play")
+                                    .tone(Tone::Primary)
+                                    .render(t, cx.listener(|this, _, _, cx| this.hash_now(cx))),
+                            )
+                            .child(
+                                Button::new("bcrypt-copy", "Copy")
+                                    .icon("copy")
+                                    .enabled(hashed)
+                                    .render(t, cx.listener(|this, _, _, cx| this.copy_hash(cx))),
+                            ),
                     )
                     // The hash itself, in mono and selectable-width rather than a
                     // text area: it is one line and it is the answer.
@@ -306,11 +300,15 @@ impl Render for Pane {
                     )
                     .child(badge(t, &verdict)),
             )
-            .child(note(
-                t,
-                self.status.clone(),
-                if self.failed { Note::Bad } else { Note::Info },
-            ))
+            .child(
+                Note::new(self.status.clone())
+                    .kind(if self.failed {
+                        NoteKind::Bad
+                    } else {
+                        NoteKind::Info
+                    })
+                    .render(t),
+            )
     }
 }
 

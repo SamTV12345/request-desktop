@@ -11,7 +11,7 @@
 //! each of the three answers on its own copyable line. The bit weights and the
 //! `rwx` ordering stay in `rp_devtools::tools::web::chmod_forms` — this panel
 //! only draws.
-use super::{Note, header, label_cell, note};
+use super::{Note, header, label_cell};
 use gpui::{
     ClipboardItem, Context, IntoElement, ParentElement as _, SharedString, Styled as _, Window,
     div, prelude::*,
@@ -224,7 +224,7 @@ impl Render for Pane {
                     .child(self.result_row(t, "Symbolic", symbolic, cx))
                     .child(self.result_row(t, "Command", format!("chmod {octal} path"), cx)),
             )
-            .child(note(t, self.status.clone(), Note::Info))
+            .child(Note::new(self.status.clone()).render(t))
     }
 }
 

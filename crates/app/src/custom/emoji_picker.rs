@@ -24,7 +24,7 @@ use rp_ui::icon::icon_tinted;
 use rp_ui::theme::{self, FONT_MONO, Theme};
 use rp_ui::tokens::{control, radius, size, space, text};
 
-use super::{Note, header, note};
+use super::{Note, NoteKind, header};
 use gpui::{
     ClipboardItem, Context, Entity, Pixels, SharedString, WeakEntity, Window, canvas, div,
     prelude::*, px, uniform_list,
@@ -328,11 +328,15 @@ impl Render for Pane {
                     .child(measure)
                     .child(grid),
             )
-            .child(note(
-                t,
-                self.status.clone(),
-                if self.copied { Note::Good } else { Note::Info },
-            ))
+            .child(
+                Note::new(self.status.clone())
+                    .kind(if self.copied {
+                        NoteKind::Good
+                    } else {
+                        NoteKind::Info
+                    })
+                    .render(t),
+            )
     }
 }
 

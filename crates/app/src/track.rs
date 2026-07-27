@@ -22,9 +22,9 @@ use gpui::{
     SharedString, Stateful, Styled, Task, Window, div, prelude::*, px, relative,
 };
 use rp_store::{DaySummary, Entry, Store};
-use rp_ui::button::icon_button;
+use rp_ui::button::IconButton;
 use rp_ui::data::{col, table_head, table_row};
-use rp_ui::feedback::{error_banner, hint};
+use rp_ui::feedback::{ErrorBanner, hint};
 use rp_ui::icon::icon_tinted;
 use rp_ui::input::Editor;
 use rp_ui::input::TextInput;
@@ -1108,12 +1108,10 @@ impl Track {
                         )
                         .flex_1(),
                     )
-                    .child(icon_button(
-                        t,
-                        "drop-running",
-                        "trash",
-                        cx.listener(move |this, _, _, cx| this.delete(id, cx)),
-                    )),
+                    .child(
+                        IconButton::new("drop-running", "trash")
+                            .render(t, cx.listener(move |this, _, _, cx| this.delete(id, cx))),
+                    ),
             )
             .into_any_element()
     }
@@ -1319,19 +1317,15 @@ impl Track {
                     .flex()
                     .items_center()
                     .gap(space::S2)
-                    .child(icon_button(
-                        t,
-                        "prev",
-                        "chevron_left",
-                        cx.listener(|this, _, _, cx| this.step(-1, cx)),
-                    ))
+                    .child(
+                        IconButton::new("prev", "chevron_left")
+                            .render(t, cx.listener(|this, _, _, cx| this.step(-1, cx))),
+                    )
                     .child(div().flex_1().min_w_0().child(self.jump.clone()))
-                    .child(icon_button(
-                        t,
-                        "next",
-                        "chevron_right",
-                        cx.listener(|this, _, _, cx| this.step(1, cx)),
-                    ))
+                    .child(
+                        IconButton::new("next", "chevron_right")
+                            .render(t, cx.listener(|this, _, _, cx| this.step(1, cx))),
+                    )
                     .child(pill_button(
                         t,
                         "today".into(),
@@ -1685,7 +1679,7 @@ impl Track {
                         // "no database" is expected on a first run and is not an
                         // error; the crate draws, the caller knows which it has.
                         let calm = e.as_ref() == NO_STORE;
-                        d.child(error_banner(t, e, calm))
+                        d.child(ErrorBanner::new(e).calm(calm).render(t))
                     }),
             )
             // A month is a grid; a day and a week are a table. The design makes
@@ -2284,22 +2278,18 @@ impl Track {
                 false,
                 cx.listener(|this, _, _, cx| this.save_draft(cx)),
             ))
-            .child(icon_button(
+            .child(IconButton::new("draft-cancel", "close").render(
                 t,
-                "draft-cancel",
-                "close",
                 cx.listener(|this, _, _, cx| {
                     this.draft = None;
                     cx.notify();
                 }),
             ))
             .when_some(id, |d, id| {
-                d.child(icon_button(
-                    t,
-                    "draft-delete",
-                    "trash",
-                    cx.listener(move |this, _, _, cx| this.delete(id, cx)),
-                ))
+                d.child(
+                    IconButton::new("draft-delete", "trash")
+                        .render(t, cx.listener(move |this, _, _, cx| this.delete(id, cx))),
+                )
             })
             .into_any_element()
     }
@@ -2414,12 +2404,10 @@ impl Track {
                     .size(control::ICON)
                     .flex_none()
                     .when(self.hovered == Some(id), |d| {
-                        d.child(icon_button(
-                            t,
-                            SharedString::from(format!("del-{id}")),
-                            "trash",
-                            cx.listener(move |this, _, _, cx| this.delete(id, cx)),
-                        ))
+                        d.child(
+                            IconButton::new(SharedString::from(format!("del-{id}")), "trash")
+                                .render(t, cx.listener(move |this, _, _, cx| this.delete(id, cx))),
+                        )
                     }),
             )
     }

@@ -5,7 +5,7 @@
 //! The displayed value is always derived from `Instant`s — never accumulated
 //! per tick — so the tick rate is a refresh rate, not the source of truth. A
 //! dropped frame or a late timer costs nothing.
-use super::{Note, Tone, button, chip, header, note};
+use super::{Button, Chip, Note, Tone, header};
 use gpui::{Context, IntoElement, ParentElement, Styled, Task, Window, div, prelude::*};
 use rp_ui::theme::{self, FONT_MONO};
 use rp_ui::tokens::{radius, space, text};
@@ -138,25 +138,15 @@ impl Render for Pane {
             (t.divider, t.surface, t.text_muted())
         };
         let toggle = if running {
-            button(
-                t,
-                "chrono-pause",
-                "Stop",
-                "stop",
-                Tone::Danger,
-                true,
-                cx.listener(|this, _, _, cx| this.pause(cx)),
-            )
+            Button::new("chrono-pause", "Stop")
+                .icon("stop")
+                .tone(Tone::Danger)
+                .render(t, cx.listener(|this, _, _, cx| this.pause(cx)))
         } else {
-            button(
-                t,
-                "chrono-start",
-                "Start",
-                "play",
-                Tone::Primary,
-                true,
-                cx.listener(|this, _, _, cx| this.start(cx)),
-            )
+            Button::new("chrono-start", "Start")
+                .icon("play")
+                .tone(Tone::Primary)
+                .render(t, cx.listener(|this, _, _, cx| this.start(cx)))
         };
 
         div()
@@ -181,11 +171,11 @@ impl Render for Pane {
                     .border_1()
                     .border_color(frame_border)
                     .rounded(radius::CARD)
-                    .child(chip(
-                        t,
-                        if running { "running" } else { "stopped" },
-                        running,
-                    ))
+                    .child(
+                        Chip::new(if running { "running" } else { "stopped" })
+                            .on(running)
+                            .render(t),
+                    )
                     .child(
                         // Mono, so the centiseconds do not shove the digits left
                         // and right as they roll over.
@@ -203,25 +193,22 @@ impl Render for Pane {
                     .gap(space::S2)
                     .justify_center()
                     .child(toggle)
-                    .child(button(
-                        t,
-                        "chrono-reset",
-                        "Reset",
-                        "trash",
-                        Tone::Default,
-                        true,
-                        cx.listener(|this, _, _, cx| this.reset(cx)),
-                    )),
+                    .child(
+                        Button::new("chrono-reset", "Reset")
+                            .icon("trash")
+                            .render(t, cx.listener(|this, _, _, cx| this.reset(cx))),
+                    ),
             )
-            .child(div().flex().justify_center().child(note(
-                t,
-                if running {
-                    "Running — refreshed every 10 ms, measured from a monotonic clock.".into()
-                } else {
-                    "Stopped — no timer is running.".into()
-                },
-                Note::Info,
-            )))
+            .child(
+                div().flex().justify_center().child(
+                    Note::new(if running {
+                        "Running — refreshed every 10 ms, measured from a monotonic clock."
+                    } else {
+                        "Stopped — no timer is running."
+                    })
+                    .render(t),
+                ),
+            )
     }
 }
 
