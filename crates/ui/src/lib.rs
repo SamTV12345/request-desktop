@@ -31,6 +31,7 @@
 //! | [`input`] | the single-line field and the multi-line editor |
 //! | [`shortcut`] | key chords, spelled per platform, label **and** binding |
 //! | [`search_bar`] | the "jump to anything" bar — and the props pattern, explained |
+//! | [`tabs`] | the tab strip, from a list of items it knows nothing about |
 //! | [`fonts`] | the three design faces, resolved against what is installed |
 //!
 //! # Two rules that are not obvious and cost hours
@@ -53,6 +54,7 @@ pub mod input;
 pub mod layout;
 pub mod search_bar;
 pub mod shortcut;
+pub mod tabs;
 pub mod theme;
 pub mod tokens;
 
@@ -61,6 +63,7 @@ pub use button::Tone;
 pub use fonts::{Fonts, fonts, resolve_fonts};
 pub use search_bar::SearchBar;
 pub use shortcut::{Chord, Platform};
+pub use tabs::{TabItem, TabMenuRequest, TabStrip};
 pub use theme::{ActiveTheme, Theme, set_theme, theme};
 
 /// Register every key binding the input widgets need. Call once at startup.

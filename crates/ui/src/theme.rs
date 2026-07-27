@@ -59,6 +59,12 @@ pub struct Theme {
     pub bg: Rgba,
     /// Cards, inputs, raised areas.
     pub surface: Rgba,
+    /// The window's chrome — the title row, the rail, the tab strip. A ground of
+    /// its own, *recessed* rather than raised: on the dark ground the mockups give
+    /// it `#1b1814`, darker than `bg`, so an active tab drawn in `bg` reads as
+    /// lifted out of the chrome. Not a derived alpha, because it has to be opaque
+    /// and it is not the same distance from `bg` as `surface` is.
+    pub chrome: Rgba,
     pub text: Rgba,
     pub accent: Rgba,
     /// The olive secondary, for a second categorical role.
@@ -84,6 +90,10 @@ impl Theme {
             dark: false,
             bg: c(0xF5EAD8),
             surface: c(0xEBDDC5),
+            // The mockups are dark-ground only, so the light chrome is the step
+            // the light ramp already defines at the same remove from `bg` that
+            // `#1b1814` sits from the dark one: neutral-300.
+            chrome: c(0xDCD3C4),
             text,
             accent: c(0xC67139),
             accent_2: c(0x7A8A5E),
@@ -133,6 +143,7 @@ impl Theme {
             dark: true,
             bg: c(0x221E19),
             surface: c(0x2E2921),
+            chrome: c(0x1B1814),
             text,
             accent: c(0xE08D54),
             accent_2: c(0x9FB181),
@@ -382,6 +393,23 @@ mod tests {
         assert_eq!((SUCCESS.r, SUCCESS.g), (d.success().r, d.success().g));
         assert_eq!(BORDER.a, d.divider.a);
         assert_eq!(TEXT_ON_ACCENT.r, d.on_accent().r);
+    }
+
+    /// Chrome is recessed on both grounds: *darker* than `bg`, where `surface` is
+    /// the raised one. Darker rather than "further from the ink", because on a
+    /// light ground darker is nearer the ink — the direction is the shadow's, not
+    /// the contrast's. If chrome collapses onto `bg` the tab strip and the active
+    /// tab in it become one shape.
+    #[test]
+    fn chrome_is_a_ground_of_its_own_and_recessed_on_both() {
+        for t in [Theme::light(), Theme::dark()] {
+            assert_ne!(t.chrome.r, t.bg.r, "chrome must not be bg");
+            assert_ne!(t.chrome.r, t.surface.r, "chrome is not the raised surface");
+            assert!(t.chrome.r < t.bg.r, "chrome sits under bg, not over it");
+            assert!(t.chrome.g < t.bg.g && t.chrome.b < t.bg.b);
+        }
+        // And the dark one is the mockups' own value.
+        assert_eq!((Theme::dark().chrome.r * 255.).round() as u32, 0x1B);
     }
 
     #[test]

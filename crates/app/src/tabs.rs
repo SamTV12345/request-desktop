@@ -13,14 +13,14 @@
 //! interesting part (open / activate / close / move out) is testable without a
 //! window or an `App`.
 use gpui::{
-    AnyElement, AnyView, Entity, IntoElement, MouseButton, MouseDownEvent, ParentElement,
-    SharedString, Styled, div, prelude::*,
+    AnyElement, AnyView, Entity, IntoElement, MouseDownEvent, ParentElement, SharedString, Styled,
+    div, prelude::*,
 };
 use rp_store::{TabRecord, WindowSession};
-use rp_ui::icon::icon_tinted;
 use rp_ui::layout::divider;
 use rp_ui::theme;
-use rp_ui::tokens::{control, radius, size, space, text};
+use rp_ui::tokens::{control, radius, space, text};
+use rp_ui::{TabItem, TabMenuRequest, TabStrip};
 use std::path::{Path, PathBuf};
 
 use crate::Workspace;
@@ -542,142 +542,76 @@ pub fn plan(session: &WindowSession, mut requests_at: impl FnMut(&Path) -> Optio
     }
 }
 
-/// One tab action — detach, close. Reveals itself only while its own tab is
-/// hovered, which is what keeps the strip quiet when nothing is being aimed at.
-fn tab_action(
-    t: theme::Theme,
-    id: SharedString,
-    group: SharedString,
-    glyph: &'static str,
-    on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
-) -> impl IntoElement {
-    div()
-        .id(id)
-        .flex()
-        .flex_none()
-        .items_center()
-        .justify_center()
-        .p(space::S1)
-        .rounded(radius::PILL)
-        // gpui has no `invisible()`, so the reveal is an opacity swap driven by
-        // the tab's group.
-        .opacity(0.)
-        .group_hover(group, |s| s.opacity(1.))
-        .hover(|s| s.bg(t.active()))
-        // svg takes its colour from its own element, never from the container.
-        .child(icon_tinted(glyph, text::SMALL, t.text_muted()))
-        .on_click(on_click)
+/// Which tab carries this element key.
+///
+/// [`rp_ui::TabStrip`] hands back the key it was given rather than an index, so
+/// the lookup belongs here — and a click that lands after the list changed
+/// underneath resolves to nothing rather than to whichever tab now sits at that
+/// position.
+fn index_of(ws: &Workspace, key: &SharedString) -> Option<usize> {
+    ws.tabs().iter().position(|t| t.key.id() == *key)
 }
 
 /// The tab strip above the detail pane.
+///
+/// The drawing is [`rp_ui::TabStrip`]'s; what stays here is the part that knows
+/// about `TabKey` — turning tabs into items, and turning a key back into the index
+/// every operation on [`Tabs`] takes.
 pub fn strip(ws: &Workspace, cx: &mut gpui::Context<Workspace>) -> impl IntoElement + use<> {
     let t = theme::theme(cx);
     let tabs = ws.tabs();
     let active = tabs.active_index();
-    // Built eagerly with a `for` loop: a lazy `map` closure would let the
-    // `&mut Context` borrow escape.
-    let mut items = Vec::with_capacity(tabs.len());
-    for (i, tab) in tabs.iter().enumerate() {
-        let is_active = active == Some(i);
-        let id = tab.key.id();
-        // One hover group per tab, so hovering a tab reveals only its own
-        // actions: `GroupHitboxes` resolves a group name to the innermost
-        // element that claimed it, and a shared name would make every tab's
-        // close button light up at once.
-        let group = SharedString::from(format!("{id}-group"));
-        items.push(
-            div()
-                .id(id.clone())
-                .group(group.clone())
-                .flex()
-                .flex_none()
-                .gap(space::S1)
-                .items_center()
-                .my(space::S1)
-                .px(space::S3)
-                .rounded(radius::PILL)
-                .text_size(text::CONTROL)
-                // The active tab is the raised surface under a pill — the same
-                // "lifted out of the ground" move the system uses for cards.
-                .map(|d| {
-                    if is_active {
-                        d.bg(t.surface).text_color(t.text)
-                    } else {
-                        d.text_color(t.text_muted())
-                            .hover(|s| s.bg(t.hover()).text_color(t.text))
-                    }
-                })
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.tabs_mut().activate(i);
-                    cx.defer(crate::save_session);
-                    cx.notify();
-                }))
-                // Right-click selects the tab and opens the menu at the pointer,
-                // as IntelliJ does. `ev.position` is already in window
-                // coordinates, which is what `anchored()` wants.
-                .on_mouse_down(
-                    MouseButton::Right,
-                    cx.listener(move |this, ev: &MouseDownEvent, window, cx| {
-                        this.tabs_mut().activate(i);
-                        this.tab_menu = Some((i, ev.position));
-                        // Escape only reaches the menu if the menu holds focus.
-                        window.focus(&this.menu_focus);
-                        cx.defer(crate::save_session);
-                        cx.notify();
-                    }),
-                )
-                // Pinned marker. `text::SMALL`, the size the detach and close
-                // glyphs use, so it reads as their sibling; tinted from the theme
-                // rather than a constant, so the meaning survives a ground switch.
-                .when(tab.pinned, |d| {
-                    d.child(icon_tinted("pin", text::SMALL, t.accent))
-                })
-                .child(
-                    div()
-                        .max_w(size::TAB_TITLE)
-                        // Without these two the title is clipped mid-glyph
-                        // instead of ellipsized: `truncate` needs the box to be
-                        // allowed to shrink and to hide its overflow.
-                        .min_w_0()
-                        .overflow_hidden()
-                        .truncate()
-                        .child(tab.title.clone()),
-                )
-                // Pull the tab out onto another monitor.
-                .child(tab_action(
-                    t,
-                    SharedString::from(format!("{id}-detach")),
-                    group.clone(),
-                    "window",
-                    cx.listener(move |this, _, _, cx| this.detach_tab(i, cx)),
-                ))
-                .child(tab_action(
-                    t,
-                    SharedString::from(format!("{id}-close")),
-                    group,
-                    "close",
-                    cx.listener(move |this, _, _, cx| {
-                        this.tabs_mut().remove(i);
-                        cx.defer(crate::save_session);
-                        cx.notify();
-                    }),
-                )),
-        );
-    }
-    div()
-        .id("tab-strip")
-        .flex()
-        .flex_none()
-        .items_center()
-        .gap(space::S1)
-        .h(control::MD)
-        .px(space::S2)
-        .w_full()
-        .overflow_x_scroll()
-        .bg(t.bg)
-        .border_b_1()
-        .border_color(t.divider)
-        .children(items)
+    let items = tabs
+        .iter()
+        .enumerate()
+        .map(|(i, tab)| TabItem {
+            key: tab.key.id(),
+            title: tab.title.clone(),
+            pinned: tab.pinned,
+            active: active == Some(i),
+        })
+        .collect();
+    TabStrip::new("tab-strip", items)
+        .on_activate(cx.listener(|this, key: &SharedString, _, cx| {
+            if let Some(i) = index_of(this, key) {
+                this.tabs_mut().activate(i);
+                cx.defer(crate::save_session);
+                cx.notify();
+            }
+        }))
+        .on_close(cx.listener(|this, key: &SharedString, _, cx| {
+            if let Some(i) = index_of(this, key) {
+                this.tabs_mut().remove(i);
+                cx.defer(crate::save_session);
+                cx.notify();
+            }
+        }))
+        .on_toggle_pin(cx.listener(|this, key: &SharedString, _, cx| {
+            if let Some(i) = index_of(this, key) {
+                this.tabs_mut().toggle_pin(i);
+                cx.defer(crate::save_session);
+                cx.notify();
+            }
+        }))
+        // Pull the tab out onto another monitor.
+        .on_detach(cx.listener(|this, key: &SharedString, _, cx| {
+            if let Some(i) = index_of(this, key) {
+                this.detach_tab(i, cx);
+            }
+        }))
+        // Right-click selects the tab and opens the menu at the pointer, as
+        // IntelliJ does.
+        .on_menu(cx.listener(|this, req: &TabMenuRequest, window, cx| {
+            if let Some(i) = index_of(this, &req.key) {
+                this.tabs_mut().activate(i);
+                this.tab_menu = Some((i, req.at));
+                // Escape only reaches the menu if the menu holds focus.
+                window.focus(&this.menu_focus);
+                cx.defer(crate::save_session);
+                cx.notify();
+            }
+        }))
+        .render(t)
 }
 
 // ---------------------------------------------------------------------------

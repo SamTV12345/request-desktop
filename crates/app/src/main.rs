@@ -49,17 +49,18 @@ mod shell {
     pub const TILE_RADIUS: Pixels = px(24.);
     /// The rail icon, a step above `text::H4`.
     pub const RAIL_ICON: Pixels = px(22.);
-    /// The title bar and the app mark inside it.
-    pub const TITLEBAR: Pixels = px(52.);
+    /// The title bar and the app mark inside it. 44 in the redesign, down from 52:
+    /// the row carries a 28-px control at most, so the rest was air.
+    pub const TITLEBAR: Pixels = px(44.);
     pub const MARK: Pixels = px(22.);
+    /// The title row's right inset. The design's own 6, with no step on the 4.4
+    /// scale near it.
+    pub const TITLE_INSET_R: Pixels = px(6.);
     /// The 1×20 rule between the mark and what follows it.
     pub const RULE: Pixels = px(20.);
     /// A title-bar icon button: 40×32, pill. The gear.
     pub const CONTROL_W: Pixels = px(40.);
     pub const CONTROL_H: Pixels = px(32.);
-    /// `--space-5`. `theme::space` jumps S4 → S6 and skips it, but the mockups
-    /// use it: 22 is exactly 5 × 4.4, the title bar's left inset.
-    pub const S5: Pixels = px(22.);
 }
 
 /// The name in the title bar, from the mockups.
@@ -1143,9 +1144,13 @@ impl Workspace {
             .gap(space::S3)
             .h(shell::TITLEBAR)
             .w_full()
-            .pl(shell::S5)
-            .pr(space::S2)
-            .bg(t.surface)
+            // The redesign's asymmetric inset — 14 left, 6 right — because the
+            // right end holds icon buttons that carry their own padding.
+            .pl(space::S3)
+            .pr(shell::TITLE_INSET_R)
+            // Chrome, not surface: the title row and the tab strip share the one
+            // recessed ground, so the body reads as raised out of both.
+            .bg(t.chrome)
             .on_mouse_down(gpui::MouseButton::Left, |_, window, _| {
                 window.start_window_move()
             })
