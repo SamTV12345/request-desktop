@@ -4,21 +4,31 @@ The standard for this workspace is "tested as well as SQLite": the parsers and
 devtools are expected to be covered by a corpus, property and fuzz suite, and
 branch coverage is the number we watch.
 
-The workspace is five crates — `rp-core` (`crates/core`), `rp-devtools`
-(`crates/devtools`), `rp-store` (`crates/store`), `request-pilot` (`crates/app`,
-the gpui GUI) and `rp-mcp` (`crates/mcp`). Only `fuzz` is excluded and builds on
-its own, because cargo-fuzz needs nightly and its own profile.
+The workspace is six crates — `rp-core` (`crates/core`), `rp-devtools`
+(`crates/devtools`), `rp-store` (`crates/store`), `rp-ui` (`crates/ui`, the
+design system: tokens, theme and shared components, depending on gpui and
+nothing else), `request-pilot` (`crates/app`, the gpui GUI) and `rp-mcp`
+(`crates/mcp`). Only `fuzz` is excluded and builds on its own, because
+cargo-fuzz needs nightly and its own profile.
+
+`crates/app` has both a `[lib]` and a `[bin]` target. The library is one module
+(`session`, the file loader) and exists so `crates/app/tests/end_to_end.rs` can
+drive the app's real loader instead of a copy of it; everything else in
+`crates/app/src` is gpui and stays binary-only.
 
 ## Running the suites locally
 
 ```bash
-# The gates, in the order CI runs them. All from the repo root.
+# All from the repo root.
 cargo fmt --all --check                             # formatting
 cargo clippy --workspace --all-targets -- -D warnings
-cargo test -p rp-core -p rp-devtools                # the real test suite
+cargo test --workspace                              # 656 tests
 cargo build -p request-pilot                        # gpui app compiles + links
-cargo deny check -A unlicensed                      # advisories, bans, licenses
+cargo deny check                                    # advisories, bans, licenses
 ```
+
+All three of the first gates are green. CI's `test` job is narrower than
+`--workspace` — see [What CI gates on](#what-ci-gates-on).
 
 `cargo fmt --all` (without `--check`) fixes formatting in place. Config is in
 `rustfmt.toml` — stock rustfmt at `max_width = 100`, which is already what the
@@ -69,22 +79,29 @@ Collect once, render separately: passing `--summary-only` together with `--lcov`
 silently truncates the lcov file, so `--no-report` then `llvm-cov report` is the
 supported combination. Add `--html` to `report` for a browsable tree.
 
-**Current measured coverage** (`rp-core` + `rp-devtools`): **75.63% branch**,
-89.74% line, 89.13% region, 87.90% function, over 15,910 regions.
+**Current measured coverage** (`rp-core` + `rp-devtools`): **88.21% branch**,
+96.27% line, 95.88% region, 94.01% function, over 18,828 regions. Measured on
+Windows with the commands above; CI measures the same thing on Linux, so
+platform-gated code can shift the last decimal.
 
-The weakest area by far is `crates/core/src/bru.rs` at **31.90% branch** /
-50.61% line — the `.bru` parser, which is also the main fuzz target. That is the
-place where new tests buy the most. `crates/devtools/src/lib.rs` is at 0% branch.
+`crates/core/src/bru.rs` used to be the hole in this table and is not any more —
+94.86% branch / 98.30% line. The two weakest spots now are
+`crates/core/src/exec.rs` at **75.76% branch** (the send path: timeouts, TLS and
+redirect handling are awkward to reach without a server per case) and
+`crates/devtools/src/lib.rs` at **60.63% line**, the registry plumbing. Those
+are where new tests buy the most.
 
 CI **reports** these numbers and uploads `lcov.info` as a build artifact; it does
 not enforce a threshold. A hard gate on a codebase this young just gets disabled
 the first time it is inconvenient, so the number belongs in code review instead.
-Note `lcov.info` is not currently in `.gitignore` — don't commit it.
+`lcov.info` is in `.gitignore`, so a local collection will not follow you into a
+commit.
 
 ### Fuzzing
 
-`fuzz/` is a separate nightly crate with targets for the `.bru` and `.http`
-parsers. On Windows you must add `--no-include-main-msvc`; on Linux and macOS
+`fuzz/` is a separate nightly crate with seven targets: `bru_parse`, `bru_env`,
+`bru_roundtrip`, `httpfile_parse`, `httpfile_roundtrip`, `vars_capture` and
+`tools_run`. On Windows you must add `--no-include-main-msvc`; on Linux and macOS
 that flag is a no-op, so the same line works everywhere.
 
 ```bash
@@ -109,6 +126,13 @@ hides a failing test — every gate reports its own verdict.
 | `deny` | Linux | yes |
 | `fuzz-smoke` | Linux (nightly) | not on PRs — schedule/dispatch only |
 
+`.github/workflows/differential.yml` is a second workflow, on the same PR/push
+triggers: it installs Bruno's own JS `.bru` parser from
+`scripts/bru_reference` and compares our parser against it with
+`RP_DIFFERENTIAL=1`. Without that variable the test in
+`crates/core/tests/differential_bru.rs` skips, which is the one ignored test in a
+local `cargo test --workspace`.
+
 The nightly run exists mostly for `deny`: it re-checks the tree against a fresh
 RUSTSEC advisory database, so a newly published advisory surfaces without anyone
 opening a PR.
@@ -117,26 +141,26 @@ opening a PR.
 uploads any crash reproducers from `fuzz/artifacts/`. It is intentionally kept
 off the PR path — cargo-fuzz needs nightly and a full rebuild of every target.
 
-### Two gates are currently red, on purpose
+### Every gate is green
 
-- **`clippy`** — there are pre-existing lints in all three crates (collapsible
-  ifs, `type_complexity`, `manual_is_multiple_of`, `format_in_format_args`,
-  `large_enum_variant`, `field_reassign_with_default`, `manual_strip`, a manual
-  `Vec::pop_if`, and a single-pattern `match`). They are deliberately **not**
-  allow-listed: the gate names them so the owners fix them.
-- **`test`** — the corpus and property suites are still being written and a
-  handful of assertions fail. That is in-flight work, not a pipeline bug.
+`fmt`, `clippy` (`-D warnings`, whole workspace, all targets) and
+`cargo test --workspace` (**656 tests**) all pass. There is no allow-list
+hiding a lint and no failing assertion being tolerated, so any red you see is
+something you changed.
 
 ### What CI does not cover (deliberate tradeoff)
 
 The `test` matrix runs **only `rp-core` and `rp-devtools`** on all three
-platforms. It does not test `request-pilot`.
+platforms — 336 of the workspace's 656 tests. The 320 it skips are
+`request-pilot` (169), `rp-mcp` (74), `rp-ui` (45) and `rp-store` (32). The
+release workflow does run `cargo test --workspace`, so a break in one of those
+four blocks a tag but not a merge.
 
 `request-pilot` depends on gpui, Zed's GPU UI framework, which drags in a large
 platform-specific graphics stack (blade/Vulkan on Linux, Metal on macOS,
 DirectX on Windows) plus xkbcommon, xcb and FreeType. Compiling it on all three
-runners would roughly triple CI wall-clock time and, since the crate is a GUI
-shell with no tests of its own, would buy zero extra assertions.
+runners would roughly triple CI wall-clock time, which is the reason the matrix
+skips it.
 
 Instead, `request-pilot` is covered on Linux only, in two ways: `clippy`
 type-checks it as part of `--workspace`, and `build-app` fully compiles **and
@@ -144,10 +168,12 @@ links** it. The linking step is the one that matters — clippy never invokes th
 linker, so `build-app` is what catches a missing gpui system library.
 
 **The gap this leaves:** a Windows- or macOS-only compile or link break in
-`request-pilot` will not be caught by CI. It will surface in the release
-pipeline (`.github/workflows/build.yml`) or on a developer's machine. If the app
-crate grows real logic, move that logic into `rp-core`/`rp-devtools` where the
-cross-platform matrix already covers it, rather than widening the gpui build.
+`request-pilot` will not be caught by CI, and neither will a failure in any of
+the 320 tests outside `rp-core`/`rp-devtools`. Both surface in
+`.github/workflows/release.yml`, which runs the whole suite, or on a developer's
+machine. The app crate is no longer the "no tests of its own" shell this section
+once described — it has 169 — so widening the matrix, or moving the logic into a
+crate the matrix already covers, is a real decision and not a formality.
 
 ### Linux system packages
 
@@ -175,21 +201,22 @@ blanket ignores. Duplicate dependency versions are reported but not gated — th
 gpui, reqwest and RustCrypto trees legitimately disagree on versions we do not
 control.
 
-Three items there need a human decision and should not be left to rot:
+One item there needs a human decision. The other two this section used to list
+have been resolved:
 
-1. **`evalexpr` is `AGPL-3.0-only`** — not dual-licensed. It is a direct
-   dependency of `rp-devtools`, so it links into the shipped `request-pilot`
-   binary, which on a strict reading makes the whole application AGPL. Either
-   replace it with a permissively licensed expression evaluator or accept AGPL
-   for the project deliberately. **Resolve before the first public release.**
-2. **`serde_yml` is unsound and archived** (RUSTSEC-2025-0068). We *do* reach
-   the affected serializer via `serde_yml::to_string`. Migrate to
-   `serde_norway`.
-3. **`rsa` 0.9 is vulnerable to the Marvin timing attack** (RUSTSEC-2023-0071)
-   with no patched release available. Only used by an offline local devtool, so
-   the network precondition for the attack does not apply here.
+1. **`rsa` 0.9 is vulnerable to the Marvin timing attack** (RUSTSEC-2023-0071)
+   with no patched release available. It is the one entry in `deny.toml`'s
+   `advisories.ignore`. Only used by an offline local devtool, so the network
+   precondition for the attack does not apply here. Revisit when `rsa` 0.10
+   ships.
+2. ~~`evalexpr` is `AGPL-3.0-only`~~ — gone. Nothing in the workspace depends on
+   it, `deny.toml` has no license exceptions, and `cargo deny check licenses`
+   passes against an allow-list that does not include AGPL.
+3. ~~`serde_yml` is unsound and archived~~ (RUSTSEC-2025-0068) — migrated;
+   `rp-devtools` uses `serde_norway` 0.9.
 
-The `deny` job passes `-A unlicensed` because our own three crates declare
-neither a `license` field nor `publish = false`, and cargo-deny infers "private"
-solely from `publish`. Adding `publish = false` (or a real license) to the three
-manifests would let that flag be dropped.
+The `deny` job still passes `-A unlicensed`, and no longer needs to: all six
+manifests now carry `publish = false`, which is what cargo-deny infers "private"
+from, and `cargo deny check` with no flags reports `advisories ok, bans ok,
+licenses ok, sources ok`. The flag and the comment above it in `ci.yml` can be
+dropped.
