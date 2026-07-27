@@ -71,7 +71,17 @@ pub fn sidebar_row(t: Theme, selected: bool) -> gpui::Div {
         .rounded(radius::PILL)
         .text_size(text::BODY)
         .line_height(text::BODY_LINE)
-        .when(selected, |d| d.bg(t.accent_wash()))
+        .text_color(t.text)
+        // The selected row is a *filled* pill, not a wash. Both lists in the
+        // redesign draw it that way — `Requests.dc.html` has
+        // `background:var(--color-accent);color:var(--color-bg)` on the current
+        // request and `Tools Improved.dc.html` the same on the current tool. The
+        // wash this replaced is only a few percent off `hover()`, so the selected
+        // row and the row under the pointer looked alike.
+        //
+        // The ink is set here rather than left to the caller, because a caller that
+        // colours its own label would otherwise paint dark text on the accent.
+        .when(selected, |d| d.bg(t.accent).text_color(t.on_accent()))
         .hover(|s| s.bg(t.hover()))
 }
 /// A centred icon, a one-line heading and a quieter hint — for every "there is

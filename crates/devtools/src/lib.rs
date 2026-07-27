@@ -171,7 +171,7 @@ pub enum Kind {
     Custom,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Category {
     Crypto,
     Converter,
@@ -183,6 +183,28 @@ pub enum Category {
     Measurement,
     Text,
     Data,
+}
+
+impl Category {
+    /// The heading the sidebar groups this category under.
+    ///
+    /// Three of these are the redesign's own words — `Tools Improved.dc.html`
+    /// writes "Convert & format", "Crypto & auth" and "Network" — and the rest
+    /// follow the same shape: what you would *say*, not the variant's name.
+    pub const fn label(self) -> &'static str {
+        match self {
+            Category::Converter => "Convert & format",
+            Category::Crypto => "Crypto & auth",
+            Category::Network => "Network",
+            Category::Web => "Web & URLs",
+            Category::Images => "Images & colour",
+            Category::Development => "Development",
+            Category::Math => "Maths",
+            Category::Measurement => "Measurement",
+            Category::Text => "Text",
+            Category::Data => "Data",
+        }
+    }
 }
 
 pub struct Tool {

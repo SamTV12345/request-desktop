@@ -19,6 +19,7 @@ mod request_pane;
 use request_pilot::session;
 mod tabs;
 mod tool_pane;
+mod tools;
 mod track;
 mod year_strip;
 
@@ -71,7 +72,28 @@ mod shell {
 /// it shows and the binding it will get cannot drift apart.
 const PALETTE: rp_ui::Chord = rp_ui::Chord::primary("K");
 
+/// Open the pinned tool in slot `0`…`8` — ⌘1…⌘9, or Ctrl off the Mac.
+///
+/// One action carrying the slot rather than nine unit actions: nine would mean
+/// nine bindings and nine identical handlers. `no_json` because the bindings are
+/// registered in code and never parsed from a keymap file, which is what would
+/// otherwise require `Deserialize` and a JSON schema for the payload.
+#[derive(Clone, PartialEq, Default, Debug, gpui::Action)]
+#[action(namespace = tools, no_json)]
+struct OpenFavorite(usize);
+
 const APP_NAME: &str = "Toolbench";
+
+/// The tool list's own row metrics, from `Tools Improved.dc.html`. None of them is
+/// on a token scale: the rows are `border-radius:10px` with `padding:7px 10px` at
+/// `font-size:13.5px`, the pinned dot is 5px, and a tool with no UI is drawn at
+/// `opacity:0.6`. The request list is deliberately different — pills, per
+/// `Requests.dc.html` — so these stay local rather than becoming tokens.
+const ROW_RADIUS: Pixels = px(10.);
+const ROW_PAD_Y: Pixels = px(7.);
+const ROW_TEXT: Pixels = px(13.5);
+const PIN_DOT: Pixels = px(5.);
+const UNAVAILABLE_OPACITY: f32 = 0.6;
 
 /// The maker's mark at the right end of the title bar, where the mockups had
 /// window controls the OS already draws.
@@ -444,6 +466,14 @@ struct Workspace {
     captured: Vec<(String, String)>,
     // Tools
     tool_query: Entity<TextInput>,
+    /// Favourite tool ids, in the order they were pinned — which is the order of
+    /// the ⌘1…⌘9 shortcuts, so it is a `Vec` and not a set.
+    ///
+    /// Per window rather than global: it is loaded from the store when a window
+    /// opens and written back on every toggle, so a second window picks it up when
+    /// it opens. Two windows disagreeing until then is the cheap wrong answer, and
+    /// the alternative is a `Global` plus a refresh of every window on a pin.
+    favorites: Vec<String>,
     /// The command palette's query field. Built once and reused: it owns the focus
     /// the palette's key bindings hang off, and rebuilding it per open would mean
     /// re-focusing something the window has not laid out yet.
@@ -543,6 +573,7 @@ impl Workspace {
             var_rows: Vec::new(),
             captured: Vec::new(),
             tool_query,
+            favorites: stored_favorites(cx),
             palette_query,
             palette_open: false,
             palette_selected: 0,
@@ -1388,13 +1419,10 @@ impl Workspace {
                             move |_, cx| cx.new(|_| Tip(full.clone())).into()
                         })
                         .child(method_badge(t, &r.method))
-                        .child(
-                            div()
-                                .flex_1()
-                                .truncate()
-                                .text_color(if active { t.accent } else { t.text })
-                                .child(full),
-                        )
+                        // No `text_color` here: the row owns the ink, because on a
+                        // selected row the ground is the accent and accent-on-accent
+                        // is an invisible label.
+                        .child(div().flex_1().truncate().child(full))
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.open_request(&at, i, cx);
                             cx.defer(save_session);
@@ -1717,13 +1745,22 @@ impl Workspace {
         let matches = rp_devtools::search(&query);
         let count = matches.len();
         let selected = self.tool_tabs.active_key().cloned();
+        let t = theme::theme(cx);
+        let groups = tools::grouped(&matches, &self.favorites);
         // Rows are built eagerly: `cx` is a `&mut` borrow, so a lazy `map`
         // closure would let it escape.
-        let mut rows = Vec::with_capacity(count);
-        for tool in matches {
-            rows.push(self.tool_row(tool, selected == Some(TabKey::Tool(tool.id)), cx));
+        let mut rows = Vec::new();
+        for group in &groups {
+            rows.push(group_heading(t, group).into_any_element());
+            for (i, tool) in group.tools.iter().enumerate() {
+                let active = selected == Some(TabKey::Tool(tool.id));
+                // Only the pinned group numbers its rows — the same tool lower
+                // down in its category must not claim a second shortcut.
+                let slot = (group.pinned && i < tools::MAX_SHORTCUTS).then_some(i);
+                rows.push(self.tool_row(tool, active, slot, cx).into_any_element());
+            }
         }
-        let t = theme::theme(cx);
+        let no_ui = matches.iter().filter(|tool| unavailable(tool)).count();
         sidebar(t, self.sidebar_width)
             .child(section(cx, t, "Tools"))
             .child(
@@ -1747,6 +1784,7 @@ impl Workspace {
                     .flex()
                     .flex_col()
                     .flex_1()
+                    .min_h_0()
                     .overflow_y_scroll()
                     .when(count == 0, |d| {
                         d.child(empty_state(
@@ -1759,41 +1797,157 @@ impl Workspace {
                     })
                     .children(rows),
             )
+            // The design puts the no-UI count in a footer rather than a pill on
+            // every affected row: it is the same fact stated once instead of four
+            // times, and the rows it was on are long enough already.
+            .when(no_ui > 0, |d| {
+                d.child(
+                    div()
+                        .flex()
+                        .flex_none()
+                        .items_center()
+                        .gap(space::S2)
+                        .px(space::S4)
+                        .py(space::S2)
+                        .border_t_1()
+                        .border_color(t.divider)
+                        .text_size(text::SMALL)
+                        .text_color(t.text_meta())
+                        .child(icon_tinted("plus", text::TINY, t.text_meta()))
+                        .child(SharedString::from(format!(
+                            "{no_ui} tools here still need a dedicated UI"
+                        ))),
+                )
+            })
+    }
+
+    /// Open the pinned tool in `slot`, if there is one.
+    ///
+    /// Out of range is deliberately nothing rather than a message: ⌘7 with four
+    /// favourites is a shortcut that does not exist yet, not an error.
+    fn open_favorite(&mut self, slot: usize, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(id) = self.favorites.get(slot).cloned() else {
+            return;
+        };
+        let Some(tool) = rp_devtools::search("").into_iter().find(|t| t.id == id) else {
+            return;
+        };
+        self.section = Section::Tools;
+        self.open_tool(tool, window, cx);
+        cx.defer(save_session);
+        cx.notify();
+    }
+
+    /// Toggle `id`'s favourite state and write the list back to the store.
+    ///
+    /// Persistence is never load-bearing here — a failed write costs the pin, not
+    /// the click, so the list in memory is updated either way.
+    fn toggle_favorite(&mut self, id: &'static str, cx: &mut Context<Self>) {
+        tools::toggle(&mut self.favorites, id);
+        let value = tools::favorites_to(&self.favorites);
+        if let Some(store) = cx.try_global::<Persist>().and_then(|p| p.store.as_ref()) {
+            let _ = store.set(tools::FAVORITES_KEY, &value);
+        }
+        cx.notify();
     }
 
     fn tool_row(
         &self,
         tool: &'static Tool,
         active: bool,
+        // `Some(i)` in the pinned group: this row answers to ⌘/Ctrl+`i+1`.
+        slot: Option<usize>,
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
         let t = theme::theme(cx);
-        let (fill, ink) = t.tag_neutral();
+        let pinned = self.favorites.iter().any(|k| k == tool.id);
+        // The star is always in the row and only *visible* when the row is pinned,
+        // selected, or under the pointer — the same opacity-swap-on-group-hover the
+        // tab strip's close button uses, because gpui has no `invisible()`.
+        //
+        // Hover matters more than it looks: without it you could only ever pin the
+        // tool that is already open, so the feature would be invisible until you
+        // happened to look at a row you had just opened.
+        let group = SharedString::from(format!("row-{}", tool.id));
+        let star_ink = if active {
+            t.on_accent()
+        } else if pinned {
+            t.accent
+        } else {
+            t.text_disabled()
+        };
         sidebar_row(t, active)
-            .id(tool.id)
+            // Unique across groups: a pinned tool draws twice, once at the top and
+            // once in its category, and two children may not share an id.
+            .id(SharedString::from(match slot {
+                Some(i) => format!("tool-pin-{i}-{}", tool.id),
+                None => format!("tool-{}", tool.id),
+            }))
+            // The design's tool rows are a 10px corner, not the request list's
+            // pill — `Tools Improved.dc.html` says `border-radius:10px` on every
+            // one of them.
+            .group(group.clone())
+            .rounded(ROW_RADIUS)
+            .h_auto()
+            .py(ROW_PAD_Y)
+            .text_size(ROW_TEXT)
             // Tool names run long too — "Encode/decode url formatted strings".
             .tooltip(move |_, cx| cx.new(|_| Tip(tool.name.into())).into())
-            .child(
-                div()
-                    .flex_1()
-                    .truncate()
-                    .text_color(if active { t.accent } else { t.text })
-                    .child(tool.name),
-            )
-            // Mark the tools this build cannot provide, so the disappointment
-            // happens before the click rather than after it.
-            .when(unavailable(tool), |d| {
+            // A tool with no UI is dimmed rather than labelled: the count in the
+            // footer says how many, and the row still opens to explain itself.
+            .when(unavailable(tool), |d| d.opacity(UNAVAILABLE_OPACITY))
+            // The pinned group's rows carry the accent-2 dot the design gives them.
+            .when(slot.is_some(), |d| {
                 d.child(
                     div()
                         .flex_none()
-                        .px(space::S2)
+                        .size(PIN_DOT)
                         .rounded(radius::PILL)
-                        .bg(fill)
-                        .text_size(text::TINY)
-                        .text_color(ink)
-                        .child("no UI"),
+                        .bg(t.accent_2_ramp.s500),
                 )
             })
+            .child(div().flex_1().min_w_0().truncate().child(tool.name))
+            // The shortcut hint, in mono like every other key hint in the app.
+            .when_some(slot, |d, i| {
+                d.child(
+                    div()
+                        .flex_none()
+                        .font_family(theme::FONT_MONO)
+                        .text_size(text::TINY)
+                        .text_color(if active { t.on_accent() } else { t.text_meta() })
+                        .child(SharedString::from(
+                            rp_ui::Chord::primary(shortcut_digit(i)).label(),
+                        )),
+                )
+            })
+            .child(
+                div()
+                    .id(SharedString::from(match slot {
+                        Some(i) => format!("star-pin-{i}-{}", tool.id),
+                        None => format!("star-{}", tool.id),
+                    }))
+                    .flex_none()
+                    .p(space::S1)
+                    .rounded(radius::PILL)
+                    // Without this the row's own hitbox is hit too — gpui counts
+                    // *every* containing hitbox as hovered unless one blocks the
+                    // mouse, so both click handlers fire and pinning would also
+                    // open the tool. `occlude()` is `HitboxBehavior::BlockMouse`,
+                    // which stops the walk before it reaches the row.
+                    .occlude()
+                    .when(!pinned && !active, |d| {
+                        d.opacity(0.).group_hover(group.clone(), |s| s.opacity(1.))
+                    })
+                    .hover(|s| s.bg(t.active()))
+                    .tooltip(move |_, cx| {
+                        cx.new(|_| Tip(if pinned { "Unpin" } else { "Pin" }.into()))
+                            .into()
+                    })
+                    .child(icon_tinted("star", text::SMALL, star_ink))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.toggle_favorite(tool.id, cx);
+                    })),
+            )
             .on_click(cx.listener(move |this, _, window, cx| {
                 this.open_tool(tool, window, cx);
                 cx.defer(save_session);
@@ -2711,6 +2865,14 @@ impl Render for Workspace {
             .on_action(cx.listener(|this, _: &rp_ui::palette::Toggle, window, cx| {
                 this.toggle_palette(window, cx)
             }))
+            // ⌘1…⌘9. Bound globally like the palette's own chord, so a favourite
+            // opens while a text field has focus — the hint on the row promises a
+            // shortcut, not a shortcut that works only sometimes.
+            .on_action(
+                cx.listener(|this, a: &OpenFavorite, window, cx| {
+                    this.open_favorite(a.0, window, cx)
+                }),
+            )
             .on_action(
                 cx.listener(|this, _: &rp_ui::palette::Dismiss, window, cx| {
                     this.close_palette(window, cx)
@@ -2799,6 +2961,59 @@ fn stored_sidebar_width(cx: &App) -> Pixels {
     }
 }
 
+/// The pinned tools, or none. Ids that no longer name a tool are dropped on the
+/// way in — see [`tools::favorites_from`].
+fn stored_favorites(cx: &App) -> Vec<String> {
+    let stored = cx
+        .try_global::<Persist>()
+        .and_then(|p| p.store.as_ref())
+        .and_then(|store| store.get(tools::FAVORITES_KEY).ok().flatten())
+        .unwrap_or_default();
+    let all = rp_devtools::search("");
+    tools::favorites_from(&stored, |id| all.iter().any(|t| t.id == id))
+}
+
+/// A group heading in the tools list.
+///
+/// Two shapes from `Tools Improved.dc.html`: the pinned one is a star and a word,
+/// a category is its name, a rule filling the rest of the row, and the count in
+/// mono. The rule is what makes a long list skimmable — the eye catches the line,
+/// not the small-caps text.
+fn group_heading(t: theme::Theme, group: &tools::Group) -> impl IntoElement + use<> {
+    div()
+        .flex()
+        .items_center()
+        .gap(space::S2)
+        .px(space::S3)
+        .pt(space::S3)
+        .pb(space::S1)
+        .text_size(text::TINY)
+        .text_color(t.text_meta())
+        .when(group.pinned, |d| {
+            d.child(icon_tinted("star", text::TINY, t.text_meta()))
+        })
+        .child(SharedString::from(group.label.to_uppercase()))
+        .when(!group.pinned, |d| {
+            d.child(div().flex_1().min_w_0().h(px(1.)).bg(t.divider))
+                .child(
+                    div()
+                        .flex_none()
+                        .font_family(theme::FONT_MONO)
+                        .child(SharedString::from(group.tools.len().to_string())),
+                )
+        })
+}
+
+/// `1`…`9` as a `&'static str`, for the pinned rows' shortcut chords.
+///
+/// A lookup rather than `to_string()`, because [`Chord`] holds a `&'static str`
+/// key — the chord is a compile-time thing everywhere else in the app and this is
+/// the one place that indexes into it.
+fn shortcut_digit(i: usize) -> &'static str {
+    const DIGITS: [&str; tools::MAX_SHORTCUTS] = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
+    DIGITS[i.min(DIGITS.len() - 1)]
+}
+
 /// A `Kind::Custom` tool with neither a generic form nor a bespoke pane.
 fn unavailable(tool: &'static Tool) -> bool {
     tool.kind == rp_devtools::Kind::Custom && !custom::HAS_PANE.contains(&tool.id)
@@ -2813,6 +3028,15 @@ fn main() {
             cx.set_global(resolved);
             // One call: the design system registers what its widgets need.
             rp_ui::bind_keys(cx, PALETTE);
+            // The label on the row and the binding come from the same `Chord`, so
+            // a Mac shows ⌘1 and gets ⌘1 — see `rp_ui::shortcut`.
+            cx.bind_keys((0..tools::MAX_SHORTCUTS).map(|i| {
+                gpui::KeyBinding::new(
+                    &rp_ui::Chord::primary(shortcut_digit(i)).keystroke(),
+                    OpenFavorite(i),
+                    None,
+                )
+            }));
             // Tabs can be pulled out into their own windows; the app lives until
             // the last one is gone.
             cx.on_window_closed(|cx| {
