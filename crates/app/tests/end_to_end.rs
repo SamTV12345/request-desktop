@@ -7,23 +7,18 @@
 //! request", which is what the user was actually blocked on.
 //!
 //! ## What cannot be reached from here
-//! `crates/app` is a binary (`src/main.rs`), so an integration test cannot
-//! `use` its modules: `session::{load, kind_of, flatten}` — the loader this
-//! file has to reimplement below — `tabs`, `request_pane`, `editor` and
-//! `text_input` are all invisible from outside. `session.rs` says in its own
-//! header that it was split out of `main.rs` "so it is testable", but as long
-//! as the package has no `[lib]` target that only means unit tests inside the
-//! binary. Extracting `session.rs` (and `tabs.rs`, which is deliberately
-//! generic over the content type) into a small `rp-app-core` library, or adding
-//! a `[lib]` target to this package, would let this file drive the app's real
-//! loader instead of a copy of it.
+//! `session` now comes from `crates/app`'s library target, so this file drives
+//! the app's real loader. The rest of `src/` is still binary-only and invisible
+//! from outside: `tabs`, `request_pane`, `track` and friends are gpui views, and
+//! gpui has no test support in this workspace, so there is nothing to reach for.
 //!
 //! No new dependencies: the HTTP server is `std::net`, the same ~120-line shape
 //! as `crates/core/tests/exec_corpus.rs`, bound to `127.0.0.1:0`.
 
+use request_pilot::session::{Loaded, flatten, load};
 use rp_core::interp::{self, Vars};
-use rp_core::model::{Auth, Body, Item, Request};
-use rp_core::{bru, exec, httpfile, vars};
+use rp_core::model::{Auth, Body, Request};
+use rp_core::{bru, exec, vars};
 use rp_store::{Store, TabRecord, WindowSession};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -163,53 +158,8 @@ fn block_on<F: std::future::Future>(f: F) -> F::Output {
 
 // ------------------------------------------------------- the app's own loader
 //
-// A copy of `crates/app/src/session.rs`, which the binary crate hides. Kept
-// deliberately literal so a divergence is obvious on sight.
-
-#[derive(Debug, Default)]
-struct Loaded {
-    requests: Vec<Request>,
-    environments: Vec<rp_core::model::Environment>,
-    declared: Vec<(String, String)>,
-}
-
-fn flatten(items: &[Item]) -> Vec<Request> {
-    let mut out = Vec::new();
-    for item in items {
-        match item {
-            Item::Request { request, .. } => out.push((**request).clone()),
-            Item::Folder { items, .. } => out.extend(flatten(items)),
-        }
-    }
-    out
-}
-
-fn load(path: &Path) -> anyhow::Result<Loaded> {
-    if path.is_dir() {
-        let c = bru::load_collection(path)?;
-        return Ok(Loaded {
-            requests: flatten(&c.items),
-            environments: c.environments,
-            declared: Vec::new(),
-        });
-    }
-    let src = String::from_utf8_lossy(&std::fs::read(path)?).into_owned();
-    if path
-        .extension()
-        .is_some_and(|e| e.eq_ignore_ascii_case("bru"))
-    {
-        return Ok(Loaded {
-            requests: vec![bru::parse(&src)?],
-            ..Default::default()
-        });
-    }
-    let (requests, declared) = httpfile::parse_with_vars(&src)?;
-    Ok(Loaded {
-        requests,
-        environments: vars::load_env_files(path).unwrap_or_default(),
-        declared,
-    })
-}
+// The real one, from the library target. This file used to carry a copy because
+// `crates/app` had no `[lib]`; it does now.
 
 /// Variables of one named environment, as the sidebar's environment picker
 /// hands them to the executor.

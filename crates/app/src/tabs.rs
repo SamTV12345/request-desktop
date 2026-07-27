@@ -1521,7 +1521,9 @@ mod tests {
     }
 
     fn load_requests(p: &Path) -> Option<usize> {
-        crate::session::load(p).ok().map(|l| l.requests.len())
+        request_pilot::session::load(p)
+            .ok()
+            .map(|l| l.requests.len())
     }
 
     #[test]

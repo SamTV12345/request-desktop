@@ -14,7 +14,9 @@ mod filters;
 mod palette;
 mod reference;
 mod request_pane;
-mod session;
+// `session` is the library target's, not the binary's, so `tests/` can use the
+// same loader the app does. See `lib.rs`.
+use request_pilot::session;
 mod tabs;
 mod tool_pane;
 mod track;
