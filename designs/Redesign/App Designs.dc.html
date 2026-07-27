@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="_ds/organic-a267054e-2b3b-4711-a849-cfab844b89ab/styles.css">
+<script src="_ds/organic-a267054e-2b3b-4711-a849-cfab844b89ab/_ds_bundle.js"></script>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caprasimo&family=Figtree:wght@300..800&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+  .theme-dark {
+    --color-bg: #221e19;
+    --color-surface: #2e2921;
+    --color-text: #f3e8d6;
+    --color-accent: #e08d54;
+    --color-accent-2: #9fb181;
+    --color-divider: color-mix(in srgb, #f3e8d6 18%, transparent);
+    --color-neutral-100: #2e2b25;
+    --color-neutral-200: #474238;
+    --color-neutral-300: #645c50;
+    --color-neutral-400: #82796a;
+    --color-neutral-500: #a19786;
+    --color-neutral-600: #c0b6a5;
+    --color-neutral-700: #dcd3c4;
+    --color-neutral-800: #eee7db;
+    --color-neutral-900: #f9f4ed;
+    --color-accent-100: #402310;
+    --color-accent-200: #643312;
+    --color-accent-300: #8c491a;
+    --color-accent-400: #b2622d;
+    --color-accent-500: #d67f48;
+    --color-accent-600: #f6a06b;
+    --color-accent-700: #ffc6a5;
+    --color-accent-800: #ffe1d0;
+    --color-accent-900: #fff2eb;
+    --color-accent-2-100: #272e1b;
+    --color-accent-2-200: #3d472b;
+    --color-accent-2-300: #56633f;
+    --color-accent-2-400: #728157;
+    --color-accent-2-500: #8fa073;
+    --color-accent-2-600: #aebf92;
+    --color-accent-2-700: #ccdbb2;
+    --color-accent-2-800: #e1eecc;
+    --color-accent-2-900: #f0fae1;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.45);
+    --shadow-md: 0 4px 14px rgba(0,0,0,0.5);
+    --shadow-lg: 0 18px 44px rgba(0,0,0,0.55);
+  }
+</style>
+</helmet>
+
+<section style="display:flex;flex-direction:column;gap:32px;padding:72px;background:#efe4d0;font-family:var(--font-body);color:var(--color-text)">
+  <div>
+    <div style="font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:var(--color-accent-700);margin-bottom:8px">Turn 3 · Time travel</div>
+    <h1 style="margin:0 0 10px;font-size:48px">A calendar for the history</h1>
+    <p style="margin:0;font-size:17px;max-width:78ch;opacity:0.75">Month grid for the overview, week grid for the detail — the same view switcher carries Day / Week / Month / Year. The left rail swaps the endless task-pill list for a mini-month, project filters and a search across all history; the year strip under the month jumps back further.</p>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:64px;align-items:flex-start">
+    <div id="3a" style="display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;align-items:center;gap:14px">
+        <span style="display:inline-flex;align-items:center;justify-content:center;min-width:38px;height:30px;padding:0 12px;border-radius:999px;background:#2e2921;color:#f6a06b;font-family:var(--font-heading);font-size:14px">3a</span>
+        <span style="font-family:var(--font-heading);font-size:22px">Month — dark</span>
+        <span class="tag tag-neutral">day cells with entry chips · year strip</span>
+      </div>
+      <div class="theme-dark" style="width:1920px;height:1080px">
+        <dc-import name="Time Calendar" view="month" group="3a" hint-size="1920px,1080px" style="width:1920px;height:1080px"></dc-import>
+      </div>
+    </div>
+    <div id="3b" style="display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;align-items:center;gap:14px">
+        <span style="display:inline-flex;align-items:center;justify-content:center;min-width:38px;height:30px;padding:0 12px;border-radius:999px;background:#2e2921;color:#f6a06b;font-family:var(--font-heading);font-size:14px">3b</span>
+        <span style="font-family:var(--font-heading);font-size:22px">Week — dark</span>
+        <span class="tag tag-neutral">real hour grid · entry inspector</span>
+      </div>
+      <div class="theme-dark" style="width:1920px;height:1080px">
+        <dc-import name="Time Calendar" view="week" group="3b" hint-size="1920px,1080px" style="width:1920px;height:1080px"></dc-import>
+      </div>
+    </div>
+    <div id="3c" style="display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;align-items:center;gap:14px">
+        <span style="display:inline-flex;align-items:center;justify-content:center;min-width:38px;height:30px;padding:0 12px;border-radius:999px;background:var(--color-accent);color:#f5ead8;font-family:var(--font-heading);font-size:14px">3c</span>
+        <span style="font-family:var(--font-heading);font-size:22px">Month — light</span>
+      </div>
+      <dc-import name="Time Calendar" view="month" group="3c" hint-size="1920px,1080px" style="width:1920px;height:1080px"></dc-import>
+    </div>
+  </div>
+</section>
+
+<section style="display:flex;flex-direction:column;gap:32px;padding:72px;background:#efe4d0;font-family:var(--font-body);color:var(--color-text)">
+  <div>
+    <div style="font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:var(--color-accent-700);margin-bottom:8px">Turn 2 · App icon</div>
+    <h1 style="margin:0 0 10px;font-size:48px">Five directions</h1>
+    <p style="margin:0;font-size:17px;max-width:74ch;opacity:0.75">Each drawn on a 512 squircle from the Organic palette and shown down to 18px, where most of the decision gets made.</p>
+  </div>
+  <div id="2a" style="display:flex;flex-direction:column;gap:16px">
+    <div style="display:flex;align-items:center;gap:14px">
+      <span style="display:inline-flex;align-items:center;justify-content:center;min-width:38px;height:30px;padding:0 12px;border-radius:999px;background:var(--color-accent);color:#f5ead8;font-family:var(--font-heading);font-size:14px">2a</span>
+      <span style="font-family:var(--font-heading);font-size:22px">Icon set</span>
+    </div>
+    <dc-import name="App Icon" hint-size="1920px,720px" style="width:1920px"></dc-import>
+  </div>
+</section>
+
+<section style="display:flex;flex-direction:column;gap:56px;padding:72px;background:#efe4d0;font-family:var(--font-body);color:var(--color-text)">
+
+  <div style="display:flex;align-items:flex-end;gap:26px;max-width:1400px">
+    <div>
+      <div style="font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:var(--color-accent-700);margin-bottom:8px">Turn 1 · Toolbench desktop</div>
+      <h1 style="margin:0 0 10px;font-size:54px">Requests, Tools, Time</h1>
+      <p style="margin:0;font-size:17px;max-width:74ch;opacity:0.75">Three screens on the Organic system, each in a light and a dark ground, plus a sheet of the recurring tool-body patterns. Static — nothing is wired up.</p>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;gap:64px;align-items:flex-start">
+
+    <div id="1a" style="display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;align-items:center;gap:14px">
+        <span style="display:inline-flex;align-items:center;justify-content:center;min-width:38px;height:30px;padding:0 12px;border-radius:999px;background:var(--color-accent);color:#f5ead8;font-family:var(--font-heading);font-size:14px">1a</span>
+        <span style="font-family:var(--font-heading);font-size:22px">Requests — light</span>
+        <span class="tag tag-neutral">collection tree · env vars · response</span>
+      </div>
+      <dc-import name="Requests" group="1a" hint-size="1920px,1080px" style="width:1920px;height:1080px"></dc-import>
+    </div>
+
+    <div id="1b" style="display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;align-items:center;gap:14px">
+        <span style="display:inline-flex;align-items:center;justify-content:center;min-width:38px;height:30px;padding:0 12px;border-radius:999px;background:var(--color-accent);color:#f5ead8;font-family:var(--font-heading);font-size:14px">1b</span>
+        <span style="font-family:var(--font-heading);font-size:22px">Tools — light</span>
+        <span class="tag tag-neutral">sidebar · search · tool tabs</span>
+      </div>
+      <dc-import name="Tools" group="1b" hint-size="1920px,1080px" style="width:1920px;height:1080px"></dc-import>
+    </div>
+
+    <div id="1c" style="display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;align-items:center;gap:14px">
+        <span style="display:inline-flex;align-items:center;justify-content:center;min-width:38px;height:30px;padding:0 12px;border-radius:999px;background:var(--color-accent);color:#f5ead8;font-family:var(--font-heading);font-size:14px">1c</span>
+        <span style="font-family:var(--font-heading);font-size:22px">Time — light</span>
+        <span class="tag tag-neutral">running timer · day list · month · summary</span>
+      </div>
+      <dc-import name="Time" group="1c" hint-size="1920px,1080px" style="width:1920px;height:1080px"></dc-import>
+    </div>
+
+    <div id="1d" style="display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;align-items:center;gap:14px">
+        <span style="display:inline-flex;align-items:center;justify-content:center;min-width:38px;height:30px;padding:0 12px;border-radius:999px;background:#2e2921;color:#f6a06b;font-family:var(--font-heading);font-size:14px">1d</span>
+        <span style="font-family:var(--font-heading);font-size:22px">Requests — dark</span>
+      </div>
+      <div class="theme-dark" style="width:1920px;height:1080px">
+        <dc-import name="Requests" group="1d" hint-size="1920px,1080px" style="width:1920px;height:1080px"></dc-import>
+      </div>
+    </div>
+
+    <div id="1e" style="display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;align-items:center;gap:14px">
+        <span style="display:inline-flex;align-items:center;justify-content:center;min-width:38px;height:30px;padding:0 12px;border-radius:999px;background:#2e2921;color:#f6a06b;font-family:var(--font-heading);font-size:14px">1e</span>
+        <span style="font-family:var(--font-heading);font-size:22px">Tools — dark</span>
+      </div>
+      <div class="theme-dark" style="width:1920px;height:1080px">
+        <dc-import name="Tools" group="1e" hint-size="1920px,1080px" style="width:1920px;height:1080px"></dc-import>
+      </div>
+    </div>
+
+    <div id="1f" style="display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;align-items:center;gap:14px">
+        <span style="display:inline-flex;align-items:center;justify-content:center;min-width:38px;height:30px;padding:0 12px;border-radius:999px;background:#2e2921;color:#f6a06b;font-family:var(--font-heading);font-size:14px">1f</span>
+        <span style="font-family:var(--font-heading);font-size:22px">Time — dark</span>
+      </div>
+      <div class="theme-dark" style="width:1920px;height:1080px">
+        <dc-import name="Time" group="1f" hint-size="1920px,1080px" style="width:1920px;height:1080px"></dc-import>
+      </div>
+    </div>
+
+    <div id="1g" style="display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;align-items:center;gap:14px">
+        <span style="display:inline-flex;align-items:center;justify-content:center;min-width:38px;height:30px;padding:0 12px;border-radius:999px;background:var(--color-accent);color:#f5ead8;font-family:var(--font-heading);font-size:14px">1g</span>
+        <span style="font-family:var(--font-heading);font-size:22px">Tool body patterns</span>
+        <span class="tag tag-neutral">the four shapes every one of the 86 tools falls into</span>
+      </div>
+      <dc-import name="Tool Patterns" group="1g" hint-size="1920px,1300px" style="width:1920px"></dc-import>
+    </div>
+
+  </div>
+</section>
+</x-dc>
+</body>
+</html>

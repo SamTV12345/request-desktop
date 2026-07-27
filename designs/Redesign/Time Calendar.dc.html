@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/organic-a267054e-2b3b-4711-a849-cfab844b89ab/styles.css">
+<script src="_ds/organic-a267054e-2b3b-4711-a849-cfab844b89ab/_ds_bundle.js"></script>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caprasimo&family=Figtree:wght@300..800&family=JetBrains+Mono:wght@400;500;700&display=swap">
+</helmet>
+<div style="width:1920px;height:1080px;display:flex;flex-direction:column;overflow:hidden;border-radius:22px;background:var(--color-bg);color:var(--color-text);font-family:var(--font-body);font-size:14px;box-shadow:var(--shadow-lg)">
+
+  <div style="height:52px;flex:none;display:flex;align-items:center;gap:14px;padding:0 10px 0 22px;background:var(--color-surface)">
+    <div style="width:22px;height:22px;border-radius:50%;background:var(--color-accent)"></div>
+    <div style="font-family:var(--font-heading);font-size:16px;letter-spacing:-0.01em">Toolbench</div>
+    <div style="width:1px;height:20px;background:var(--color-divider)"></div>
+    <div style="display:flex;align-items:center;gap:8px;padding:4px 14px;border-radius:999px;background:var(--color-accent-200);color:var(--color-accent-800);font-size:12.5px">
+      <span style="width:7px;height:7px;border-radius:50%;background:var(--color-accent-600)"></span>
+      <span>Bug Fix: Timezone Handling</span>
+      <span style="font-family:'JetBrains Mono',monospace;font-weight:700">00:41:12</span>
+    </div>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:2px">
+      <div style="width:40px;height:32px;border-radius:999px;display:grid;place-items:center;opacity:0.7"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round"><path d="M5 12h14"></path></svg></div>
+      <div style="width:40px;height:32px;border-radius:999px;display:grid;place-items:center;opacity:0.7"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="4"></rect></svg></div>
+      <div style="width:40px;height:32px;border-radius:999px;display:grid;place-items:center;background:var(--color-accent);color:var(--color-bg)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg></div>
+    </div>
+  </div>
+
+  <div style="flex:1;display:flex;min-height:0">
+
+    <div style="width:104px;flex:none;display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 0;background:var(--color-surface)">
+      <div style="width:76px;height:74px;border-radius:24px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;opacity:0.65">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h11"></path><path d="M12 6l6 6-6 6"></path><path d="M20 5v14"></path></svg>
+        <span style="font-size:11px;letter-spacing:0.02em">Requests</span>
+      </div>
+      <div style="width:76px;height:74px;border-radius:24px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;opacity:0.65">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0 5 5L16 15l-7 7-4-4 7-7z"></path></svg>
+        <span style="font-size:11px;letter-spacing:0.02em">Tools</span>
+      </div>
+      <div style="width:76px;height:74px;border-radius:24px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;background:var(--color-accent);color:var(--color-bg)">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"></circle><path d="M12 7.5V12l3 2"></path></svg>
+        <span style="font-size:11px;letter-spacing:0.02em">Time</span>
+      </div>
+    </div>
+
+    <div style="width:308px;flex:none;display:flex;flex-direction:column;min-height:0;gap:16px;padding:18px 14px 18px 8px">
+
+      <div style="display:flex;flex-direction:column;gap:9px;padding:0 6px">
+        <input class="input" style="min-height:42px" placeholder="What are you working on?">
+        <button class="btn btn-primary btn-block" style="min-height:44px;font-size:15px;gap:10px">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2.75" stroke-linejoin="round"><path d="M8 5.5l10 6.5-10 6.5z"></path></svg>
+          Start new timer
+        </button>
+      </div>
+
+      <div style="padding:14px 16px 16px;border-radius:26px;background:var(--color-surface)">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+          <span style="font-family:var(--font-heading);font-size:15px">July 2026</span>
+          <div style="margin-left:auto;display:flex;gap:2px">
+            <div style="width:26px;height:26px;border-radius:50%;display:grid;place-items:center;opacity:0.6"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 6l-6 6 6 6"></path></svg></div>
+            <div style="width:26px;height:26px;border-radius:50%;display:grid;place-items:center;opacity:0.6"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10 6l6 6-6 6"></path></svg></div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(7, 1fr);gap:3px;font-family:'JetBrains Mono',monospace;font-size:10.5px;text-align:center;opacity:0.5;margin-bottom:4px">
+          <span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(7, 1fr);gap:3px;font-family:'JetBrains Mono',monospace;font-size:12px;text-align:center">
+          <span style="padding:5px 0;border-radius:50%;opacity:0.3">29</span>
+          <span style="padding:5px 0;border-radius:50%;opacity:0.3">30</span>
+          <span style="padding:5px 0;border-radius:50%;background:var(--color-accent-2-200);color:var(--color-accent-2-800)">1</span>
+          <span style="padding:5px 0;border-radius:50%;background:var(--color-accent-2-200);color:var(--color-accent-2-800)">2</span>
+          <span style="padding:5px 0;border-radius:50%;background:var(--color-accent);color:var(--color-bg);font-weight:700">3</span>
+          <span style="padding:5px 0;border-radius:50%;opacity:0.35">4</span>
+          <span style="padding:5px 0;border-radius:50%;opacity:0.35">5</span>
+          <span style="padding:5px 0;border-radius:50%;background:var(--color-accent-2-200);color:var(--color-accent-2-800)">6</span>
+          <span style="padding:5px 0;border-radius:50%;background:var(--color-accent-2-200);color:var(--color-accent-2-800)">7</span>
+          <span style="padding:5px 0;border-radius:50%;background:var(--color-accent-2-200);color:var(--color-accent-2-800)">8</span>
+          <span style="padding:5px 0;border-radius:50%;background:var(--color-accent-2-200);color:var(--color-accent-2-800)">9</span>
+          <span style="padding:5px 0;border-radius:50%;background:var(--color-accent-2-200);color:var(--color-accent-2-800)">10</span>
+          <span style="padding:5px 0;border-radius:50%;opacity:0.35">11</span>
+          <span style="padding:5px 0;border-radius:50%;opacity:0.35">12</span>
+          <span style="padding:5px 0;border-radius:50%;background:var(--color-accent-2-200);color:var(--color-accent-2-800)">13</span>
+          <span style="padding:5px 0;border-radius:50%;background:var(--color-accent-2-200);color:var(--color-accent-2-800)">14</span>
+          <span style="padding:5px 0;border-radius:50%;opacity:0.45">15</span>
+          <span style="padding:5px 0;border-radius:50%;background:var(--color-accent-2-200);color:var(--color-accent-2-800)">16</span>
+          <span style="padding:5px 0;border-radius:50%;background:var(--color-accent-2-200);color:var(--color-accent-2-800)">17</span>
+          <span style="padding:5px 0;border-radius:50%;opacity:0.35">18</span>
+          <span style="padding:5px 0;border-radius:50%;opacity:0.35">19</span>
+          <span style="padding:5px 0;border-radius:50%;background:var(--color-accent-2-200);color:var(--color-accent-2-800)">20</span>
+          <span style="padding:5px 0;border-radius:50%;background:var(--color-accent-2-200);color:var(--color-accent-2-800)">21</span>
+          <span style="padding:5px 0;border-radius:50%;background:var(--color-accent-2-200);color:var(--color-accent-2-800)">22</span>
+          <span style="padding:5px 0;border-radius:50%;background:var(--color-accent-2-200);color:var(--color-accent-2-800)">23</span>
+          <span style="padding:5px 0;border-radius:50%;background:var(--color-accent-2-200);color:var(--color-accent-2-800)">24</span>
+          <span style="padding:5px 0;border-radius:50%;opacity:0.35">25</span>
+          <span style="padding:5px 0;border-radius:50%;box-shadow:inset 0 0 0 1.5px var(--color-accent);color:var(--color-accent-700)">26</span>
+          <span style="padding:5px 0;border-radius:50%;opacity:0.35">27</span>
+          <span style="padding:5px 0;border-radius:50%;opacity:0.35">28</span>
+          <span style="padding:5px 0;border-radius:50%;opacity:0.35">29</span>
+          <span style="padding:5px 0;border-radius:50%;opacity:0.35">30</span>
+          <span style="padding:5px 0;border-radius:50%;opacity:0.35">31</span>
+          <span style="padding:5px 0;border-radius:50%;opacity:0.25">1</span>
+          <span style="padding:5px 0;border-radius:50%;opacity:0.25">2</span>
+        </div>
+      </div>
+
+      <div style="padding:0 6px;display:flex;flex-direction:column;gap:10px">
+        <div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;opacity:0.55">Projects</div>
+        <label class="radio" style="gap:10px;font-size:13.5px"><input type="checkbox" checked="checked"><span class="dot" style="border-radius:6px;border-color:var(--color-accent-2-500);background:var(--color-accent-2-500);box-shadow:inset 0 0 0 3px var(--color-bg)"></span>mcp <span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:12px;opacity:0.55">54h 20m</span></label>
+        <label class="radio" style="gap:10px;font-size:13.5px"><input type="checkbox" checked="checked"><span class="dot" style="border-radius:6px;border-color:var(--color-accent);background:var(--color-accent);box-shadow:inset 0 0 0 3px var(--color-bg)"></span>app <span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:12px;opacity:0.55">22h 05m</span></label>
+        <label class="radio" style="gap:10px;font-size:13.5px"><input type="checkbox" checked="checked"><span class="dot" style="border-radius:6px;border-color:var(--color-neutral-400);background:var(--color-neutral-400);box-shadow:inset 0 0 0 3px var(--color-bg)"></span>admin <span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:12px;opacity:0.55">6h 25m</span></label>
+      </div>
+
+      <div style="height:1px;background:var(--color-divider);margin:0 6px"></div>
+
+      <div style="padding:0 6px;display:flex;flex-direction:column;gap:10px">
+        <div style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;opacity:0.55">Kinds</div>
+        <label class="radio" style="gap:10px;font-size:13.5px"><input type="checkbox" checked="checked"><span class="dot" style="border-radius:6px;border-color:var(--color-accent);background:var(--color-accent);box-shadow:inset 0 0 0 3px var(--color-bg)"></span>Feature <span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:12px;opacity:0.55">31</span></label>
+        <label class="radio" style="gap:10px;font-size:13.5px"><input type="checkbox" checked="checked"><span class="dot" style="border-radius:6px;border-color:var(--color-accent);background:var(--color-accent);box-shadow:inset 0 0 0 3px var(--color-bg)"></span>Bug Fix <span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:12px;opacity:0.55">24</span></label>
+        <label class="radio" style="gap:10px;font-size:13.5px"><input type="checkbox" checked="checked"><span class="dot" style="border-radius:6px;border-color:var(--color-accent);background:var(--color-accent);box-shadow:inset 0 0 0 3px var(--color-bg)"></span>Review &amp; Deploy <span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:12px;opacity:0.55">18</span></label>
+      </div>
+
+      <div style="margin-top:auto;padding:0 6px">
+        <div style="position:relative">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" style="position:absolute;left:16px;top:12px;opacity:0.5"><circle cx="11" cy="11" r="6.5"></circle><path d="M16 16l4.5 4.5"></path></svg>
+          <input class="input" style="min-height:38px;padding-left:38px" placeholder="Search all history">
+        </div>
+      </div>
+    </div>
+
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:16px;padding:18px 22px 20px 8px">
+
+      <div style="display:flex;align-items:center;gap:14px">
+        <div style="display:flex;gap:4px">
+          <div class="btn btn-secondary btn-icon" style="width:36px;height:36px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 6l-6 6 6 6"></path></svg></div>
+          <div class="btn btn-secondary btn-icon" style="width:36px;height:36px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10 6l6 6-6 6"></path></svg></div>
+        </div>
+        <button class="btn btn-secondary" style="min-height:36px;font-size:13px">Today</button>
+        <sc-if value="{{ isMonth }}" hint-placeholder-val="{{ true }}">
+          <h3 style="margin:0;font-size:28px">July 2026</h3>
+        </sc-if>
+        <sc-if value="{{ isWeek }}" hint-placeholder-val="{{ false }}">
+          <h3 style="margin:0;font-size:28px">29 Jun – 5 Jul 2026 <span style="font-size:16px;opacity:0.5;font-family:var(--font-body)">week 27</span></h3>
+        </sc-if>
+        <sc-if value="{{ isMonth }}" hint-placeholder-val="{{ true }}">
+          <span class="seg" style="margin-left:auto">
+            <label class="seg-opt" style="padding:7px 18px"><input type="radio" name="cal-view-{{ group }}">Day</label>
+            <label class="seg-opt" style="padding:7px 18px"><input type="radio" name="cal-view-{{ group }}">Week</label>
+            <label class="seg-opt" style="padding:7px 18px"><input type="radio" name="cal-view-{{ group }}" checked="checked">Month</label>
+            <label class="seg-opt" style="padding:7px 18px"><input type="radio" name="cal-view-{{ group }}">Year</label>
+          </span>
+        </sc-if>
+        <sc-if value="{{ isWeek }}" hint-placeholder-val="{{ false }}">
+          <span class="seg" style="margin-left:auto">
+            <label class="seg-opt" style="padding:7px 18px"><input type="radio" name="cal-view-{{ group }}">Day</label>
+            <label class="seg-opt" style="padding:7px 18px"><input type="radio" name="cal-view-{{ group }}" checked="checked">Week</label>
+            <label class="seg-opt" style="padding:7px 18px"><input type="radio" name="cal-view-{{ group }}">Month</label>
+            <label class="seg-opt" style="padding:7px 18px"><input type="radio" name="cal-view-{{ group }}">Year</label>
+          </span>
+        </sc-if>
+        <div style="display:flex;align-items:baseline;gap:10px;padding-left:8px">
+          <span style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;opacity:0.55">Tracked</span>
+          <span style="font-family:var(--font-heading);font-size:26px;line-height:1;color:var(--color-accent-700);font-variant-numeric:tabular-nums">82h 50m</span>
+        </div>
+      </div>
+
+      <sc-if value="{{ isMonth }}" hint-placeholder-val="{{ true }}">
+      <div style="flex:1;min-height:0;display:flex;flex-direction:column;gap:12px">
+
+        <div style="flex:1;min-height:0;display:flex;flex-direction:column;border-radius:28px;background:var(--color-surface);padding:8px 10px 10px;overflow:hidden">
+          <div style="display:grid;grid-template-columns:repeat(7, 1fr);gap:6px;padding:8px 8px 10px;font-size:11px;letter-spacing:0.09em;text-transform:uppercase;opacity:0.55">
+            <span>Monday</span><span>Tuesday</span><span>Wednesday</span><span>Thursday</span><span>Friday</span><span>Saturday</span><span>Sunday</span>
+          </div>
+          <div style="flex:1;min-height:0;display:grid;grid-template-columns:repeat(7, 1fr);grid-template-rows:repeat(5, 1fr);gap:6px">
+
+            <div style="display:flex;flex-direction:column;gap:4px;padding:9px 11px;border-radius:18px;background:var(--color-bg);opacity:0.4;min-height:0;overflow:hidden">
+              <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px">29</span><span style="font-size:11px;opacity:0.6">Jun</span><span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11.5px;opacity:0.7">7h 30m</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--color-accent-2-200);color:var(--color-accent-2-800);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.75">3h</span><span style="overflow:hidden;text-overflow:ellipsis">Feature: API Pagination</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--color-accent-2-200);color:var(--color-accent-2-800);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.75">4h</span><span style="overflow:hidden;text-overflow:ellipsis">Feature: Audit Logging</span></div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:4px;padding:9px 11px;border-radius:18px;background:var(--color-bg);opacity:0.4;min-height:0;overflow:hidden">
+              <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px">30</span><span style="font-size:11px;opacity:0.6">Jun</span><span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11.5px;opacity:0.7">6h 45m</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--color-accent-2-200);color:var(--color-accent-2-800);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.75">2h30</span><span style="overflow:hidden;text-overflow:ellipsis">Bug Fix: Race Condition</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--color-accent-2-200);color:var(--color-accent-2-800);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.75">4h</span><span style="overflow:hidden;text-overflow:ellipsis">Feature: Rate Limiting</span></div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:4px;padding:9px 11px;border-radius:18px;background:var(--color-bg);min-height:0;overflow:hidden">
+              <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px">1</span><span style="font-size:11px;opacity:0.6">Jul</span><span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--color-accent-700)">8h 30m</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--color-accent-2-200);color:var(--color-accent-2-800);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.75">4h</span><span style="overflow:hidden;text-overflow:ellipsis">Feature: GraphQL Subs</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--color-accent-200);color:var(--color-accent-800);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.75">2h30</span><span style="overflow:hidden;text-overflow:ellipsis">Documentation</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--color-accent-2-200);color:var(--color-accent-2-800);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.75">2h</span><span style="overflow:hidden;text-overflow:ellipsis">Code Review</span></div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:4px;padding:9px 11px;border-radius:18px;background:var(--color-bg);min-height:0;overflow:hidden">
+              <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px">2</span><span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--color-accent-700)">5h 30m</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--color-accent-2-200);color:var(--color-accent-2-800);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.75">2h30</span><span style="overflow:hidden;text-overflow:ellipsis">Bug Fix: Memory Leak</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--color-accent-2-200);color:var(--color-accent-2-800);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.75">3h</span><span style="overflow:hidden;text-overflow:ellipsis">Feature: Monitoring</span></div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:4px;padding:9px 11px;border-radius:18px;background:var(--color-accent-100);box-shadow:inset 0 0 0 1.5px var(--color-accent);min-height:0;overflow:hidden">
+              <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;color:var(--color-accent-900)">3</span><span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11.5px;font-weight:700;color:var(--color-accent-800)">5h 30m</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--color-accent-2-300);color:var(--color-accent-2-900);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.8">2h</span><span style="overflow:hidden;text-overflow:ellipsis">Code Review</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--color-accent-2-300);color:var(--color-accent-2-900);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.8">2h30</span><span style="overflow:hidden;text-overflow:ellipsis">Refactoring: Cache</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--color-accent-2-300);color:var(--color-accent-2-900);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.8">1h</span><span style="overflow:hidden;text-overflow:ellipsis">Deployment</span></div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:4px;padding:9px 11px;border-radius:18px;background:color-mix(in srgb, var(--color-text) 4%, transparent);min-height:0;overflow:hidden">
+              <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px;opacity:0.45">4</span></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px;padding:9px 11px;border-radius:18px;background:color-mix(in srgb, var(--color-text) 4%, transparent);min-height:0;overflow:hidden">
+              <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px;opacity:0.45">5</span></div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:4px;padding:9px 11px;border-radius:18px;background:var(--color-bg);min-height:0;overflow:hidden">
+              <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px">6</span><span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--color-accent-700)">7h 15m</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--color-accent-2-200);color:var(--color-accent-2-800);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.75">3h15</span><span style="overflow:hidden;text-overflow:ellipsis">Feature: Email Notifs</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--color-accent-2-200);color:var(--color-accent-2-800);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.75">2h</span><span style="overflow:hidden;text-overflow:ellipsis">Bug Fix: SQL Injection</span></div>
+              <div style="font-size:11px;opacity:0.55;padding-left:9px">+1 more</div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:4px;padding:9px 11px;border-radius:18px;background:var(--color-bg);min-height:0;overflow:hidden">
+              <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px">7</span><span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--color-accent-700)">6h 00m</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--color-accent-2-200);color:var(--color-accent-2-800);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.75">4h</span><span style="overflow:hidden;text-overflow:ellipsis">Feature: Rate Limiting</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:color-mix(in srgb, var(--color-text) 9%, transparent);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.6">2h</span><span style="overflow:hidden;text-overflow:ellipsis">Sprint planning</span></div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:4px;padding:9px 11px;border-radius:18px;background:var(--color-bg);min-height:0;overflow:hidden">
+              <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px">8</span><span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--color-accent-700)">8h 00m</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--color-accent-200);color:var(--color-accent-800);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.75">5h</span><span style="overflow:hidden;text-overflow:ellipsis">Bug Fix: Concurrent Req</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--color-accent-200);color:var(--color-accent-800);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.75">3h</span><span style="overflow:hidden;text-overflow:ellipsis">Code Review</span></div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:4px;padding:9px 11px;border-radius:18px;background:var(--color-bg);min-height:0;overflow:hidden">
+              <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px">9</span><span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--color-accent-700)">7h 45m</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--color-accent-2-200);color:var(--color-accent-2-800);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.75">4h45</span><span style="overflow:hidden;text-overflow:ellipsis">Feature: Monitoring</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--color-accent-2-200);color:var(--color-accent-2-800);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.75">3h</span><span style="overflow:hidden;text-overflow:ellipsis">Bug Fix: Timezone</span></div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:4px;padding:9px 11px;border-radius:18px;background:var(--color-bg);min-height:0;overflow:hidden">
+              <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px">10</span><span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--color-accent-700)">4h 30m</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--color-accent-2-200);color:var(--color-accent-2-800);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.75">3h30</span><span style="overflow:hidden;text-overflow:ellipsis">Bug Fix: Login Redirect</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--color-accent-200);color:var(--color-accent-800);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.75">1h</span><span style="overflow:hidden;text-overflow:ellipsis">Deployment</span></div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:4px;padding:9px 11px;border-radius:18px;background:color-mix(in srgb, var(--color-text) 4%, transparent);min-height:0;overflow:hidden">
+              <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px;opacity:0.45">11</span></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px;padding:9px 11px;border-radius:18px;background:color-mix(in srgb, var(--color-text) 4%, transparent);min-height:0;overflow:hidden">
+              <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px;opacity:0.45">12</span></div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:4px;padding:9px 11px;border-radius:18px;background:var(--color-bg);min-height:0;overflow:hidden">
+              <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px">13</span><span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--color-accent-700)">6h 30m</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--color-accent-2-200);color:var(--color-accent-2-800);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.75">4h30</span><span style="overflow:hidden;text-overflow:ellipsis">Feature: GraphQL Subs</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--color-accent-2-200);color:var(--color-accent-2-800);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.75">2h</span><span style="overflow:hidden;text-overflow:ellipsis">Code Review</span></div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:4px;padding:9px 11px;border-radius:18px;background:var(--color-bg);min-height:0;overflow:hidden">
+              <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px">14</span><span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--color-accent-700)">5h 15m</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--color-accent-200);color:var(--color-accent-800);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.75">3h15</span><span style="overflow:hidden;text-overflow:ellipsis">Documentation</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--color-accent-200);color:var(--color-accent-800);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.75">2h</span><span style="overflow:hidden;text-overflow:ellipsis">Bug Fix: Missing Index</span></div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:4px;padding:9px 11px;border-radius:18px;background:var(--color-bg);min-height:0;overflow:hidden">
+              <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px">15</span><span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11.5px;opacity:0.7">1h 20m</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:color-mix(in srgb, var(--color-text) 9%, transparent);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.6">1h20</span><span style="overflow:hidden;text-overflow:ellipsis">Standup + admin</span></div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:4px;padding:9px 11px;border-radius:18px;background:var(--color-bg);min-height:0;overflow:hidden">
+              <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px">16</span><span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--color-accent-700)">7h 00m</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--color-accent-2-200);color:var(--color-accent-2-800);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.75">4h</span><span style="overflow:hidden;text-overflow:ellipsis">Feature: Audit Logging</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--color-accent-2-200);color:var(--color-accent-2-800);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.75">3h</span><span style="overflow:hidden;text-overflow:ellipsis">Bug Fix: Memory Leak</span></div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:4px;padding:9px 11px;border-radius:18px;background:var(--color-bg);min-height:0;overflow:hidden">
+              <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px">17</span><span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--color-accent-700)">4h 00m</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--color-accent-200);color:var(--color-accent-800);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.75">3h</span><span style="overflow:hidden;text-overflow:ellipsis">Refactoring: Cache</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--color-accent-200);color:var(--color-accent-800);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.75">1h</span><span style="overflow:hidden;text-overflow:ellipsis">Deployment</span></div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:4px;padding:9px 11px;border-radius:18px;background:color-mix(in srgb, var(--color-text) 4%, transparent);min-height:0;overflow:hidden">
+              <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px;opacity:0.45">18</span></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px;padding:9px 11px;border-radius:18px;background:color-mix(in srgb, var(--color-text) 4%, transparent);min-height:0;overflow:hidden">
+              <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px;opacity:0.45">19</span></div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:4px;padding:9px 11px;border-radius:18px;background:var(--color-bg);min-height:0;overflow:hidden">
+              <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px">20</span><span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--color-accent-700)">6h 00m</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--color-accent-2-200);color:var(--color-accent-2-800);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.75">4h</span><span style="overflow:hidden;text-overflow:ellipsis">Feature: API Pagination</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--color-accent-2-200);color:var(--color-accent-2-800);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.75">2h</span><span style="overflow:hidden;text-overflow:ellipsis">Code Review</span></div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:4px;padding:9px 11px;border-radius:18px;background:var(--color-bg);min-height:0;overflow:hidden">
+              <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px">21</span><span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--color-accent-700)">7h 30m</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--color-accent-2-200);color:var(--color-accent-2-800);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.75">5h30</span><span style="overflow:hidden;text-overflow:ellipsis">Feature: Email Notifs</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--color-accent-2-200);color:var(--color-accent-2-800);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.75">2h</span><span style="overflow:hidden;text-overflow:ellipsis">Bug Fix: Race Condition</span></div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:4px;padding:9px 11px;border-radius:18px;background:var(--color-bg);min-height:0;overflow:hidden">
+              <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px">22</span><span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--color-accent-700)">6h 45m</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--color-accent-200);color:var(--color-accent-800);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.75">3h45</span><span style="overflow:hidden;text-overflow:ellipsis">Bug Fix: SQL Injection</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--color-accent-200);color:var(--color-accent-800);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.75">3h</span><span style="overflow:hidden;text-overflow:ellipsis">Feature: Rate Limiting</span></div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:4px;padding:9px 11px;border-radius:18px;background:var(--color-bg);min-height:0;overflow:hidden">
+              <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px">23</span><span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--color-accent-700)">5h 00m</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--color-accent-2-200);color:var(--color-accent-2-800);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.75">3h</span><span style="overflow:hidden;text-overflow:ellipsis">Feature: Monitoring</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--color-accent-2-200);color:var(--color-accent-2-800);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.75">2h</span><span style="overflow:hidden;text-overflow:ellipsis">Bug Fix: Timezone</span></div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:4px;padding:9px 11px;border-radius:18px;background:var(--color-bg);min-height:0;overflow:hidden">
+              <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px">24</span><span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--color-accent-700)">4h 15m</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--color-accent-2-200);color:var(--color-accent-2-800);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.75">3h15</span><span style="overflow:hidden;text-overflow:ellipsis">Bug Fix: Login Redirect</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--color-accent-200);color:var(--color-accent-800);font-size:11.5px;overflow:hidden;white-space:nowrap"><span style="font-family:'JetBrains Mono',monospace;opacity:0.75">1h</span><span style="overflow:hidden;text-overflow:ellipsis">Deployment</span></div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:4px;padding:9px 11px;border-radius:18px;background:color-mix(in srgb, var(--color-text) 4%, transparent);min-height:0;overflow:hidden">
+              <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px;opacity:0.45">25</span></div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:4px;padding:9px 11px;border-radius:18px;background:color-mix(in srgb, var(--color-accent) 10%, transparent);box-shadow:inset 0 0 0 1.5px color-mix(in srgb, var(--color-accent) 55%, transparent);min-height:0;overflow:hidden">
+              <div style="display:flex;align-items:baseline;gap:8px">
+                <span style="font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--color-accent-700);font-weight:700">26</span>
+                <span style="font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:var(--color-accent-700)">today</span>
+                <span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--color-accent-700)">0h 41m</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--color-accent);color:var(--color-bg);font-size:11.5px;overflow:hidden;white-space:nowrap">
+                <span style="width:6px;height:6px;border-radius:50%;background:currentColor;flex:none"></span>
+                <span style="overflow:hidden;text-overflow:ellipsis">Bug Fix: Timezone</span>
+              </div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:4px;padding:9px 11px;border-radius:18px;border:1px dashed var(--color-divider);min-height:0;overflow:hidden">
+              <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px;opacity:0.35">27</span></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px;padding:9px 11px;border-radius:18px;border:1px dashed var(--color-divider);min-height:0;overflow:hidden">
+              <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px;opacity:0.35">28</span></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px;padding:9px 11px;border-radius:18px;border:1px dashed var(--color-divider);min-height:0;overflow:hidden">
+              <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px;opacity:0.35">29</span></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px;padding:9px 11px;border-radius:18px;border:1px dashed var(--color-divider);min-height:0;overflow:hidden">
+              <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px;opacity:0.35">30</span></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px;padding:9px 11px;border-radius:18px;border:1px dashed var(--color-divider);min-height:0;overflow:hidden">
+              <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px;opacity:0.35">31</span></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px;padding:9px 11px;border-radius:18px;background:color-mix(in srgb, var(--color-text) 3%, transparent);min-height:0;overflow:hidden">
+              <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px;opacity:0.3">1</span><span style="font-size:11px;opacity:0.35">Aug</span></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px;padding:9px 11px;border-radius:18px;background:color-mix(in srgb, var(--color-text) 3%, transparent);min-height:0;overflow:hidden">
+              <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px;opacity:0.3">2</span></div>
+            </div>
+
+          </div>
+        </div>
+
+        <div style="flex:none;display:flex;align-items:center;gap:20px;padding:16px 24px;border-radius:26px;background:var(--color-surface)">
+          <div style="display:flex;align-items:baseline;gap:10px;width:150px;flex:none">
+            <span style="font-family:var(--font-heading);font-size:17px">2026</span>
+            <span style="font-size:12px;opacity:0.6">jump back</span>
+          </div>
+          <div style="flex:1;display:flex;gap:8px">
+            <div style="flex:1;display:flex;flex-direction:column;gap:6px;align-items:center"><div style="width:100%;height:34px;border-radius:10px;background:var(--color-accent-2-300)"></div><span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;opacity:0.55">Jan</span></div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:6px;align-items:center"><div style="width:100%;height:34px;border-radius:10px;background:var(--color-accent-2-400)"></div><span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;opacity:0.55">Feb</span></div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:6px;align-items:center"><div style="width:100%;height:34px;border-radius:10px;background:var(--color-accent-2-300)"></div><span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;opacity:0.55">Mar</span></div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:6px;align-items:center"><div style="width:100%;height:34px;border-radius:10px;background:var(--color-accent-2-400)"></div><span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;opacity:0.55">Apr</span></div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:6px;align-items:center"><div style="width:100%;height:34px;border-radius:10px;background:var(--color-accent-2-200)"></div><span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;opacity:0.55">May</span></div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:6px;align-items:center"><div style="width:100%;height:34px;border-radius:10px;background:var(--color-accent-2-400)"></div><span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;opacity:0.55">Jun</span></div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:6px;align-items:center"><div style="width:100%;height:34px;border-radius:10px;background:var(--color-accent)"></div><span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--color-accent-700)">Jul</span></div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:6px;align-items:center"><div style="width:100%;height:34px;border-radius:10px;background:color-mix(in srgb, var(--color-text) 7%, transparent)"></div><span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;opacity:0.35">Aug</span></div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:6px;align-items:center"><div style="width:100%;height:34px;border-radius:10px;background:color-mix(in srgb, var(--color-text) 7%, transparent)"></div><span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;opacity:0.35">Sep</span></div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:6px;align-items:center"><div style="width:100%;height:34px;border-radius:10px;background:color-mix(in srgb, var(--color-text) 7%, transparent)"></div><span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;opacity:0.35">Oct</span></div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:6px;align-items:center"><div style="width:100%;height:34px;border-radius:10px;background:color-mix(in srgb, var(--color-text) 7%, transparent)"></div><span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;opacity:0.35">Nov</span></div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:6px;align-items:center"><div style="width:100%;height:34px;border-radius:10px;background:color-mix(in srgb, var(--color-text) 7%, transparent)"></div><span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;opacity:0.35">Dec</span></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;padding-left:8px;font-size:12.5px">
+            <span style="opacity:0.6">2025</span>
+            <span style="opacity:0.6">2024</span>
+            <button class="btn btn-secondary" style="min-height:32px;font-size:12.5px;padding:0 14px;gap:7px">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="3"></rect><path d="M5 15V6a2 2 0 0 1 2-2h8"></path></svg>
+              Export month
+            </button>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ isWeek }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:1;min-height:0;display:flex;gap:14px">
+
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;border-radius:28px;background:var(--color-surface);overflow:hidden">
+
+          <div style="display:flex;padding:14px 16px 12px;border-bottom:1px solid var(--color-divider)">
+            <div style="width:66px;flex:none"></div>
+            <div style="flex:1;display:grid;grid-template-columns:repeat(7, 1fr);gap:6px">
+              <div style="display:flex;flex-direction:column;gap:3px;padding:0 4px"><span style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;opacity:0.55">Mon 29</span><span style="font-family:'JetBrains Mono',monospace;font-size:13px;opacity:0.75">7h 30m</span></div>
+              <div style="display:flex;flex-direction:column;gap:3px;padding:0 4px"><span style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;opacity:0.55">Tue 30</span><span style="font-family:'JetBrains Mono',monospace;font-size:13px;opacity:0.75">6h 45m</span></div>
+              <div style="display:flex;flex-direction:column;gap:3px;padding:0 4px"><span style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;opacity:0.55">Wed 1 Jul</span><span style="font-family:'JetBrains Mono',monospace;font-size:13px;opacity:0.75">8h 30m</span></div>
+              <div style="display:flex;flex-direction:column;gap:3px;padding:0 4px"><span style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;opacity:0.55">Thu 2</span><span style="font-family:'JetBrains Mono',monospace;font-size:13px;opacity:0.75">5h 30m</span></div>
+              <div style="display:flex;flex-direction:column;gap:3px;padding:0 4px"><span style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--color-accent-700)">Fri 3</span><span style="font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--color-accent-700)">5h 30m</span></div>
+              <div style="display:flex;flex-direction:column;gap:3px;padding:0 4px;opacity:0.45"><span style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase">Sat 4</span><span style="font-family:'JetBrains Mono',monospace;font-size:13px">—</span></div>
+              <div style="display:flex;flex-direction:column;gap:3px;padding:0 4px;opacity:0.45"><span style="font-size:11px;letter-spacing:0.08em;text-transform:uppercase">Sun 5</span><span style="font-family:'JetBrains Mono',monospace;font-size:13px">—</span></div>
+            </div>
+          </div>
+
+          <div style="flex:1;min-height:0;display:flex;padding:10px 16px 16px">
+            <div style="width:66px;flex:none;display:flex;flex-direction:column;font-family:'JetBrains Mono',monospace;font-size:11.5px;opacity:0.5;padding-top:2px">
+              <div style="height:56px">08:00</div>
+              <div style="height:56px">09:00</div>
+              <div style="height:56px">10:00</div>
+              <div style="height:56px">11:00</div>
+              <div style="height:56px">12:00</div>
+              <div style="height:56px">13:00</div>
+              <div style="height:56px">14:00</div>
+              <div style="height:56px">15:00</div>
+              <div style="height:56px">16:00</div>
+              <div style="height:56px">17:00</div>
+              <div style="height:56px">18:00</div>
+            </div>
+
+            <div style="flex:1;position:relative;display:grid;grid-template-columns:repeat(7, 1fr);gap:6px">
+
+              <div style="position:absolute;inset:0;display:flex;flex-direction:column;pointer-events:none">
+                <div style="height:56px;border-top:1px solid var(--color-divider)"></div>
+                <div style="height:56px;border-top:1px solid var(--color-divider)"></div>
+                <div style="height:56px;border-top:1px solid var(--color-divider)"></div>
+                <div style="height:56px;border-top:1px solid var(--color-divider)"></div>
+                <div style="height:56px;border-top:1px solid var(--color-divider)"></div>
+                <div style="height:56px;border-top:1px solid var(--color-divider)"></div>
+                <div style="height:56px;border-top:1px solid var(--color-divider)"></div>
+                <div style="height:56px;border-top:1px solid var(--color-divider)"></div>
+                <div style="height:56px;border-top:1px solid var(--color-divider)"></div>
+                <div style="height:56px;border-top:1px solid var(--color-divider)"></div>
+                <div style="height:56px;border-top:1px solid var(--color-divider);border-bottom:1px solid var(--color-divider)"></div>
+              </div>
+
+              <div style="position:relative">
+                <div style="position:absolute;top:28px;left:0;right:0;height:26px;border-radius:12px;background:color-mix(in srgb, var(--color-text) 9%, transparent);padding:4px 10px;font-size:11px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">Standup</div>
+                <div style="position:absolute;top:56px;left:0;right:0;height:166px;border-radius:16px;background:var(--color-accent-2-200);border-left:4px solid var(--color-accent-2-500);padding:9px 12px;overflow:hidden">
+                  <div style="font-size:12.5px;color:var(--color-accent-2-900);line-height:1.3">Feature: API Pagination</div>
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--color-accent-2-800);opacity:0.8;margin-top:3px">09:00–12:00 · 3h</div>
+                  <div style="font-size:11px;color:var(--color-accent-2-800);opacity:0.75;margin-top:5px">Cursor-based, limit/offset dropped</div>
+                </div>
+                <div style="position:absolute;top:280px;left:0;right:0;height:222px;border-radius:16px;background:var(--color-accent-2-200);border-left:4px solid var(--color-accent-2-500);padding:9px 12px;overflow:hidden">
+                  <div style="font-size:12.5px;color:var(--color-accent-2-900);line-height:1.3">Feature: Audit Logging</div>
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--color-accent-2-800);opacity:0.8;margin-top:3px">13:00–17:00 · 4h</div>
+                  <div style="font-size:11px;color:var(--color-accent-2-800);opacity:0.75;margin-top:5px">Append-only table + retention job</div>
+                </div>
+              </div>
+
+              <div style="position:relative">
+                <div style="position:absolute;top:56px;left:0;right:0;height:138px;border-radius:16px;background:var(--color-accent-2-200);border-left:4px solid var(--color-accent-2-500);padding:9px 12px;overflow:hidden">
+                  <div style="font-size:12.5px;color:var(--color-accent-2-900);line-height:1.3">Bug Fix: Race Condition in Worker</div>
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--color-accent-2-800);opacity:0.8;margin-top:3px">09:00–11:30 · 2h 30m</div>
+                </div>
+                <div style="position:absolute;top:252px;left:0;right:0;height:26px;border-radius:12px;background:color-mix(in srgb, var(--color-text) 9%, transparent);padding:4px 10px;font-size:11px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">Standup</div>
+                <div style="position:absolute;top:308px;left:0;right:0;height:222px;border-radius:16px;background:var(--color-accent-2-200);border-left:4px solid var(--color-accent-2-500);padding:9px 12px;overflow:hidden">
+                  <div style="font-size:12.5px;color:var(--color-accent-2-900);line-height:1.3">Feature: Rate Limiting</div>
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--color-accent-2-800);opacity:0.8;margin-top:3px">13:30–17:30 · 4h</div>
+                  <div style="font-size:11px;color:var(--color-accent-2-800);opacity:0.75;margin-top:5px">Token bucket per key</div>
+                </div>
+              </div>
+
+              <div style="position:relative">
+                <div style="position:absolute;top:0;left:0;right:0;height:222px;border-radius:16px;background:var(--color-accent-2-200);border-left:4px solid var(--color-accent-2-500);padding:9px 12px;overflow:hidden">
+                  <div style="font-size:12.5px;color:var(--color-accent-2-900);line-height:1.3">Feature: GraphQL Subscriptions</div>
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--color-accent-2-800);opacity:0.8;margin-top:3px">08:00–12:00 · 4h</div>
+                  <div style="font-size:11px;color:var(--color-accent-2-800);opacity:0.75;margin-top:5px">ws transport, first resolver green</div>
+                </div>
+                <div style="position:absolute;top:280px;left:0;right:0;height:138px;border-radius:16px;background:var(--color-accent-200);border-left:4px solid var(--color-accent-500);padding:9px 12px;overflow:hidden">
+                  <div style="font-size:12.5px;color:var(--color-accent-900);line-height:1.3">Documentation</div>
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--color-accent-800);opacity:0.8;margin-top:3px">13:00–15:30 · 2h 30m</div>
+                </div>
+                <div style="position:absolute;top:448px;left:0;right:0;height:110px;border-radius:16px;background:var(--color-accent-2-200);border-left:4px solid var(--color-accent-2-500);padding:9px 12px;overflow:hidden">
+                  <div style="font-size:12.5px;color:var(--color-accent-2-900);line-height:1.3">Code Review</div>
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--color-accent-2-800);opacity:0.8;margin-top:3px">16:00–18:00 · 2h</div>
+                </div>
+              </div>
+
+              <div style="position:relative">
+                <div style="position:absolute;top:84px;left:0;right:0;height:138px;border-radius:16px;background:var(--color-accent-2-200);border-left:4px solid var(--color-accent-2-500);padding:9px 12px;overflow:hidden">
+                  <div style="font-size:12.5px;color:var(--color-accent-2-900);line-height:1.3">Bug Fix: Memory Leak in Cache</div>
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--color-accent-2-800);opacity:0.8;margin-top:3px">09:30–12:00 · 2h 30m</div>
+                </div>
+                <div style="position:absolute;top:280px;left:0;right:0;height:166px;border-radius:16px;background:var(--color-accent-2-200);border-left:4px solid var(--color-accent-2-500);padding:9px 12px;overflow:hidden">
+                  <div style="font-size:12.5px;color:var(--color-accent-2-900);line-height:1.3">Feature: Monitoring Dashboard</div>
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--color-accent-2-800);opacity:0.8;margin-top:3px">13:00–16:00 · 3h</div>
+                </div>
+              </div>
+
+              <div style="position:relative;background:color-mix(in srgb, var(--color-accent) 7%, transparent);border-radius:14px">
+                <div style="position:absolute;top:56px;left:0;right:0;height:110px;border-radius:16px;background:var(--color-accent-2-300);border-left:4px solid var(--color-accent-2-600);padding:9px 12px;overflow:hidden">
+                  <div style="font-size:12.5px;color:var(--color-accent-2-900);line-height:1.3">Code Review</div>
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--color-accent-2-900);opacity:0.8;margin-top:3px">09:00–11:00 · 2h</div>
+                  <div style="font-size:11px;color:var(--color-accent-2-900);opacity:0.8;margin-top:5px">PR #152 — DB indexes</div>
+                </div>
+                <div style="position:absolute;top:196px;left:0;right:0;height:138px;border-radius:16px;background:var(--color-accent-2-300);border-left:4px solid var(--color-accent-2-600);padding:9px 12px;overflow:hidden">
+                  <div style="font-size:12.5px;color:var(--color-accent-2-900);line-height:1.3">Refactoring: Cache Layer</div>
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--color-accent-2-900);opacity:0.8;margin-top:3px">11:30–14:00 · 2h 30m</div>
+                  <div style="font-size:11px;color:var(--color-accent-2-900);opacity:0.8;margin-top:5px">Dead code removed</div>
+                </div>
+                <div style="position:absolute;top:392px;left:0;right:0;height:54px;border-radius:16px;background:var(--color-accent);padding:7px 12px;overflow:hidden">
+                  <div style="font-size:12.5px;color:var(--color-bg);line-height:1.3">Deployment</div>
+                  <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--color-bg);opacity:0.85;margin-top:2px">15:00–16:00 · 1h</div>
+                </div>
+              </div>
+
+              <div style="position:relative"></div>
+              <div style="position:relative"></div>
+
+            </div>
+          </div>
+        </div>
+
+        <div style="width:308px;flex:none;display:flex;flex-direction:column;gap:12px;padding:22px 24px;border-radius:28px;background:var(--color-surface);overflow:hidden">
+          <div style="font-size:11px;letter-spacing:0.09em;text-transform:uppercase;opacity:0.55">Selected entry</div>
+          <div style="font-family:var(--font-heading);font-size:21px;line-height:1.15">Refactoring: Cache Layer</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="tag tag-accent-2">mcp</span>
+            <span class="tag tag-neutral" style="font-family:'JetBrains Mono',monospace">#19</span>
+          </div>
+          <div style="display:grid;grid-template-columns:64px 1fr;gap:8px 12px;font-size:13px;padding-top:4px">
+            <span style="opacity:0.6">Start</span><input class="input" style="min-height:32px;font-family:'JetBrains Mono',monospace;font-size:12.5px;background:var(--color-bg)" value="11:30">
+            <span style="opacity:0.6">End</span><input class="input" style="min-height:32px;font-family:'JetBrains Mono',monospace;font-size:12.5px;background:var(--color-bg)" value="14:00">
+            <span style="opacity:0.6">Total</span><span style="font-family:'JetBrains Mono',monospace;font-size:15px;align-self:center">2h 30m</span>
+          </div>
+          <div class="field" style="padding-top:4px">
+            <label style="font-size:12px">Note</label>
+            <div style="border-radius:16px;background:var(--color-bg);border:1px solid var(--color-divider);padding:11px 14px;font-size:13px;line-height:1.55;min-height:78px">Simplified cache abstraction, removed dead code</div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:auto">
+            <button class="btn btn-primary" style="flex:1;min-height:38px;font-size:13.5px">Save</button>
+            <div class="btn btn-secondary btn-icon" style="width:38px;height:38px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6V4.5A1.5 1.5 0 0 1 9.5 3h5A1.5 1.5 0 0 1 16 4.5V6"></path><path d="M5 6h14"></path><path d="M7 6l1 13h8l1-13"></path></svg></div>
+            <div class="btn btn-secondary btn-icon" style="width:38px;height:38px"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"><path d="M9 5.5l9 6.5-9 6.5z"></path></svg></div>
+          </div>
+          <div style="font-size:11.5px;opacity:0.5;text-align:center">Drag an edge in the grid to correct the time</div>
+        </div>
+      </div>
+      </sc-if>
+
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1920,&quot;height&quot;:1080},&quot;view&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;month&quot;,&quot;week&quot;],&quot;default&quot;:&quot;month&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;group&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const v = this.props.view || "month";
+    return {
+      isMonth: v === "month",
+      isWeek: v === "week",
+      group: this.props.group || v,
+    };
+  }
+}
+</script>
+</body>
+</html>

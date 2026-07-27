@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/organic-a267054e-2b3b-4711-a849-cfab844b89ab/styles.css">
+<script src="_ds/organic-a267054e-2b3b-4711-a849-cfab844b89ab/_ds_bundle.js"></script>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caprasimo&family=Figtree:wght@300..800&display=swap">
+</helmet>
+<div style="width:100%;height:100%;display:block">
+  <sc-if value="{{ isTrefoil }}" hint-placeholder-val="{{ true }}">
+    <svg width="100%" height="100%" viewBox="0 0 512 512" style="display:block">
+      <rect width="512" height="512" rx="116" fill="#c67139"></rect>
+      <circle cx="256" cy="182" r="92" fill="#f5ead8"></circle>
+      <circle cx="192" cy="300" r="92" fill="#8fa073"></circle>
+      <circle cx="320" cy="300" r="92" fill="#f6a06b"></circle>
+    </svg>
+  </sc-if>
+  <sc-if value="{{ isSend }}" hint-placeholder-val="{{ false }}">
+    <svg width="100%" height="100%" viewBox="0 0 512 512" style="display:block">
+      <rect width="512" height="512" rx="116" fill="#f5ead8"></rect>
+      <circle cx="256" cy="256" r="172" fill="#c67139"></circle>
+      <g fill="none" stroke="#f5ead8" stroke-width="46" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M196 180 L 292 256 L 196 332"></path>
+        <path d="M348 182 L 348 330"></path>
+      </g>
+    </svg>
+  </sc-if>
+  <sc-if value="{{ isRing }}" hint-placeholder-val="{{ false }}">
+    <svg width="100%" height="100%" viewBox="0 0 512 512" style="display:block">
+      <rect width="512" height="512" rx="116" fill="#f5ead8"></rect>
+      <g fill="none" stroke-width="48" stroke-linecap="round">
+        <path d="M282 108 A 150 150 0 0 1 386 331" stroke="#c67139"></path>
+        <path d="M371 352 A 150 150 0 0 1 126 331" stroke="#7a8a5e"></path>
+        <path d="M115 307 A 150 150 0 0 1 256 106" stroke="#643312"></path>
+      </g>
+      <circle cx="256" cy="256" r="42" fill="#c67139"></circle>
+    </svg>
+  </sc-if>
+  <sc-if value="{{ isMono }}" hint-placeholder-val="{{ false }}">
+    <svg width="100%" height="100%" viewBox="0 0 512 512" style="display:block">
+      <rect width="512" height="512" rx="116" fill="#c67139"></rect>
+      <circle cx="256" cy="256" r="150" fill="#643312"></circle>
+      <text x="256" y="366" text-anchor="middle" font-family="Caprasimo, serif" font-size="290" fill="#f5ead8">T</text>
+      <circle cx="382" cy="132" r="34" fill="#8fa073"></circle>
+    </svg>
+  </sc-if>
+  <sc-if value="{{ isBench }}" hint-placeholder-val="{{ false }}">
+    <svg width="100%" height="100%" viewBox="0 0 512 512" style="display:block">
+      <rect width="512" height="512" rx="116" fill="#f5ead8"></rect>
+      <rect x="104" y="136" width="304" height="66" rx="33" fill="#c67139"></rect>
+      <rect x="104" y="223" width="208" height="66" rx="33" fill="#7a8a5e"></rect>
+      <rect x="104" y="310" width="136" height="66" rx="33" fill="#f6a06b"></rect>
+      <circle cx="375" cy="343" r="33" fill="#c67139"></circle>
+    </svg>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:256,&quot;height&quot;:256},&quot;variant&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;trefoil&quot;,&quot;send&quot;,&quot;ring&quot;,&quot;mono&quot;,&quot;bench&quot;],&quot;default&quot;:&quot;trefoil&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const v = this.props.variant || "trefoil";
+    return {
+      isTrefoil: v === "trefoil",
+      isSend: v === "send",
+      isRing: v === "ring",
+      isMono: v === "mono",
+      isBench: v === "bench",
+    };
+  }
+}
+</script>
+</body>
+</html>

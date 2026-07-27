@@ -31,3 +31,6 @@ lcov.info
 
 # Written by the `>>! ./out/film.json` response redirect in examples/movies.http
 examples/out/
+
+# Screenshots pasted into a session to point at a layout bug. Transient.
+img.png
