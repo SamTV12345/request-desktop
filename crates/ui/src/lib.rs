@@ -2,11 +2,12 @@
 //!
 //! Its own crate so there is exactly one place to change how the app looks. Before
 //! this, the pieces were spread across five files in `crates/app` and several
-//! existed **twice** — `button` and `primary_button` in both `main.rs` and
-//! `track.rs`, `chip` in `custom/mod.rs` and `track.rs`, `section` in `main.rs` and
-//! `filters.rs`, `note` in two places. Two copies of a button is two things to
-//! restyle and one of them gets forgotten, which is how a window ends up with two
-//! slightly different buttons on the same row.
+//! existed more than once — **eight** button functions across five files, `chip` in
+//! `custom/mod.rs` and `track.rs`, `section` in `main.rs` and `filters.rs`, `note`
+//! in two places. Two copies of a button is two things to restyle and one of them
+//! gets forgotten, which is how a window ends up with two slightly different
+//! buttons on the same row. See [`button`] for what the eight disagreed about, and
+//! which of those disagreements turned out to be nobody's decision.
 //!
 //! # What belongs here
 //!
@@ -61,7 +62,7 @@ pub mod theme;
 pub mod tokens;
 
 pub use assets::Assets;
-pub use button::Tone;
+pub use button::{Size, Tone};
 pub use fonts::{Fonts, fonts, resolve_fonts};
 pub use palette::Palette;
 pub use search_bar::SearchBar;

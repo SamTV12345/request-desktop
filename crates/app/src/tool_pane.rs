@@ -17,7 +17,7 @@ use gpui::{
     prelude::*,
 };
 use rp_devtools::{Args, Field, FieldKind, Kind, Tool};
-use rp_ui::button::check_box;
+use rp_ui::button::{Button, Size, Tone, check_box};
 use rp_ui::icon::icon_tinted;
 use rp_ui::input::Editor;
 use rp_ui::input::TextInput;
@@ -398,33 +398,6 @@ impl ToolPane {
         Self::field(t, f.label).child(div().flex().child(control))
     }
 
-    /// `.btn-ghost` — a pill with no fill until hovered.
-    fn ghost_button(
-        // Not `&'static str`: the per-panel copy rows need one id each, derived
-        // from their label.
-        id: impl Into<gpui::ElementId>,
-        icon: &'static str,
-        label: &'static str,
-        t: Theme,
-    ) -> gpui::Stateful<gpui::Div> {
-        div()
-            .id(id)
-            .flex()
-            .flex_none()
-            .whitespace_nowrap()
-            .items_center()
-            .gap(space::S1)
-            .h(control::MD)
-            .px(space::S3)
-            .rounded(radius::PILL)
-            .text_size(text::SMALL)
-            .text_color(t.text_muted())
-            .cursor_pointer()
-            .hover(|s| s.bg(t.accent_wash()).text_color(t.accent))
-            .child(icon_tinted(icon, text::SMALL, t.text_muted()))
-            .child(label)
-    }
-
     /// One copyable row per labelled panel the tool produced.
     ///
     /// The labels live *in* the output text, because a tool returns one string —
@@ -470,15 +443,13 @@ impl ToolPane {
                             .child(shown.clone()),
                     )
                     .child(
-                        Self::ghost_button(
-                            gpui::SharedString::from(format!("copy-{shown}")),
-                            "copy",
-                            "Copy",
-                            t,
-                        )
-                        .on_click(move |_, _, cx| {
-                            cx.write_to_clipboard(ClipboardItem::new_string(value.clone()));
-                        }),
+                        Button::new(gpui::SharedString::from(format!("copy-{shown}")), "Copy")
+                            .icon("copy")
+                            .tone(Tone::Ghost)
+                            .size(Size::Sm)
+                            .render(t, move |_, _, cx| {
+                                cx.write_to_clipboard(ClipboardItem::new_string(value.clone()));
+                            }),
                     )
                     .into_any_element(),
             );
@@ -559,15 +530,20 @@ impl ToolPane {
                     .flex_wrap()
                     .child(title)
                     .child(
-                        Self::ghost_button("copy-result", "copy", "Copy all", t).on_click(
-                            cx.listener(|this, _, _, cx| {
-                                let text = match &this.output {
-                                    Ok(s) => s.clone(),
-                                    Err(e) => e.clone(),
-                                };
-                                cx.write_to_clipboard(ClipboardItem::new_string(text));
-                            }),
-                        ),
+                        Button::new("copy-result", "Copy all")
+                            .icon("copy")
+                            .tone(Tone::Ghost)
+                            .size(Size::Sm)
+                            .render(
+                                t,
+                                cx.listener(|this, _, _, cx| {
+                                    let text = match &this.output {
+                                        Ok(s) => s.clone(),
+                                        Err(e) => e.clone(),
+                                    };
+                                    cx.write_to_clipboard(ClipboardItem::new_string(text));
+                                }),
+                            ),
                     ),
             )
             .children(self.copyable_rows(t, cx))

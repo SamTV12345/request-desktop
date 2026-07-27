@@ -1,6 +1,6 @@
 mod calendar;
 // The design system. Everything about how this app looks lives in `rp-ui`.
-use rp_ui::button::check_box;
+use rp_ui::button::{Button, Tone, check_box};
 use rp_ui::data::method_badge;
 use rp_ui::fonts::fonts;
 use rp_ui::fonts::resolve_fonts;
@@ -1462,47 +1462,38 @@ impl Workspace {
                     .gap(space::S1)
                     .px(space::S3)
                     .pb(space::S2)
-                    .child(button(
+                    .child(Button::new("open-file", "Open…").icon("file").render(
                         t,
-                        "open-file",
-                        "file",
-                        "Open…",
                         cx.listener(|this, _, _, cx| this.open_dialog(false, false, cx)),
                     ))
                     // Adds instead of replacing, and takes several files at once —
                     // "open" and "also open this" are different intentions and now
                     // have different buttons.
-                    .child(button(
+                    .child(Button::new("add-file", "Add…").icon("plus").render(
                         t,
-                        "add-file",
-                        "plus",
-                        "Add…",
                         cx.listener(|this, _, _, cx| this.open_dialog(false, true, cx)),
                     ))
-                    .child(button(
+                    .child(Button::new("open-dir", "Folder…").icon("folder").render(
                         t,
-                        "open-dir",
-                        "folder",
-                        "Folder…",
                         cx.listener(|this, _, _, cx| this.open_dialog(true, true, cx)),
                     ))
-                    .child(button(
-                        t,
-                        "open-vars",
-                        "settings",
-                        "Variables",
-                        cx.listener(|this, _, _, cx| {
-                            this.open_vars(cx);
-                            cx.defer(save_session);
-                        }),
-                    ))
-                    .child(primary_button(
-                        t,
-                        "save",
-                        "save",
-                        "Save",
-                        cx.listener(|this, _, _, cx| this.save(cx)),
-                    )),
+                    .child(
+                        Button::new("open-vars", "Variables")
+                            .icon("settings")
+                            .render(
+                                t,
+                                cx.listener(|this, _, _, cx| {
+                                    this.open_vars(cx);
+                                    cx.defer(save_session);
+                                }),
+                            ),
+                    )
+                    .child(
+                        Button::new("save", "Save")
+                            .icon("save")
+                            .tone(Tone::Primary)
+                            .render(t, cx.listener(|this, _, _, cx| this.save(cx))),
+                    ),
             )
             .child(
                 div()
@@ -2349,40 +2340,47 @@ fn mcp_card(copied: Option<SharedString>, cx: &mut Context<Settings>) -> impl In
                     .flex()
                     .flex_wrap()
                     .gap(space::S2)
-                    .child(primary_button(
-                        t,
-                        "mcp-copy-config",
-                        "copy",
-                        "Copy config",
-                        cx.listener(move |this, _: &gpui::ClickEvent, _, cx| {
-                            this.copy("config".into(), config.clone(), cx)
-                        }),
-                    ))
-                    .child(button(
-                        t,
-                        "mcp-copy-command",
-                        "copy",
-                        "Copy command",
-                        cx.listener(move |this, _: &gpui::ClickEvent, _, cx| {
-                            this.copy("command".into(), command.clone(), cx)
-                        }),
-                    ))
-                    .child(button(
-                        t,
-                        "mcp-copy-prompt",
-                        "copy",
-                        "Copy prompt",
-                        cx.listener(|this, _: &gpui::ClickEvent, _, cx| {
-                            this.copy("prompt".into(), MCP_PROMPT.into(), cx)
-                        }),
-                    ))
-                    .child(button(
-                        t,
-                        "mcp-regenerate",
-                        "alert",
-                        "Regenerate token",
-                        cx.listener(|this, _: &gpui::ClickEvent, _, cx| this.regenerate(cx)),
-                    )),
+                    .child(
+                        Button::new("mcp-copy-config", "Copy config")
+                            .icon("copy")
+                            .tone(Tone::Primary)
+                            .render(
+                                t,
+                                cx.listener(move |this, _: &gpui::ClickEvent, _, cx| {
+                                    this.copy("config".into(), config.clone(), cx)
+                                }),
+                            ),
+                    )
+                    .child(
+                        Button::new("mcp-copy-command", "Copy command")
+                            .icon("copy")
+                            .render(
+                                t,
+                                cx.listener(move |this, _: &gpui::ClickEvent, _, cx| {
+                                    this.copy("command".into(), command.clone(), cx)
+                                }),
+                            ),
+                    )
+                    .child(
+                        Button::new("mcp-copy-prompt", "Copy prompt")
+                            .icon("copy")
+                            .render(
+                                t,
+                                cx.listener(|this, _: &gpui::ClickEvent, _, cx| {
+                                    this.copy("prompt".into(), MCP_PROMPT.into(), cx)
+                                }),
+                            ),
+                    )
+                    .child(
+                        Button::new("mcp-regenerate", "Regenerate token")
+                            .icon("alert")
+                            .render(
+                                t,
+                                cx.listener(|this, _: &gpui::ClickEvent, _, cx| {
+                                    this.regenerate(cx)
+                                }),
+                            ),
+                    ),
             )
             .child(
                 div()
@@ -2481,84 +2479,21 @@ fn mcp_card(copied: Option<SharedString>, cx: &mut Context<Settings>) -> impl In
                     .child(error),
             )
         })
-        .child(div().flex().child(primary_button(
-            t,
-            "mcp-toggle",
-            if running { "stop" } else { "play" },
-            if running {
-                "Stop server"
-            } else {
-                "Start server"
-            },
-            |_, _, cx| toggle_mcp(cx),
-        )))
-}
-
-/// `.btn-secondary`: a pill outlined in the ink, no fill until it is hovered.
-fn button(
-    t: theme::Theme,
-    id: &'static str,
-    glyph: &'static str,
-    label: &'static str,
-    on_click: impl Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    button_of(t, id, glyph, label, false, on_click)
-}
-
-/// `.btn-primary`: an accent fill. One per group of controls.
-fn primary_button(
-    t: theme::Theme,
-    id: &'static str,
-    glyph: &'static str,
-    label: &'static str,
-    on_click: impl Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    button_of(t, id, glyph, label, true, on_click)
-}
-
-/// The one button in the shell. Both variants are the same pill — `control::MD`
-/// high, icon then label — so a row of mixed buttons still lines up; only the
-/// fill and the hover/active pair differ.
-fn button_of(
-    t: theme::Theme,
-    id: &'static str,
-    glyph: &'static str,
-    label: &'static str,
-    primary: bool,
-    on_click: impl Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    let ink = if primary {
-        t.on_accent()
-    } else {
-        t.text_label()
-    };
-    div()
-        .id(id)
-        .flex()
-        .flex_none()
-        .items_center()
-        .justify_center()
-        .gap(space::S1)
-        .h(control::MD)
-        .px(space::S3)
-        .rounded(radius::PILL)
-        .text_size(text::CONTROL)
-        .text_color(ink)
-        .map(|d| {
-            if primary {
-                d.bg(t.accent)
-                    .hover(|s| s.bg(t.accent_ramp.s400))
-                    .active(|s| s.bg(t.accent_ramp.s600))
-            } else {
-                d.border_1()
-                    .border_color(t.divider)
-                    .hover(|s| s.bg(t.hover()).border_color(t.border_hover()))
-                    .active(|s| s.bg(t.active()))
-            }
-        })
-        .child(icon_tinted(glyph, text::CONTROL, ink))
-        .child(label)
-        .on_click(on_click)
+        .child(
+            div().flex().child(
+                Button::new(
+                    "mcp-toggle",
+                    if running {
+                        "Stop server"
+                    } else {
+                        "Start server"
+                    },
+                )
+                .icon(if running { "stop" } else { "play" })
+                .tone(Tone::Primary)
+                .render(t, |_, _, cx| toggle_mcp(cx)),
+            ),
+        )
 }
 
 /// The shared geometry of a sidebar list row, so requests and tools cannot

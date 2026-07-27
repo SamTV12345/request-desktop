@@ -22,7 +22,7 @@ use gpui::{
     SharedString, Stateful, Styled, Task, Window, div, prelude::*, px, relative,
 };
 use rp_store::{DaySummary, Entry, Store};
-use rp_ui::button::IconButton;
+use rp_ui::button::{Button, IconButton, Size, Tone};
 use rp_ui::data::{col, table_head, table_row};
 use rp_ui::feedback::{ErrorBanner, hint};
 use rp_ui::icon::icon_tinted;
@@ -1098,15 +1098,11 @@ impl Track {
                     .items_center()
                     .gap(space::S2)
                     .child(
-                        primary_button(
-                            t,
-                            "track-toggle".into(),
-                            "stop",
-                            "Stop".into(),
-                            true,
-                            cx.listener(|this, _, _, cx| this.start_or_stop(cx)),
-                        )
-                        .flex_1(),
+                        Button::new("track-toggle", "Stop")
+                            .icon("stop")
+                            .tone(Tone::Danger)
+                            .render(t, cx.listener(|this, _, _, cx| this.start_or_stop(cx)))
+                            .flex_1(),
                     )
                     .child(
                         IconButton::new("drop-running", "trash")
@@ -1149,14 +1145,12 @@ impl Track {
                                 }),
                             )),
                     )
-                    .child(primary_button(
-                        t,
-                        "track-start".into(),
-                        "play",
-                        "Start new timer".into(),
-                        false,
-                        cx.listener(|this, _, _, cx| this.start_or_stop(cx)),
-                    ))
+                    .child(
+                        Button::new("track-start", "Start new timer")
+                            .icon("play")
+                            .tone(Tone::Primary)
+                            .render(t, cx.listener(|this, _, _, cx| this.start_or_stop(cx))),
+                    )
             })
     }
 
@@ -1326,18 +1320,21 @@ impl Track {
                         IconButton::new("next", "chevron_right")
                             .render(t, cx.listener(|this, _, _, cx| this.step(1, cx))),
                     )
-                    .child(pill_button(
-                        t,
-                        "today".into(),
-                        "Today".into(),
-                        cx.listener(|this, _, _, cx| {
-                            let scope = this.scope;
-                            let today = this
-                                .with_store(cx, |s| Ok(today(Some(s))))
-                                .unwrap_or(this.date);
-                            this.go_to(today, scope, cx)
-                        }),
-                    )),
+                    .child(
+                        Button::new("today", "Today")
+                            .tone(Tone::Quiet)
+                            .size(Size::Sm)
+                            .render(
+                                t,
+                                cx.listener(|this, _, _, cx| {
+                                    let scope = this.scope;
+                                    let today = this
+                                        .with_store(cx, |s| Ok(today(Some(s))))
+                                        .unwrap_or(this.date);
+                                    this.go_to(today, scope, cx)
+                                }),
+                            ),
+                    ),
             )
     }
 
@@ -1781,13 +1778,13 @@ impl Track {
                     .gap(space::S3)
                     .children(links)
                     .child(div().flex_1().min_w_0())
-                    .child(year_strip::secondary_button(
-                        t,
-                        "export-month".into(),
-                        "copy",
-                        "Export month".into(),
-                        cx.listener(|this, _, _, cx| this.copy(true, cx)),
-                    )),
+                    .child(
+                        Button::new("export-month", "Export month")
+                            .icon("copy")
+                            .tone(Tone::Quiet)
+                            .size(Size::Sm)
+                            .render(t, cx.listener(|this, _, _, cx| this.copy(true, cx))),
+                    ),
             )
     }
 
@@ -2206,18 +2203,18 @@ impl Track {
                             .text_color(t.text)
                             .child("Summary"),
                     )
-                    .child(pill_button(
-                        t,
-                        "copy-summary".into(),
-                        "Copy".into(),
-                        cx.listener(|this, _, _, cx| this.copy(false, cx)),
-                    ))
-                    .child(pill_button(
-                        t,
-                        "copy-csv".into(),
-                        "CSV".into(),
-                        cx.listener(|this, _, _, cx| this.copy(true, cx)),
-                    )),
+                    .child(
+                        Button::new("copy-summary", "Copy")
+                            .tone(Tone::Quiet)
+                            .size(Size::Sm)
+                            .render(t, cx.listener(|this, _, _, cx| this.copy(false, cx))),
+                    )
+                    .child(
+                        Button::new("copy-csv", "CSV")
+                            .tone(Tone::Quiet)
+                            .size(Size::Sm)
+                            .render(t, cx.listener(|this, _, _, cx| this.copy(true, cx))),
+                    ),
             )
             .child(
                 div()
@@ -2270,14 +2267,12 @@ impl Track {
                     .text_color(t.text_muted())
                     .child(SharedString::from(span)),
             )
-            .child(primary_button(
-                t,
-                "draft-save".into(),
-                "save",
-                "Save".into(),
-                false,
-                cx.listener(|this, _, _, cx| this.save_draft(cx)),
-            ))
+            .child(
+                Button::new("draft-save", "Save")
+                    .icon("save")
+                    .tone(Tone::Primary)
+                    .render(t, cx.listener(|this, _, _, cx| this.save_draft(cx))),
+            )
             .child(IconButton::new("draft-cancel", "close").render(
                 t,
                 cx.listener(|this, _, _, cx| {
@@ -2500,67 +2495,6 @@ fn heading(t: Theme, label: impl Into<SharedString>) -> Div {
         .text_size(text::H5)
         .text_color(t.text)
         .child(label.into())
-}
-
-/// The one primary action, which changes identity rather than multiplying.
-/// `destructive` is the running state: the button becomes Stop.
-fn primary_button(
-    t: Theme,
-    id: SharedString,
-    icon_name: &'static str,
-    label: SharedString,
-    destructive: bool,
-    on_click: impl Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static,
-) -> Stateful<Div> {
-    let tint = if destructive {
-        t.danger()
-    } else {
-        t.accent_ramp.s800
-    };
-    let ink = if destructive {
-        t.on_accent()
-    } else {
-        t.accent_ramp.s100
-    };
-    div()
-        .id(id)
-        .flex()
-        .items_center()
-        .justify_center()
-        .gap(space::S2)
-        .h(control::MD)
-        .px(space::S4)
-        .rounded(radius::PILL)
-        .bg(tint)
-        .text_size(text::CONTROL)
-        .text_color(ink)
-        .hover(|s| s.bg(alpha(tint, 0.85)))
-        .child(icon_tinted(icon_name, text::BODY, ink))
-        .child(label)
-        .on_click(on_click)
-}
-
-/// A quiet pill action: "Today", "Copy", a recent-task pick.
-fn pill_button(
-    t: Theme,
-    id: SharedString,
-    label: SharedString,
-    on_click: impl Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static,
-) -> Stateful<Div> {
-    div()
-        .id(id)
-        .flex()
-        .items_center()
-        .flex_none()
-        .h(control::MD)
-        .px(space::S3)
-        .rounded(radius::PILL)
-        .bg(t.hover())
-        .text_size(text::SMALL)
-        .text_color(t.text_label())
-        .hover(|s| s.bg(t.active()).text_color(t.text))
-        .child(label)
-        .on_click(on_click)
 }
 
 /// The source a booking is attributed to. Two values, so the design's dropdown

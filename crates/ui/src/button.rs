@@ -1,13 +1,19 @@
 //! Every pressable thing, in one family.
 //!
-//! This module exists because there were **five** button functions across three
-//! files: `button` and `primary_button` in `main.rs`, `button` again with a `Tone`
-//! in `custom/mod.rs`, `primary_button` again and `pill_button` in `track.rs`, and
-//! `secondary_button` in `year_strip.rs`. They differed in small ways nobody chose
-//! — a hover that lifted the border in one and only the fill in another — so the
+//! This module exists because there were **eight** button functions across five
+//! files: `button`, `primary_button` and `button_of` in `main.rs`, `button` again
+//! with a `Tone` in `custom/mod.rs`, `primary_button` again and `pill_button` in
+//! `track.rs`, `ghost_button` in `tool_pane.rs`, and `secondary_button` in
+//! `year_strip.rs`. They differed in small ways nobody chose — one padded with
+//! `S3` and one with `S4`, one hover lifted the border and another only the fill,
+//! one "primary" filled with `accent_ramp.s800` instead of the accent — so the
 //! same button looked slightly different depending on which screen it was on.
 //!
-//! One shape, one hover, one disabled state, and a [`Tone`] to say what it means.
+//! One shape, one hover, one disabled state, a [`Tone`] to say what it means and a
+//! [`Size`] because the design's own dense rows need two. Everything those eight
+//! disagreed about is now settled against the stylesheet rather than by whichever
+//! file was written last; the three deviations that settling corrected are noted at
+//! [`Size::metrics`] and on `Tone::Primary`'s hover.
 use crate::icon::icon_tinted;
 use crate::theme::Theme;
 use crate::tokens::{control, radius, space, text};
@@ -29,6 +35,39 @@ pub enum Tone {
     Primary,
     Ghost,
     Danger,
+    /// Filled, but unemphatic: the `t.hover()` wash with a label-weight ink, for a
+    /// row of peers where a border on each would draw a grid. This is what
+    /// `track.rs`'s `pill_button` and `year_strip.rs`'s `secondary_button` both
+    /// were, and it is not [`Tone::Ghost`] — a ghost is *invisible* until hovered,
+    /// this one is visible and merely quiet.
+    Quiet,
+}
+
+/// How large a button is. Two, because the design's own dense rows say two.
+///
+/// The system gives `.btn` one height (36px) and one text size (14px), and the
+/// mockups then override the pills in the timer row and the year strip to 12.5–13px
+/// inline. That override is not noise: at 14px those rows do not fit. So `Sm` is a
+/// real size in this app even though the stylesheet does not name one — and there
+/// are exactly two, not a `Pixels` argument, because a third would be a fourth.
+#[derive(Clone, Copy, PartialEq, Eq, Default, Debug)]
+pub enum Size {
+    #[default]
+    Md,
+    Sm,
+}
+
+impl Size {
+    /// Height, text size, horizontal padding.
+    fn metrics(self) -> (gpui::Pixels, gpui::Pixels, gpui::Pixels) {
+        match self {
+            // `.btn`'s own padding: `calc(var(--space-3) * 1.2)`, which is 15.84px
+            // and deliberately neither S3 nor S4. `main.rs` used S3 and this module
+            // used S4; the stylesheet settles it and both were guesses.
+            Size::Md => (control::MD, text::CONTROL, space::S3 * 1.2),
+            Size::Sm => (control::SM, text::SMALL, space::S3),
+        }
+    }
 }
 
 /// The standard button: optional icon, label, the system's one control height, and
@@ -53,6 +92,7 @@ pub struct Button {
     /// the two buttons in the app that carry no icon simply never call `icon`.
     pub icon: Option<&'static str>,
     pub tone: Tone,
+    pub size: Size,
     /// A disabled button keeps its shape and loses its affordances: no cursor
     /// change, no hover, no click handler at all. Registering the handler and
     /// ignoring the event would leave a button that looks pressable and is not.
@@ -66,6 +106,7 @@ impl Button {
             label: label.into(),
             icon: None,
             tone: Tone::Default,
+            size: Size::Md,
             enabled: true,
         }
     }
@@ -80,6 +121,11 @@ impl Button {
         self
     }
 
+    pub fn size(mut self, size: Size) -> Self {
+        self.size = size;
+        self
+    }
+
     pub fn enabled(mut self, enabled: bool) -> Self {
         self.enabled = enabled;
         self
@@ -90,17 +136,22 @@ impl Button {
         t: Theme,
         on_click: impl Fn(&ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
     ) -> Stateful<Div> {
+        let clear = crate::theme::alpha(t.divider, 0.);
         let (bg, ink, border) = match (self.enabled, self.tone) {
             (false, _) => (t.hover(), t.text_disabled(), t.divider),
             (true, Tone::Primary) => (t.accent, t.on_accent(), t.accent),
             (true, Tone::Danger) => (t.danger(), t.on_accent(), t.danger()),
-            (true, Tone::Default) => (t.surface, t.text, t.divider),
-            (true, Tone::Ghost) => (
-                crate::theme::alpha(t.divider, 0.),
-                t.text_muted(),
-                crate::theme::alpha(t.divider, 0.),
-            ),
+            // `.btn-secondary` adds *only* `border-color` — the ground stays `.btn`'s
+            // `transparent`, so the button reads as an outline and not as a raised
+            // tile. Filling it with `t.surface` (which this did) makes it disappear
+            // against a card, whose ground is exactly `t.surface`.
+            (true, Tone::Default) => (clear, t.text, t.divider),
+            (true, Tone::Ghost) => (clear, t.text_muted(), clear),
+            // Filled but borderless: the wash *is* the edge, so a border on top of
+            // it would double the outline in a row of these.
+            (true, Tone::Quiet) => (t.hover(), t.text_label(), clear),
         };
+        let (height, font, pad_x) = self.size.metrics();
         let mut el = div()
             .id(self.id)
             .flex()
@@ -111,27 +162,33 @@ impl Button {
             .items_center()
             .justify_center()
             .gap(space::S1)
-            .h(control::MD)
-            .px(space::S4)
+            .h(height)
+            .px(pad_x)
             .rounded(radius::PILL)
             .border_1()
             .border_color(border)
             .bg(bg)
-            .text_size(text::CONTROL)
+            .text_size(font)
             .text_color(ink);
         if let Some(icon) = self.icon {
-            el = el.child(icon_tinted(icon, text::CONTROL, ink));
+            el = el.child(icon_tinted(icon, font, ink));
         }
         el = el.child(self.label);
         if !self.enabled {
             return el;
         }
         el = el.cursor_pointer();
-        let (accent_hover, accent_active) = (t.accent_ramp.s400, t.accent_ramp.s600);
+        // `.btn-primary:hover` is `accent-600` and `:active` is `accent-700` — one
+        // step *into* the ramp, then two. This used to be `s400` then `s600`, which
+        // on the light ground goes lighter before it goes darker; `reverse()` keeps
+        // the named steps pointing the same way on the dark ground, so naming the
+        // design's steps is also what makes the two grounds agree.
+        let (accent_hover, accent_active) = (t.accent_ramp.s600, t.accent_ramp.s700);
         el = match self.tone {
             Tone::Primary => el
                 .hover(|s| s.bg(accent_hover).border_color(accent_hover))
                 .active(|s| s.bg(accent_active).border_color(accent_active)),
+            Tone::Quiet => el.hover(|s| s.bg(t.active()).text_color(t.text)),
             // No danger ramp in this system, so the state change is the fill dropping
             // to its wash rather than a second red.
             Tone::Danger => el
@@ -297,6 +354,29 @@ mod tests {
     #[test]
     fn disabling_is_named() {
         assert!(!Button::new("copy", "Copy").enabled(false).enabled);
+    }
+
+    /// `Sm` is shorter *and* smaller-texted, and every metric differs from `Md` —
+    /// a size that only changed the height would leave 14px text in a 28px pill.
+    #[test]
+    fn the_small_size_differs_in_every_metric() {
+        let (h_md, f_md, p_md) = Size::Md.metrics();
+        let (h_sm, f_sm, p_sm) = Size::Sm.metrics();
+        assert!(h_sm < h_md, "{h_sm:?} vs {h_md:?}");
+        assert!(f_sm < f_md, "{f_sm:?} vs {f_md:?}");
+        assert!(p_sm < p_md, "{p_sm:?} vs {p_md:?}");
+    }
+
+    /// `.btn`'s padding is `calc(var(--space-3) * 1.2)`. Both of the values this
+    /// replaced — `main.rs`'s `S3` and this module's `S4` — were wrong, in opposite
+    /// directions, which is why neither side noticed.
+    #[test]
+    fn the_default_padding_is_the_stylesheets_and_neither_guess() {
+        let (_, _, pad) = Size::Md.metrics();
+        assert!(
+            pad > space::S3 && pad < space::S4,
+            "{pad:?} should sit between the two guesses"
+        );
     }
 
     #[test]

@@ -12,17 +12,18 @@ use gpui::{
     App, Div, ParentElement, Pixels, SharedString, Stateful, Styled, Window, div, prelude::*, px,
 };
 use rp_store::DaySummary;
-use rp_ui::icon::icon_tinted;
 use rp_ui::theme::{FONT_MONO, Theme};
-use rp_ui::tokens::{radius, space, text};
+use rp_ui::tokens::{space, text};
 
 // The design's own numbers. None of them is on a token scale: the bar is a fixed
-// 34-px track with a 10-px corner, its caption is 10.5 px, and the strip's
-// secondary button is 32 px where the system's one control height is 36.
+// 34-px track with a 10-px corner and its caption is 10.5 px.
+//
+// `BTN_H = px(32.)` used to sit here for this file's own `secondary_button`. That
+// button is `rp_ui::Button` with `Size::Sm` now, whose height is `control::SM` —
+// so the loose 32 is gone rather than promoted to a token.
 const BAR_H: Pixels = px(34.);
 const BAR_RADIUS: Pixels = px(10.);
 const CAPTION: Pixels = px(10.5);
-const BTN_H: Pixels = px(32.);
 
 /// The twelve monthly totals of `year`, summed from the store's per-day
 /// summaries. `load` takes a `YYYY-MM` key — i.e. `Store::track_summary_month`.
@@ -123,33 +124,6 @@ pub fn year_link(
         .text_color(t.text_muted())
         .hover(|s| s.text_color(t.accent))
         .child(SharedString::from(year.to_string()))
-        .on_click(on_click)
-}
-
-/// `.btn-secondary`, in the smaller size the strip's row uses.
-pub fn secondary_button(
-    t: Theme,
-    id: SharedString,
-    icon_name: &'static str,
-    label: SharedString,
-    on_click: impl Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static,
-) -> Stateful<Div> {
-    div()
-        .id(id)
-        .flex()
-        .items_center()
-        .justify_center()
-        .flex_none()
-        .gap(space::S2)
-        .h(BTN_H)
-        .px(space::S3)
-        .rounded(radius::PILL)
-        .bg(t.hover())
-        .text_size(text::SMALL)
-        .text_color(t.text_label())
-        .hover(|s| s.bg(t.active()).text_color(t.text))
-        .child(icon_tinted(icon_name, text::SMALL, t.text_label()))
-        .child(label)
         .on_click(on_click)
 }
 

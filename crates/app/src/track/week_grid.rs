@@ -10,13 +10,14 @@
 //! the same basis `Track::clock` and `Track::day_start` use. Deriving a day from
 //! the UTC clock was a real bug once (see `track::today`) and must not come back.
 use super::{
-    Entry, IconButton, Scope, Track, Ymd, days_from_civil, entry_day_of, fmt_hm, heading, hint,
-    now, pill_button, step_day, tag, week_start, weekday_name,
+    Entry, Scope, Track, Ymd, days_from_civil, entry_day_of, fmt_hm, heading, hint, now, step_day,
+    tag, week_start, weekday_name,
 };
 use crate::calendar::{HOUR_HEIGHT, MIN_BLOCK, block, hour_window};
 use gpui::{
     Context, IntoElement, ParentElement, Pixels, SharedString, Styled, div, prelude::*, px,
 };
+use rp_ui::button::{Button, IconButton, Size, Tone};
 use rp_ui::theme::{FONT_HEADING, FONT_MONO, Theme, alpha};
 use rp_ui::tokens::{radius, space, text};
 
@@ -360,22 +361,25 @@ impl Track {
                     // A running entry has no end yet, so there is no range for
                     // the form to edit — the timer's Stop is what finishes it.
                     div().flex_1().when(!running, |d| {
-                        d.child(pill_button(
-                            t,
-                            "inspect-edit".into(),
-                            "Edit".into(),
-                            // The inline form lives in the day's entry table, so
-                            // editing steps to the day it belongs to first —
-                            // otherwise the form opens where nothing draws it.
-                            cx.listener(move |this, _, _, cx| {
-                                this.go_to(
-                                    entry_day_of(clone.started_at, this.offset),
-                                    Scope::Day,
-                                    cx,
-                                );
-                                this.edit(Some(&clone), cx);
-                            }),
-                        ))
+                        d.child(
+                            Button::new("inspect-edit", "Edit")
+                                .tone(Tone::Quiet)
+                                .size(Size::Sm)
+                                // The inline form lives in the day's entry table, so
+                                // editing steps to the day it belongs to first —
+                                // otherwise the form opens where nothing draws it.
+                                .render(
+                                    t,
+                                    cx.listener(move |this, _, _, cx| {
+                                        this.go_to(
+                                            entry_day_of(clone.started_at, this.offset),
+                                            Scope::Day,
+                                            cx,
+                                        );
+                                        this.edit(Some(&clone), cx);
+                                    }),
+                                ),
+                        )
                     }),
                 )
                 .child(
