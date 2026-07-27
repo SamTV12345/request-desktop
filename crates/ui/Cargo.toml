@@ -1,0 +1,14 @@
+[package]
+name = "rp-ui"
+version.workspace = true
+edition.workspace = true
+# Not published to a registry; cargo-deny infers "private crate" from this.
+publish = false
+
+[dependencies]
+# `AssetSource` hands back an `anyhow::Result`, so the icon source needs it.
+anyhow = "1"
+gpui = "0.2"
+# The two input widgets walk by grapheme, not by byte, so a flag or an accented
+# character deletes as one thing.
+unicode-segmentation = "1.13.3"

@@ -3,12 +3,15 @@
 //! Upstream renders both directions at once (no mode toggle) and this pane keeps
 //! that. It diverges in one place: the decode direction writes a real file
 //! through the save dialog instead of triggering a browser download.
+use rp_ui::icon::icon_tinted;
+use rp_ui::input::Editor;
+use rp_ui::layout::{card, section_label};
+use rp_ui::theme;
+use rp_ui::tokens::{radius, size, space, text};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use super::{Note, Tone, button, header, meta_row, note};
-use crate::editor::Editor;
-use crate::theme::{self, radius, size, space, text};
 use gpui::{
     AppContext, ClipboardItem, Context, Entity, ExternalPaths, Image, ImageFormat,
     PathPromptOptions, SharedString, Window, div, img, prelude::*,
@@ -574,7 +577,7 @@ impl Render for Pane {
                                     .id("preview-image")
                                     .with_fallback(move || {
                                         note(
-                                            &t,
+                                            t,
                                             "Could not decode these bytes as an image — they may \
                                              be truncated or corrupt."
                                                 .into(),
@@ -587,7 +590,7 @@ impl Render for Pane {
                     .into_any_element(),
             ),
             Preview::Unsupported(message) => Some(
-                note(&t, message.clone(), Note::Info)
+                note(t, message.clone(), Note::Info)
                     .px(space::S3)
                     .into_any_element(),
             ),
@@ -601,9 +604,9 @@ impl Render for Pane {
                 .py(space::S2)
                 .rounded(radius::MD)
                 .bg(t.bg)
-                .child(meta_row(&t, "name", p.name.clone(), false))
-                .child(meta_row(&t, "size", p.size.clone(), false))
-                .child(meta_row(&t, "mime", p.mime.clone(), false))
+                .child(meta_row(t, "name", p.name.clone(), false))
+                .child(meta_row(t, "size", p.size.clone(), false))
+                .child(meta_row(t, "mime", p.mime.clone(), false))
         });
 
         div()
@@ -614,14 +617,14 @@ impl Render for Pane {
             .p(space::S4)
             .overflow_hidden()
             .child(header(
-                &t,
+                t,
                 "Base64 file converter",
                 "Encode a file to a data URI, or write base64 back to a file.",
             ))
             .when_some(preview, |d, preview| d.child(preview))
             // ---- file -> base64. The whole section is the drop target.
             .child(
-                theme::card(&t)
+                card(t)
                     .id("encode-drop")
                     .flex()
                     .flex_col()
@@ -654,13 +657,13 @@ impl Render for Pane {
                             // the card when the pane is narrow.
                             .flex_wrap()
                             .gap(space::S3)
-                            .child(theme::section_label(&t, "File to base64").px_0().pt_0())
+                            .child(section_label(t, "File to base64").px_0().pt_0())
                             .child(
                                 div()
                                     .flex()
                                     .gap(space::S2)
                                     .child(button(
-                                        &t,
+                                        t,
                                         "pick-file",
                                         "Choose file…",
                                         "folder",
@@ -669,7 +672,7 @@ impl Render for Pane {
                                         cx.listener(|this, _, _, cx| this.pick_file(cx)),
                                     ))
                                     .child(button(
-                                        &t,
+                                        t,
                                         "copy-base64",
                                         "Copy",
                                         "copy",
@@ -688,7 +691,7 @@ impl Render for Pane {
                             .gap(space::S2)
                             .text_size(text::SMALL)
                             .text_color(t.text_muted())
-                            .child(theme::icon_tinted("file", text::H5, t.accent))
+                            .child(icon_tinted("file", text::H5, t.accent))
                             .child(SharedString::from(format!(
                                 "Drop a single file anywhere in this box, or choose one — up to {}.",
                                 human_size(MAX_BYTES)
@@ -706,7 +709,7 @@ impl Render for Pane {
             )
             // ---- base64 -> file
             .child(
-                theme::card(&t)
+                card(t)
                     .flex()
                     .flex_col()
                     .gap(space::S2)
@@ -719,13 +722,13 @@ impl Render for Pane {
                             .justify_between()
                             .flex_wrap()
                             .gap(space::S3)
-                            .child(theme::section_label(&t, "Base64 to file").px_0().pt_0())
+                            .child(section_label(t, "Base64 to file").px_0().pt_0())
                             .child(
                                 div()
                                     .flex()
                                     .gap(space::S2)
                                     .child(button(
-                                        &t,
+                                        t,
                                         "preview-base64",
                                         "Preview",
                                         "file",
@@ -734,7 +737,7 @@ impl Render for Pane {
                                         cx.listener(|this, _, _, cx| this.preview_decoded(cx)),
                                     ))
                                     .child(button(
-                                        &t,
+                                        t,
                                         "save-file",
                                         "Save as…",
                                         "save",
@@ -754,7 +757,7 @@ impl Render for Pane {
                     ),
             )
             .child(note(
-                &t,
+                t,
                 self.status.clone(),
                 if self.failed { Note::Bad } else { Note::Info },
             ))

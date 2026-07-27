@@ -10,6 +10,9 @@ anyhow.workspace = true
 rp-core = { path = "../core" }
 rp-devtools = { path = "../devtools" }
 gpui = "0.2"
+# The design system: tokens, the theme, and every shared building block. The app
+# draws from here rather than growing its own second copy of a button.
+rp-ui = { version = "0.1.0", path = "../ui" }
 unicode-segmentation = "1.13.3"
 tokio = { version = "1.53.1", features = ["rt-multi-thread"] }
 serde_json.workspace = true

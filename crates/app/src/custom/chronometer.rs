@@ -6,8 +6,9 @@
 //! per tick — so the tick rate is a refresh rate, not the source of truth. A
 //! dropped frame or a late timer costs nothing.
 use super::{Note, Tone, button, chip, header, note};
-use crate::theme::{self, radius, space, text};
 use gpui::{Context, IntoElement, ParentElement, Styled, Task, Window, div, prelude::*};
+use rp_ui::theme::{self, FONT_MONO};
+use rp_ui::tokens::{radius, space, text};
 use std::time::{Duration, Instant};
 
 /// Refresh interval. Matches the displayed precision (centiseconds) so we do
@@ -138,7 +139,7 @@ impl Render for Pane {
         };
         let toggle = if running {
             button(
-                &t,
+                t,
                 "chrono-pause",
                 "Stop",
                 "stop",
@@ -148,7 +149,7 @@ impl Render for Pane {
             )
         } else {
             button(
-                &t,
+                t,
                 "chrono-start",
                 "Start",
                 "play",
@@ -165,7 +166,7 @@ impl Render for Pane {
             .size_full()
             .p(space::S4)
             .child(header(
-                &t,
+                t,
                 "Chronometer",
                 "Monitor the duration of a thing. Basically a stopwatch.",
             ))
@@ -181,7 +182,7 @@ impl Render for Pane {
                     .border_color(frame_border)
                     .rounded(radius::CARD)
                     .child(chip(
-                        &t,
+                        t,
                         if running { "running" } else { "stopped" },
                         running,
                     ))
@@ -189,7 +190,7 @@ impl Render for Pane {
                         // Mono, so the centiseconds do not shove the digits left
                         // and right as they roll over.
                         div()
-                            .font_family(theme::FONT_MONO)
+                            .font_family(FONT_MONO)
                             .text_size(text::H1)
                             .line_height(text::H1)
                             .text_color(digits)
@@ -203,7 +204,7 @@ impl Render for Pane {
                     .justify_center()
                     .child(toggle)
                     .child(button(
-                        &t,
+                        t,
                         "chrono-reset",
                         "Reset",
                         "trash",
@@ -213,7 +214,7 @@ impl Render for Pane {
                     )),
             )
             .child(div().flex().justify_center().child(note(
-                &t,
+                t,
                 if running {
                     "Running — refreshed every 10 ms, measured from a monotonic clock.".into()
                 } else {

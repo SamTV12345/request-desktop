@@ -1,14 +1,20 @@
-mod assets;
 mod calendar;
+// The design system. Everything about how this app looks lives in `rp-ui`.
+use rp_ui::button::check_box;
+use rp_ui::data::method_badge;
+use rp_ui::fonts::fonts;
+use rp_ui::fonts::resolve_fonts;
+use rp_ui::icon::icon_tinted;
+use rp_ui::input::TextInput;
+use rp_ui::layout::{card, divider, empty_state, section_label, sidebar, sidebar_row};
+use rp_ui::theme;
+use rp_ui::tokens::{control, radius, size, space, text};
 mod custom;
-mod editor;
 mod filters;
 mod reference;
 mod request_pane;
 mod session;
 mod tabs;
-mod text_input;
-mod theme;
 mod tool_pane;
 mod track;
 mod year_strip;
@@ -25,7 +31,6 @@ use rp_devtools::Tool;
 use rp_store::{Store, WindowSession};
 use std::path::Path;
 use tabs::{Content, Restore, Tab, TabKey, Tabs};
-use text_input::TextInput;
 use tool_pane::ToolPane;
 
 /// Shell geometry the mockups fix and `theme` does not carry yet.
@@ -36,7 +41,7 @@ use tool_pane::ToolPane;
 /// untidy.
 mod shell {
     use gpui::{Pixels, px};
-    /// The rail. `theme::size::RAIL` (176) contradicts the mockups.
+    /// The rail. `size::RAIL` (176) contradicts the mockups.
     pub const RAIL: Pixels = px(104.);
     /// A rail entry: a 76×74 tile, not a full-width row.
     pub const TILE_W: Pixels = px(76.);
@@ -58,6 +63,10 @@ mod shell {
 }
 
 /// The name in the title bar, from the mockups.
+/// The chord the "jump to anything" bar advertises. One definition, so the label
+/// it shows and the binding it will get cannot drift apart.
+const PALETTE: rp_ui::Chord = rp_ui::Chord::primary("K");
+
 const APP_NAME: &str = "Toolbench";
 
 /// The maker's mark at the right end of the title bar, where the mockups had
@@ -106,104 +115,6 @@ fn set_ground(dark: bool, cx: &mut App) {
 
 /// The three faces the design names, resolved against what is installed.
 ///
-/// gpui falls back silently when a family is missing, so asking for
-/// "Caprasimo" on a machine that does not have it renders something else while
-/// the code still claims Caprasimo. Resolve once at startup and say what was
-/// actually picked.
-#[derive(Clone)]
-struct Fonts {
-    heading: SharedString,
-    body: SharedString,
-    mono: SharedString,
-    /// The handwriting for the signature. Falls back to the resolved heading
-    /// face, never to the default sans — a "handwritten" mark rendered in body
-    /// text reads as a bug, not as a signature.
-    script: SharedString,
-}
-
-impl Global for Fonts {}
-
-/// Substitutes per role, closest first, ending in a face Windows always has.
-/// Nothing is downloaded and no dependency is added: the design's own face wins
-/// when it is installed, otherwise the nearest shape in the same category —
-/// a slab for the display face, a humanist sans for body, a mono for mono.
-const HEADING_FACES: &[&str] = &[
-    theme::FONT_HEADING,
-    "Rockwell",
-    "Bookman Old Style",
-    "Georgia",
-];
-const BODY_FACES: &[&str] = &[theme::FONT_BODY, "Corbel", "Candara", "Segoe UI"];
-const MONO_FACES: &[&str] = &[theme::FONT_MONO, "Cascadia Mono", "Consolas", "Courier New"];
-/// Genuine handwriting faces that ship with Windows, best first. No generic
-/// fallback here on purpose: `resolve_fonts` ends the chain with the heading
-/// face, so a machine with none of these gets something deliberate.
-const SCRIPT_FACES: &[&str] = &["Segoe Script", "Ink Free", "Gabriola", "Brush Script MT"];
-
-fn pick_face(installed: &[String], wanted: &[&str]) -> SharedString {
-    wanted
-        .iter()
-        .find(|w| installed.iter().any(|i| i.eq_ignore_ascii_case(w)))
-        // Nothing in the row exists: ask for the last one anyway and let the
-        // platform substitute, rather than silently claiming the design's face.
-        .unwrap_or(&wanted[wanted.len() - 1])
-        .to_string()
-        .into()
-}
-
-/// The first installed handwriting face, or `fallback` with a word about it.
-fn pick_script(installed: &[String], fallback: &SharedString) -> SharedString {
-    match SCRIPT_FACES
-        .iter()
-        .find(|w| installed.iter().any(|i| i.eq_ignore_ascii_case(w)))
-    {
-        Some(face) => {
-            eprintln!("request-pilot: the signature is set in {face:?}");
-            face.to_string().into()
-        }
-        None => {
-            eprintln!(
-                "request-pilot: no handwriting face is installed ({}) — \
-                 the signature is set in {fallback:?} and will not look handwritten",
-                SCRIPT_FACES.join(", ")
-            );
-            fallback.clone()
-        }
-    }
-}
-
-fn resolve_fonts(cx: &mut App) -> Fonts {
-    let installed = cx.text_system().all_font_names();
-    let heading = pick_face(&installed, HEADING_FACES);
-    let fonts = Fonts {
-        script: pick_script(&installed, &heading),
-        heading,
-        body: pick_face(&installed, BODY_FACES),
-        mono: pick_face(&installed, MONO_FACES),
-    };
-    for (role, wanted, got) in [
-        ("heading", theme::FONT_HEADING, &fonts.heading),
-        ("body", theme::FONT_BODY, &fonts.body),
-        ("mono", theme::FONT_MONO, &fonts.mono),
-    ] {
-        if got.as_ref() != wanted {
-            eprintln!("request-pilot: the {role} face {wanted:?} is not installed — using {got:?}");
-        }
-    }
-    fonts
-}
-
-/// The resolved faces. Falls back to the design's names when the global is
-/// missing, which only happens outside `main`.
-fn fonts(cx: &App) -> Fonts {
-    cx.try_global::<Fonts>().cloned().unwrap_or_else(|| Fonts {
-        heading: theme::FONT_HEADING.into(),
-        body: theme::FONT_BODY.into(),
-        mono: theme::FONT_MONO.into(),
-        script: SCRIPT_FACES[0].into(),
-    })
-}
-
 /// The SQLite store plus the registry of live windows, so any window can write
 /// the whole session.
 ///
@@ -646,7 +557,7 @@ impl Workspace {
         div()
             .id("sidebar-handle")
             .flex_none()
-            .w(theme::space::S2)
+            .w(space::S2)
             .h_full()
             .cursor(gpui::CursorStyle::ResizeLeftRight)
             .when(active, |d| d.bg(t.accent))
@@ -1175,11 +1086,11 @@ impl Workspace {
                     .flex_none()
                     .items_center()
                     .justify_center()
-                    .gap(theme::space::S1)
+                    .gap(space::S1)
                     .w(shell::TILE_W)
                     .h(shell::TILE_H)
                     .rounded(shell::TILE_RADIUS)
-                    .text_size(theme::text::TINY)
+                    .text_size(text::TINY)
                     .text_color(ink)
                     .map(|d| {
                         if active {
@@ -1190,7 +1101,7 @@ impl Workspace {
                     })
                     // svg does not inherit the container's text colour, so the
                     // glyph is tinted on the element itself or it paints nothing.
-                    .child(theme::icon_tinted(glyph, shell::RAIL_ICON, ink))
+                    .child(icon_tinted(glyph, shell::RAIL_ICON, ink))
                     .child(label)
                     .on_click(cx.listener(move |this, _, _, cx| this.set_section(section, cx))),
             );
@@ -1200,10 +1111,10 @@ impl Workspace {
             .flex_col()
             .flex_none()
             .items_center()
-            .gap(theme::space::S1)
+            .gap(space::S1)
             .w(shell::RAIL)
             .h_full()
-            .py(theme::space::S3)
+            .py(space::S3)
             .bg(t.surface)
             .children(items)
     }
@@ -1229,11 +1140,11 @@ impl Workspace {
             .flex()
             .flex_none()
             .items_center()
-            .gap(theme::space::S3)
+            .gap(space::S3)
             .h(shell::TITLEBAR)
             .w_full()
             .pl(shell::S5)
-            .pr(theme::space::S2)
+            .pr(space::S2)
             .bg(t.surface)
             .on_mouse_down(gpui::MouseButton::Left, |_, window, _| {
                 window.start_window_move()
@@ -1243,18 +1154,40 @@ impl Workspace {
                 div()
                     .flex_none()
                     .size(shell::MARK)
-                    .rounded(theme::radius::PILL)
+                    .rounded(radius::PILL)
                     .bg(t.accent),
             )
             .child(
                 div()
                     .flex_none()
-                    .text_size(theme::text::H5)
+                    .text_size(text::H5)
                     .font_family(fonts(cx).heading)
                     .text_color(t.text)
                     .child(APP_NAME),
             )
             .child(div().flex_none().w(px(1.)).h(shell::RULE).bg(t.divider))
+            // "Jump to anything", with the shortcut spelled for whichever platform
+            // this build is for — see `rp_ui::shortcut` for why that is not a
+            // hard-coded string.
+            .child(
+                rp_ui::SearchBar::new("palette")
+                    .placeholder("Jump to anything")
+                    .chord(PALETTE)
+                    .render(
+                        t,
+                        cx.listener(|_, _: &gpui::ClickEvent, _, cx| {
+                            // ponytail: the palette itself is not built. Saying so
+                            // in the status line beats a button that looks alive
+                            // and does nothing — which is the failure this app has
+                            // already shipped twice.
+                            eprintln!(
+                                "request-pilot: the command palette ({}) is not built yet",
+                                PALETTE.label()
+                            );
+                            cx.refresh_windows();
+                        }),
+                    ),
+            )
             .child(div().flex_1())
             // Where the mockups had minimise/maximise/close pills. The app runs
             // with native decorations, so Windows already draws those a few
@@ -1336,10 +1269,10 @@ impl Workspace {
                             .id(SharedString::from(format!("group-{}", path.display())))
                             .flex()
                             .items_center()
-                            .gap(theme::space::S1)
-                            .h(theme::control::MD)
-                            .px(theme::space::S3)
-                            .text_size(theme::text::LABEL)
+                            .gap(space::S1)
+                            .h(control::MD)
+                            .px(space::S3)
+                            .text_size(text::LABEL)
                             .text_color(t.text_label())
                             .cursor_pointer()
                             .hover(|s| s.bg(t.hover()))
@@ -1347,13 +1280,13 @@ impl Workspace {
                                 let full = SharedString::from(path.display().to_string());
                                 move |_, cx| cx.new(|_| Tip(full.clone())).into()
                             })
-                            .child(theme::icon_tinted(
+                            .child(icon_tinted(
                                 if collapsed {
                                     "chevron_right"
                                 } else {
                                     "chevron_left"
                                 },
-                                theme::text::SMALL,
+                                text::SMALL,
                                 t.text_muted(),
                             ))
                             .child(
@@ -1366,7 +1299,7 @@ impl Workspace {
                             .child(
                                 div()
                                     .flex_none()
-                                    .text_size(theme::text::TINY)
+                                    .text_size(text::TINY)
                                     .text_color(t.text_meta())
                                     .child(SharedString::from(count.to_string())),
                             )
@@ -1377,14 +1310,10 @@ impl Workspace {
                                     .id(SharedString::from(format!("close-{}", path.display())))
                                     .flex()
                                     .flex_none()
-                                    .p(theme::space::S1 * 0.5)
-                                    .rounded(theme::radius::PILL)
+                                    .p(space::S1 * 0.5)
+                                    .rounded(radius::PILL)
                                     .hover(|s| s.bg(t.active()))
-                                    .child(theme::icon_tinted(
-                                        "close",
-                                        theme::text::SMALL,
-                                        t.text_muted(),
-                                    ))
+                                    .child(icon_tinted("close", text::SMALL, t.text_muted()))
                                     .on_click(cx.listener(move |this, _, _, cx| {
                                         this.close_source(&closing, cx)
                                     })),
@@ -1402,9 +1331,9 @@ impl Workspace {
                     .when_some(source.error.clone(), |d, why| {
                         d.child(
                             div()
-                                .px(theme::space::S3)
-                                .pb(theme::space::S1)
-                                .text_size(theme::text::TINY)
+                                .px(space::S3)
+                                .pb(space::S1)
+                                .text_size(text::TINY)
                                 .text_color(t.danger())
                                 .child(why),
                         )
@@ -1423,9 +1352,9 @@ impl Workspace {
                 div()
                     .flex()
                     .flex_wrap()
-                    .gap(theme::space::S1)
-                    .px(theme::space::S3)
-                    .pb(theme::space::S2)
+                    .gap(space::S1)
+                    .px(space::S3)
+                    .pb(space::S2)
                     .child(button(
                         t,
                         "open-file",
@@ -1470,9 +1399,9 @@ impl Workspace {
             )
             .child(
                 div()
-                    .px(theme::space::S3)
-                    .pb(theme::space::S2)
-                    .text_size(theme::text::SMALL)
+                    .px(space::S3)
+                    .pb(space::S2)
+                    .text_size(text::SMALL)
                     .truncate()
                     .text_color(if self.error.is_some() {
                         t.text_label()
@@ -1485,14 +1414,10 @@ impl Workspace {
                 div()
                     .flex()
                     .items_center()
-                    .gap(theme::space::S2)
-                    .px(theme::space::S3)
-                    .pb(theme::space::S2)
-                    .child(theme::icon_tinted(
-                        "search",
-                        theme::text::CONTROL,
-                        t.text_muted(),
-                    ))
+                    .gap(space::S2)
+                    .px(space::S3)
+                    .pb(space::S2)
+                    .child(icon_tinted("search", text::CONTROL, t.text_muted()))
                     .child(
                         div()
                             .flex()
@@ -1501,7 +1426,7 @@ impl Workspace {
                             .child(self.request_query.clone()),
                     ),
             )
-            .child(theme::divider(&t))
+            .child(divider(t))
             .child(
                 div()
                     .id("request-list")
@@ -1553,10 +1478,10 @@ impl Workspace {
                     .id(SharedString::from(format!("env-{i}")))
                     .flex()
                     .items_center()
-                    .px(theme::space::S2)
-                    .py(theme::space::S1)
-                    .rounded(theme::radius::PILL)
-                    .text_size(theme::text::TINY)
+                    .px(space::S2)
+                    .py(space::S1)
+                    .rounded(radius::PILL)
+                    .text_size(text::TINY)
                     .bg(fill)
                     .text_color(ink)
                     .hover(|s| s.bg(t.accent_wash()))
@@ -1579,14 +1504,14 @@ impl Workspace {
                 div()
                     .flex()
                     .flex_col()
-                    .gap(theme::space::S1)
-                    .flex_basis(theme::size::GRID_CELL)
+                    .gap(space::S1)
+                    .flex_basis(size::GRID_CELL)
                     .flex_grow()
-                    .min_w(theme::size::GRID_CELL_MIN)
+                    .min_w(size::GRID_CELL_MIN)
                     .child(
                         div()
                             .truncate()
-                            .text_size(theme::text::LABEL)
+                            .text_size(text::LABEL)
                             .text_color(t.text_label())
                             .child(SharedString::from(name.clone())),
                     )
@@ -1600,7 +1525,7 @@ impl Workspace {
             caught.push(
                 div()
                     .truncate()
-                    .text_size(theme::text::SMALL)
+                    .text_size(text::SMALL)
                     .text_color(t.success())
                     .child(SharedString::from(format!("{name} = {value}"))),
             );
@@ -1610,35 +1535,29 @@ impl Workspace {
             .id("vars-pane")
             .flex()
             .flex_col()
-            .gap(theme::space::S3)
+            .gap(space::S3)
             .size_full()
             .min_w_0()
-            .p(theme::space::S4)
+            .p(space::S4)
             .overflow_y_scroll()
             .child(section(cx, t, "Environment").px_0().pt_0())
             .when(!env_chips.is_empty(), |d| {
-                d.child(
-                    div()
-                        .flex()
-                        .flex_wrap()
-                        .gap(theme::space::S1)
-                        .children(env_chips),
-                )
+                d.child(div().flex().flex_wrap().gap(space::S1).children(env_chips))
             })
             .child(section(cx, t, "Variables").px_0().pt_0())
             .child(
                 div()
                     .flex()
                     .flex_wrap()
-                    .gap_x(theme::space::S4)
-                    .gap_y(theme::space::S3)
+                    .gap_x(space::S4)
+                    .gap_y(space::S3)
                     .min_w_0()
                     .children(rows),
             )
             .when(self.var_rows.is_empty(), |d| {
                 d.child(
                     div()
-                        .text_size(theme::text::SMALL)
+                        .text_size(text::SMALL)
                         .text_color(t.text_meta())
                         .child("none — add an http-client.env.json or `@name = value`"),
                 )
@@ -1665,19 +1584,19 @@ impl Workspace {
             .child(section(cx, t, "Tools"))
             .child(
                 div()
-                    .px(theme::space::S3)
-                    .pb(theme::space::S2)
+                    .px(space::S3)
+                    .pb(space::S2)
                     .child(self.tool_query.clone()),
             )
             .child(
                 div()
-                    .px(theme::space::S3)
-                    .pb(theme::space::S2)
-                    .text_size(theme::text::SMALL)
+                    .px(space::S3)
+                    .pb(space::S2)
+                    .text_size(text::SMALL)
                     .text_color(t.text_meta())
                     .child(SharedString::from(format!("{count} tools"))),
             )
-            .child(theme::divider(&t))
+            .child(divider(t))
             .child(
                 div()
                     .id("tool-list")
@@ -1723,10 +1642,10 @@ impl Workspace {
                 d.child(
                     div()
                         .flex_none()
-                        .px(theme::space::S2)
-                        .rounded(theme::radius::PILL)
+                        .px(space::S2)
+                        .rounded(radius::PILL)
                         .bg(fill)
-                        .text_size(theme::text::TINY)
+                        .text_size(text::TINY)
                         .text_color(ink)
                         .child("no UI"),
                 )
@@ -1833,7 +1752,7 @@ fn open_workspace(session: Option<WindowSession>, cx: &mut App) {
 /// missing family without a word — so the family is re-set to whatever
 /// `resolve_fonts` found.
 fn section(cx: &App, t: theme::Theme, label: &'static str) -> gpui::Div {
-    theme::section_label(&t, label).font_family(fonts(cx).heading)
+    section_label(t, label).font_family(fonts(cx).heading)
 }
 
 /// The maker's mark, in whatever handwriting this machine has.
@@ -1845,9 +1764,9 @@ fn section(cx: &App, t: theme::Theme, label: &'static str) -> gpui::Div {
 fn signature(cx: &App, t: theme::Theme) -> impl IntoElement + use<> {
     div()
         .flex_none()
-        .px(theme::space::S2)
-        .text_size(theme::text::H5)
-        .line_height(theme::text::H5_LINE)
+        .px(space::S2)
+        .text_size(text::H5)
+        .line_height(text::H5_LINE)
         .font_family(fonts(cx).script)
         .text_color(t.accent)
         .opacity(0.85)
@@ -1864,13 +1783,9 @@ fn gear(t: theme::Theme) -> impl IntoElement {
         .justify_center()
         .w(shell::CONTROL_W)
         .h(shell::CONTROL_H)
-        .rounded(theme::radius::PILL)
+        .rounded(radius::PILL)
         .hover(|s| s.bg(t.hover()))
-        .child(theme::icon_tinted(
-            "settings",
-            theme::text::CONTROL,
-            t.text_muted(),
-        ))
+        .child(icon_tinted("settings", text::CONTROL, t.text_muted()))
         .on_click(|_, _, cx| open_settings(cx))
 }
 
@@ -1891,9 +1806,9 @@ fn ground_switch(cx: &App) -> impl IntoElement + use<> {
                 .flex_1()
                 .items_center()
                 .justify_center()
-                .h(theme::control::MD)
-                .rounded(theme::radius::PILL)
-                .text_size(theme::text::CONTROL)
+                .h(control::MD)
+                .rounded(radius::PILL)
+                .text_size(text::CONTROL)
                 .map(|d| {
                     if on {
                         d.bg(t.accent).text_color(t.on_accent())
@@ -1907,9 +1822,9 @@ fn ground_switch(cx: &App) -> impl IntoElement + use<> {
     }
     div()
         .flex()
-        .gap(theme::space::S1)
-        .p(theme::space::S1)
-        .rounded(theme::radius::PILL)
+        .gap(space::S1)
+        .p(space::S1)
+        .rounded(radius::PILL)
         .bg(t.bg)
         .children(opts)
 }
@@ -2028,13 +1943,13 @@ impl Render for Settings {
         div()
             .flex()
             .flex_col()
-            .gap(theme::space::S3)
+            .gap(space::S3)
             .size_full()
-            .p(theme::space::S5)
+            .p(space::S5)
             .bg(t.bg)
             .font_family(fonts(cx).body)
-            .text_size(theme::text::BODY)
-            .line_height(theme::text::BODY_LINE)
+            .text_size(text::BODY)
+            .line_height(text::BODY_LINE)
             .text_color(t.text)
             .child(
                 // `overflow_y_scroll` lives on StatefulInteractiveElement, so the
@@ -2045,13 +1960,13 @@ impl Render for Settings {
                     .id("settings-body")
                     .flex()
                     .flex_col()
-                    .gap(theme::space::S3)
+                    .gap(space::S3)
                     .flex_1()
                     .min_h_0()
                     .min_w_0()
                     .overflow_y_scroll()
                     .child(
-                        theme::card(&t)
+                        card(t)
                             .min_w_0()
                             .child(section(cx, t, "Appearance"))
                             .child(ground_switch(cx)),
@@ -2145,27 +2060,27 @@ fn mcp_card(copied: Option<SharedString>, cx: &mut Context<Settings>) -> impl In
     };
     let mono = fonts(cx).mono;
 
-    theme::card(&t)
+    card(t)
         .child(
             div()
                 .flex()
                 .items_center()
-                .gap(theme::space::S2)
+                .gap(space::S2)
                 .child(section(cx, t, "Agent access (MCP)").flex_1())
                 .child(
                     div()
                         .flex_none()
-                        .px(theme::space::S2)
-                        .rounded(theme::radius::PILL)
+                        .px(space::S2)
+                        .rounded(radius::PILL)
                         .bg(fill)
-                        .text_size(theme::text::TINY)
+                        .text_size(text::TINY)
                         .text_color(ink)
                         .child(if running { "running" } else { "stopped" }),
                 ),
         )
         .child(
             div()
-                .text_size(theme::text::SMALL)
+                .text_size(text::SMALL)
                 .text_color(t.text_meta())
                 .child(match (running, wide) {
                     (true, false) => {
@@ -2189,13 +2104,13 @@ fn mcp_card(copied: Option<SharedString>, cx: &mut Context<Settings>) -> impl In
                 .id("mcp-bind")
                 .flex()
                 .items_start()
-                .gap(theme::space::S2)
+                .gap(space::S2)
                 .cursor_pointer()
                 .child(
                     div()
                         .flex_none()
-                        .mt(theme::space::S1 * 0.5)
-                        .child(theme::check_box(&t, wide)),
+                        .mt(space::S1 * 0.5)
+                        .child(check_box(t, wide)),
                 )
                 .child(
                     div()
@@ -2203,16 +2118,16 @@ fn mcp_card(copied: Option<SharedString>, cx: &mut Context<Settings>) -> impl In
                         .flex_col()
                         .flex_1()
                         .min_w_0()
-                        .gap(theme::space::S1 * 0.5)
+                        .gap(space::S1 * 0.5)
                         .child(
                             div()
-                                .text_size(theme::text::CONTROL)
+                                .text_size(text::CONTROL)
                                 .text_color(t.text)
                                 .child("Reachable from containers"),
                         )
                         .child(
                             div()
-                                .text_size(theme::text::SMALL)
+                                .text_size(text::SMALL)
                                 .text_color(if wide { t.warning() } else { t.text_meta() })
                                 .child(
                                     "A client in a Docker sandbox has its own network, so \
@@ -2230,12 +2145,12 @@ fn mcp_card(copied: Option<SharedString>, cx: &mut Context<Settings>) -> impl In
             div()
                 .flex()
                 .items_center()
-                .gap(theme::space::S2)
-                .text_size(theme::text::SMALL)
+                .gap(space::S2)
+                .text_size(text::SMALL)
                 .child(
                     div()
                         .flex_none()
-                        .w(theme::size::LABEL)
+                        .w(size::LABEL)
                         .text_color(t.text_label())
                         .child("URL"),
                 )
@@ -2270,12 +2185,12 @@ fn mcp_card(copied: Option<SharedString>, cx: &mut Context<Settings>) -> impl In
                 div()
                     .flex()
                     .items_center()
-                    .gap(theme::space::S2)
-                    .text_size(theme::text::SMALL)
+                    .gap(space::S2)
+                    .text_size(text::SMALL)
                     .child(
                         div()
                             .flex_none()
-                            .w(theme::size::LABEL)
+                            .w(size::LABEL)
                             .text_color(t.text_label())
                             .child("From this machine"),
                     )
@@ -2297,12 +2212,12 @@ fn mcp_card(copied: Option<SharedString>, cx: &mut Context<Settings>) -> impl In
                 div()
                     .flex()
                     .items_center()
-                    .gap(theme::space::S2)
-                    .text_size(theme::text::SMALL)
+                    .gap(space::S2)
+                    .text_size(text::SMALL)
                     .child(
                         div()
                             .flex_none()
-                            .w(theme::size::LABEL)
+                            .w(size::LABEL)
                             .text_color(t.text_label())
                             .child("Token"),
                     )
@@ -2326,7 +2241,7 @@ fn mcp_card(copied: Option<SharedString>, cx: &mut Context<Settings>) -> impl In
                 div()
                     .flex()
                     .flex_wrap()
-                    .gap(theme::space::S2)
+                    .gap(space::S2)
                     .child(primary_button(
                         t,
                         "mcp-copy-config",
@@ -2364,7 +2279,7 @@ fn mcp_card(copied: Option<SharedString>, cx: &mut Context<Settings>) -> impl In
             )
             .child(
                 div()
-                    .text_size(theme::text::SMALL)
+                    .text_size(text::SMALL)
                     .text_color(t.text_meta())
                     .child(
                         "The config block works as-is for Claude Code (.mcp.json) and for \
@@ -2380,14 +2295,10 @@ fn mcp_card(copied: Option<SharedString>, cx: &mut Context<Settings>) -> impl In
                 div()
                     .flex()
                     .items_center()
-                    .gap(theme::space::S2)
-                    .text_size(theme::text::SMALL)
+                    .gap(space::S2)
+                    .text_size(text::SMALL)
                     .text_color(t.text_label())
-                    .child(theme::icon_tinted(
-                        "alert",
-                        theme::text::CONTROL,
-                        t.text_label(),
-                    ))
+                    .child(icon_tinted("alert", text::CONTROL, t.text_label()))
                     .child(
                         "The token is stored, so the config keeps working after a restart. \
                          Regenerate it to lock out anything still holding the old one — \
@@ -2409,12 +2320,12 @@ fn mcp_card(copied: Option<SharedString>, cx: &mut Context<Settings>) -> impl In
                 div()
                     .flex()
                     .flex_col()
-                    .gap(theme::space::S1)
+                    .gap(space::S1)
                     .child(section(cx, t, "Recent requests").px_0().pt_0())
                     .when(activity.is_empty(), |d| {
                         d.child(
                             div()
-                                .text_size(theme::text::SMALL)
+                                .text_size(text::SMALL)
                                 .text_color(t.text_meta())
                                 .child(
                                     "Nothing has reached the server yet. If a client shows no \
@@ -2429,10 +2340,10 @@ fn mcp_card(copied: Option<SharedString>, cx: &mut Context<Settings>) -> impl In
                             .id("mcp-activity")
                             .flex()
                             .flex_col()
-                            .max_h(theme::space::S8 * 4.)
+                            .max_h(space::S8 * 4.)
                             .overflow_y_scroll()
                             .font_family(fonts(cx).mono)
-                            .text_size(theme::text::TINY)
+                            .text_size(text::TINY)
                             .children(activity.into_iter().map(|line| {
                                 let refused = line.starts_with("refused:");
                                 div()
@@ -2446,7 +2357,7 @@ fn mcp_card(copied: Option<SharedString>, cx: &mut Context<Settings>) -> impl In
         .when_some(copied, |d, what| {
             d.child(
                 div()
-                    .text_size(theme::text::SMALL)
+                    .text_size(text::SMALL)
                     .text_color(t.success())
                     .child(what),
             )
@@ -2456,14 +2367,10 @@ fn mcp_card(copied: Option<SharedString>, cx: &mut Context<Settings>) -> impl In
                 div()
                     .flex()
                     .items_center()
-                    .gap(theme::space::S2)
-                    .text_size(theme::text::SMALL)
+                    .gap(space::S2)
+                    .text_size(text::SMALL)
                     .text_color(t.text_label())
-                    .child(theme::icon_tinted(
-                        "alert",
-                        theme::text::CONTROL,
-                        t.text_label(),
-                    ))
+                    .child(icon_tinted("alert", text::CONTROL, t.text_label()))
                     .child(error),
             )
         })
@@ -2524,11 +2431,11 @@ fn button_of(
         .flex_none()
         .items_center()
         .justify_center()
-        .gap(theme::space::S1)
-        .h(theme::control::MD)
-        .px(theme::space::S3)
-        .rounded(theme::radius::PILL)
-        .text_size(theme::text::CONTROL)
+        .gap(space::S1)
+        .h(control::MD)
+        .px(space::S3)
+        .rounded(radius::PILL)
+        .text_size(text::CONTROL)
         .text_color(ink)
         .map(|d| {
             if primary {
@@ -2542,27 +2449,9 @@ fn button_of(
                     .active(|s| s.bg(t.active()))
             }
         })
-        .child(theme::icon_tinted(glyph, theme::text::CONTROL, ink))
+        .child(icon_tinted(glyph, text::CONTROL, ink))
         .child(label)
         .on_click(on_click)
-}
-
-/// A method badge: the method's own hue on a wash of itself, at a fixed width
-/// so the names to its right form a column.
-fn method_badge(t: theme::Theme, method: &str) -> impl IntoElement + use<> {
-    let color = theme::method_color(&t, method);
-    div()
-        .flex_none()
-        .w(theme::size::METHOD)
-        .rounded(theme::radius::PILL)
-        // `theme` has the accent wash as a token but no general "tint this hue"
-        // helper, and there is one badge per method — so the strength is taken
-        // from the token instead of a second set of hard-coded colours.
-        .bg(theme::alpha(color, t.accent_wash_strong().a))
-        .text_size(theme::text::TINY)
-        .text_color(color)
-        .text_center()
-        .child(SharedString::from(method.to_ascii_uppercase()))
 }
 
 /// The shared geometry of a sidebar list row, so requests and tools cannot
@@ -2580,83 +2469,17 @@ impl Render for Tip {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = theme::theme(cx);
         div()
-            .px(theme::space::S2)
-            .py(theme::space::S1)
-            .rounded(theme::radius::MD)
+            .px(space::S2)
+            .py(space::S1)
+            .rounded(radius::MD)
             .bg(t.surface)
             .border_1()
             .border_color(t.divider)
             .shadow_md()
-            .text_size(theme::text::SMALL)
+            .text_size(text::SMALL)
             .text_color(t.text)
             .child(self.0.clone())
     }
-}
-
-fn sidebar_row(t: theme::Theme, selected: bool) -> gpui::Div {
-    div()
-        .flex()
-        .items_center()
-        .gap(theme::space::S2)
-        .h(theme::control::MD)
-        .px(theme::space::S3)
-        .mx(theme::space::S2)
-        .rounded(theme::radius::PILL)
-        .text_size(theme::text::BODY)
-        .line_height(theme::text::BODY_LINE)
-        .when(selected, |d| d.bg(t.accent_wash()))
-        .hover(|s| s.bg(t.hover()))
-}
-
-/// The sidebar column itself: both lists are the same box.
-fn sidebar(t: theme::Theme, width: Pixels) -> gpui::Div {
-    div()
-        .flex()
-        .flex_col()
-        .flex_none()
-        .w(width)
-        .h_full()
-        .bg(t.bg)
-        .border_r_1()
-        .border_color(t.divider)
-}
-
-/// A centred icon, a one-line heading and a quieter hint — for every "there is
-/// nothing here yet" in the shell.
-fn empty_state(
-    cx: &App,
-    t: theme::Theme,
-    glyph: &'static str,
-    heading: &'static str,
-    hint: &'static str,
-) -> impl IntoElement + use<> {
-    div()
-        .flex()
-        .flex_1()
-        .flex_col()
-        .items_center()
-        .justify_center()
-        .gap(theme::space::S2)
-        .p(theme::space::S8)
-        .child(theme::icon_tinted(
-            glyph,
-            theme::text::H3,
-            t.text_disabled(),
-        ))
-        .child(
-            div()
-                .text_size(theme::text::H4)
-                .font_family(fonts(cx).heading)
-                .text_color(t.text_label())
-                .child(heading),
-        )
-        .child(
-            div()
-                .text_size(theme::text::SMALL)
-                .text_color(t.text_meta())
-                .text_center()
-                .child(hint),
-        )
 }
 
 impl Render for Workspace {
@@ -2758,8 +2581,8 @@ impl Render for Workspace {
             .bg(t.bg)
             .overflow_hidden()
             .font_family(fonts(cx).body)
-            .text_size(theme::text::BODY)
-            .line_height(theme::text::BODY_LINE)
+            .text_size(text::BODY)
+            .line_height(text::BODY_LINE)
             .text_color(t.text)
             // The move and release listeners sit on the root, not on the handle:
             // a pointer dragging a 9-px strip leaves it immediately, and an
@@ -2826,7 +2649,7 @@ fn stored_sidebar_width(cx: &App) -> Pixels {
         .and_then(|v| v.parse::<f32>().ok());
     match stored {
         Some(w) => clamp_sidebar(px(w)),
-        None => theme::size::SIDEBAR,
+        None => size::SIDEBAR,
     }
 }
 
@@ -2838,12 +2661,12 @@ fn unavailable(tool: &'static Tool) -> bool {
 fn main() {
     // Icons are compiled in; without an asset source `svg()` renders nothing.
     Application::new()
-        .with_assets(assets::Assets)
+        .with_assets(rp_ui::Assets)
         .run(|cx: &mut App| {
             let resolved = resolve_fonts(cx);
             cx.set_global(resolved);
-            text_input::bind_keys(cx);
-            editor::bind_keys(cx);
+            // One call: the design system registers what its widgets need.
+            rp_ui::bind_keys(cx);
             // Tabs can be pulled out into their own windows; the app lives until
             // the last one is gone.
             cx.on_window_closed(|cx| {
@@ -3105,26 +2928,5 @@ mod tests {
         }
         // One pasteable paragraph, not a list the user has to reflow.
         assert_eq!(MCP_PROMPT.lines().count(), 1);
-    }
-
-    /// Only the faces that exist may be asked for, or the app claims a typeface
-    /// it is not drawing with.
-    #[test]
-    fn a_face_is_only_picked_when_it_is_installed() {
-        let installed = vec!["Segoe UI".to_string(), "consolas".to_string()];
-        assert_eq!(pick_face(&installed, BODY_FACES).as_ref(), "Segoe UI");
-        // Case-insensitive, the way font names are matched.
-        assert_eq!(pick_face(&installed, MONO_FACES).as_ref(), "Consolas");
-        // Nothing in the row installed: the last, most generic entry stands.
-        assert_eq!(
-            pick_face(&installed, HEADING_FACES).as_ref(),
-            HEADING_FACES[HEADING_FACES.len() - 1]
-        );
-        // The design's own face wins whenever it is there.
-        let with_design = vec![theme::FONT_BODY.to_string(), "Segoe UI".to_string()];
-        assert_eq!(
-            pick_face(&with_design, BODY_FACES).as_ref(),
-            theme::FONT_BODY
-        );
     }
 }

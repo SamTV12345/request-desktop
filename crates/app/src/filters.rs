@@ -5,13 +5,14 @@
 //! read out of the task name, because that is where the demo data and every real
 //! timesheet put it: `Feature: parser`, `Bug Fix: eof`. Inferring it beats asking
 //! the user to categorise twice, and it costs nothing when they don't.
-use crate::theme;
-use crate::theme::{Theme, radius, space, text};
 use gpui::{
     App, Div, ParentElement, Pixels, Rgba, SharedString, Stateful, Styled, Window, div, prelude::*,
     px,
 };
 use rp_store::Entry;
+use rp_ui::layout::section_label;
+use rp_ui::theme::{FONT_MONO, Theme};
+use rp_ui::tokens::{radius, space, text};
 
 /// The design's dot: a rounded square, not a circle, and 6 px is its own number.
 const DOT_RADIUS: Pixels = px(6.);
@@ -127,7 +128,7 @@ pub fn kind_counts(entries: &[Entry]) -> Vec<(String, usize)> {
 }
 
 /// The dot beside a source. Organic has no categorical palette, so the two
-/// sources are separated by family the way `theme::method_color` separates
+/// sources are separated by family the way `method_color` separates
 /// methods — and by the same family the `mcp` tag already uses in the entry
 /// list, or the rail would colour-code one thing two ways.
 pub fn source_color(t: Theme, source: &str) -> Rgba {
@@ -190,7 +191,7 @@ pub fn facet_row(
         .child(
             div()
                 .flex_none()
-                .font_family(theme::FONT_MONO)
+                .font_family(FONT_MONO)
                 .text_size(text::TINY)
                 .text_color(t.text_muted())
                 .child(value),
@@ -203,7 +204,7 @@ pub fn section(t: Theme, label: &'static str, rows: Vec<Stateful<Div>>) -> Div {
     div()
         .flex()
         .flex_col()
-        .child(theme::section_label(&t, label).px_0().pt_0())
+        .child(section_label(t, label).px_0().pt_0())
         .child(div().flex().flex_col().gap(space::S1).children(rows))
 }
 

@@ -17,11 +17,15 @@ use gpui::{
     SharedString, Styled, div, prelude::*,
 };
 use rp_store::{TabRecord, WindowSession};
+use rp_ui::icon::icon_tinted;
+use rp_ui::layout::divider;
+use rp_ui::theme;
+use rp_ui::tokens::{control, radius, size, space, text};
 use std::path::{Path, PathBuf};
 
+use crate::Workspace;
 use crate::request_pane::RequestPane;
 use crate::tool_pane::ToolPane;
-use crate::{Workspace, theme};
 
 /// Identity of a tab, so clicking a sidebar entry that is already open
 /// activates it instead of opening a duplicate.
@@ -553,19 +557,15 @@ fn tab_action(
         .flex_none()
         .items_center()
         .justify_center()
-        .p(theme::space::S1)
-        .rounded(theme::radius::PILL)
+        .p(space::S1)
+        .rounded(radius::PILL)
         // gpui has no `invisible()`, so the reveal is an opacity swap driven by
         // the tab's group.
         .opacity(0.)
         .group_hover(group, |s| s.opacity(1.))
         .hover(|s| s.bg(t.active()))
         // svg takes its colour from its own element, never from the container.
-        .child(theme::icon_tinted(
-            glyph,
-            theme::text::SMALL,
-            t.text_muted(),
-        ))
+        .child(icon_tinted(glyph, text::SMALL, t.text_muted()))
         .on_click(on_click)
 }
 
@@ -591,12 +591,12 @@ pub fn strip(ws: &Workspace, cx: &mut gpui::Context<Workspace>) -> impl IntoElem
                 .group(group.clone())
                 .flex()
                 .flex_none()
-                .gap(theme::space::S1)
+                .gap(space::S1)
                 .items_center()
-                .my(theme::space::S1)
-                .px(theme::space::S3)
-                .rounded(theme::radius::PILL)
-                .text_size(theme::text::CONTROL)
+                .my(space::S1)
+                .px(space::S3)
+                .rounded(radius::PILL)
+                .text_size(text::CONTROL)
                 // The active tab is the raised surface under a pill — the same
                 // "lifted out of the ground" move the system uses for cards.
                 .map(|d| {
@@ -630,11 +630,11 @@ pub fn strip(ws: &Workspace, cx: &mut gpui::Context<Workspace>) -> impl IntoElem
                 // glyphs use, so it reads as their sibling; tinted from the theme
                 // rather than a constant, so the meaning survives a ground switch.
                 .when(tab.pinned, |d| {
-                    d.child(theme::icon_tinted("pin", theme::text::SMALL, t.accent))
+                    d.child(icon_tinted("pin", text::SMALL, t.accent))
                 })
                 .child(
                     div()
-                        .max_w(theme::size::TAB_TITLE)
+                        .max_w(size::TAB_TITLE)
                         // Without these two the title is clipped mid-glyph
                         // instead of ellipsized: `truncate` needs the box to be
                         // allowed to shrink and to hide its overflow.
@@ -669,9 +669,9 @@ pub fn strip(ws: &Workspace, cx: &mut gpui::Context<Workspace>) -> impl IntoElem
         .flex()
         .flex_none()
         .items_center()
-        .gap(theme::space::S1)
-        .h(theme::control::MD)
-        .px(theme::space::S2)
+        .gap(space::S1)
+        .h(control::MD)
+        .px(space::S2)
         .w_full()
         .overflow_x_scroll()
         .bg(t.bg)
@@ -876,9 +876,9 @@ fn menu_item(
         .flex()
         .flex_none()
         .items_center()
-        .h(theme::control::MD)
-        .px(theme::space::S3)
-        .rounded(theme::radius::SM)
+        .h(control::MD)
+        .px(space::S3)
+        .rounded(radius::SM)
         .child(row.label);
     if row.enabled {
         item.text_color(t.text)
@@ -911,7 +911,7 @@ pub fn menu(ws: &Workspace, cx: &mut gpui::Context<Workspace>) -> Option<impl In
     let mut children = Vec::new();
     for (g, group) in groups.iter().enumerate() {
         if g > 0 {
-            children.push(theme::divider(&t).my(theme::space::S1).into_any_element());
+            children.push(divider(t).my(space::S1).into_any_element());
         }
         for row in group {
             children.push(menu_item(t, i, row, cx));
@@ -921,7 +921,7 @@ pub fn menu(ws: &Workspace, cx: &mut gpui::Context<Workspace>) -> Option<impl In
         gpui::deferred(
             gpui::anchored()
                 .position(at)
-                .snap_to_window_with_margin(theme::space::S2)
+                .snap_to_window_with_margin(space::S2)
                 .child(
                     div()
                         .id("tab-menu")
@@ -930,13 +930,13 @@ pub fn menu(ws: &Workspace, cx: &mut gpui::Context<Workspace>) -> Option<impl In
                         .flex()
                         .flex_col()
                         .w(popup::WIDTH)
-                        .p(theme::space::S1)
-                        .rounded(theme::radius::MD)
+                        .p(space::S1)
+                        .rounded(radius::MD)
                         .bg(t.surface)
                         .border_1()
                         .border_color(t.divider)
                         .shadow_md()
-                        .text_size(theme::text::BODY)
+                        .text_size(text::BODY)
                         .on_mouse_down_out(cx.listener(|this, _: &MouseDownEvent, _, cx| {
                             this.tab_menu = None;
                             cx.notify();

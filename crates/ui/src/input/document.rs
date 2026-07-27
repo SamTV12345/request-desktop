@@ -14,7 +14,8 @@
 //! unwrapped. Add it when someone actually asks.
 use std::ops::Range;
 
-use crate::theme::{self, radius, space, text};
+use crate::theme;
+use crate::tokens::{radius, space, text};
 use gpui::{
     App, Bounds, ClipboardItem, ContentMask, Context, CursorStyle, ElementId, ElementInputHandler,
     Entity, EntityInputHandler, FocusHandle, Focusable, GlobalElementId, KeyBinding, LayoutId,
@@ -1011,7 +1012,7 @@ impl Render for Editor {
             // Request bodies, response bodies and tool output: the design loads
             // a mono face for exactly these. Resolved rather than named, since
             // gpui substitutes a missing family silently.
-            .font_family(crate::fonts(cx).mono)
+            .font_family(crate::fonts::fonts(cx).mono)
             .text_size(text::CONTROL)
             .line_height(text::BODY_LINE)
             .text_color(t.text)

@@ -20,14 +20,17 @@
 //! the table. The price is that rows must be a **fixed height**, which is why a
 //! card truncates rather than growing, and that the grid needs to know its own
 //! column count: see [`Pane::grid_width`].
+use rp_ui::icon::icon_tinted;
+use rp_ui::theme::{self, FONT_MONO, Theme};
+use rp_ui::tokens::{control, radius, size, space, text};
+
 use super::{Note, header, note};
-use crate::text_input::TextInput;
-use crate::theme::{self, Theme, control, radius, size, space, text};
 use gpui::{
     ClipboardItem, Context, Entity, Pixels, SharedString, WeakEntity, Window, canvas, div,
     prelude::*, px, uniform_list,
 };
 use rp_devtools::tools::text::emoji_search;
+use rp_ui::input::TextInput;
 
 /// `U+1F1E9 U+1F1EA` — every codepoint in the (possibly multi-scalar) emoji.
 fn code_points(emoji: &str) -> String {
@@ -120,7 +123,7 @@ impl Pane {
 /// A free function rather than a method, because `uniform_list`'s closure is
 /// `'static` and cannot borrow the pane — hence the `WeakEntity` for the clicks,
 /// which is also what makes a click safe after the tab has been closed.
-fn card(t: &Theme, pane: &WeakEntity<Pane>, emoji: &'static str, name: &'static str) -> gpui::Div {
+fn card(t: Theme, pane: &WeakEntity<Pane>, emoji: &'static str, name: &'static str) -> gpui::Div {
     let points = code_points(emoji);
     let escape = unicode_escape(emoji);
     let (points_bg, points_ink) = t.tag_neutral();
@@ -189,7 +192,7 @@ fn card(t: &Theme, pane: &WeakEntity<Pane>, emoji: &'static str, name: &'static 
                         .flex()
                         .min_w_0()
                         .gap(space::S1)
-                        .font_family(theme::FONT_MONO)
+                        .font_family(FONT_MONO)
                         .text_size(text::TINY)
                         // Target 2: code points, a neutral tag.
                         // Target 3: the escape, an accent tag.
@@ -252,7 +255,7 @@ impl Render for Pane {
                 for column in 0..columns {
                     match hits.get(row * columns + column) {
                         Some((emoji, name, _keywords)) => {
-                            line = line.child(card(&t, &pane, emoji, name));
+                            line = line.child(card(t, &pane, emoji, name));
                         }
                         // The last row is short: hold the empty columns open so
                         // its cards keep the width the rows above gave them.
@@ -295,7 +298,7 @@ impl Render for Pane {
             .p(space::S4)
             .overflow_hidden()
             .child(header(
-                &t,
+                t,
                 "Emoji picker",
                 "Click the emoji, its code points or its escape to copy.",
             ))
@@ -304,7 +307,7 @@ impl Render for Pane {
                     .flex()
                     .items_center()
                     .gap(space::S2)
-                    .child(theme::icon_tinted("search", text::CONTROL, t.text_muted()))
+                    .child(icon_tinted("search", text::CONTROL, t.text_muted()))
                     // TextInput asks for `w_full`, so it needs a flexible box of
                     // its own or it sizes against the whole row.
                     .child(div().flex().flex_1().min_w_0().child(self.search.clone()))
@@ -326,7 +329,7 @@ impl Render for Pane {
                     .child(grid),
             )
             .child(note(
-                &t,
+                t,
                 self.status.clone(),
                 if self.copied { Note::Good } else { Note::Info },
             ))

@@ -12,12 +12,16 @@
 //! `rwx` ordering stay in `rp_devtools::tools::web::chmod_forms` — this panel
 //! only draws.
 use super::{Note, header, label_cell, note};
-use crate::theme::{self, Theme, control, radius, size, space, text};
 use gpui::{
     ClipboardItem, Context, IntoElement, ParentElement as _, SharedString, Styled as _, Window,
     div, prelude::*,
 };
 use rp_devtools::tools::web::chmod_forms;
+use rp_ui::button::check_box;
+use rp_ui::icon::icon_tinted;
+use rp_ui::layout::{card, section_label};
+use rp_ui::theme::{self, FONT_MONO, Theme};
+use rp_ui::tokens::{control, radius, size, space, text};
 
 /// Display labels for the two axes. Their own constants because the registry's
 /// are lowercase keys used to build field names, not headings — but they must
@@ -59,7 +63,7 @@ impl Pane {
     /// alone — which is the part the text area could not do.
     fn result_row(
         &self,
-        t: &Theme,
+        t: Theme,
         label: &'static str,
         value: String,
         cx: &mut Context<Self>,
@@ -77,7 +81,7 @@ impl Pane {
                     .flex_1()
                     .min_w_0()
                     .overflow_x_scroll()
-                    .font_family(theme::FONT_MONO)
+                    .font_family(FONT_MONO)
                     .text_size(text::CONTROL)
                     .text_color(t.text)
                     .child(SharedString::from(value)),
@@ -96,7 +100,7 @@ impl Pane {
                     .text_color(t.text_muted())
                     .cursor_pointer()
                     .hover(|s| s.bg(t.accent_wash()).text_color(t.accent))
-                    .child(theme::icon_tinted("copy", text::SMALL, t.text_muted()))
+                    .child(icon_tinted("copy", text::SMALL, t.text_muted()))
                     .child("Copy")
                     .on_click(
                         cx.listener(move |this, _, _, cx| this.copy(label, to_copy.clone(), cx)),
@@ -108,7 +112,7 @@ impl Pane {
     /// columns line up down the grid.
     fn cell(
         &self,
-        t: &Theme,
+        t: Theme,
         group: usize,
         scope: usize,
         cx: &mut Context<Self>,
@@ -125,7 +129,7 @@ impl Pane {
             .rounded(radius::MD)
             .cursor_pointer()
             .hover(|s| s.bg(t.hover()))
-            .child(theme::check_box(t, checked))
+            .child(check_box(t, checked))
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.bits[group][scope] = !this.bits[group][scope];
                 // What changed is already visible in the grid; the note says what
@@ -176,7 +180,7 @@ impl Render for Pane {
                     .child(*name),
             );
             for scope in 0..SCOPES.len() {
-                row = row.child(self.cell(&t, group, scope, cx));
+                row = row.child(self.cell(t, group, scope, cx));
             }
             grid = grid.child(row);
         }
@@ -189,38 +193,38 @@ impl Render for Pane {
             .p(space::S4)
             .overflow_hidden()
             .child(header(
-                &t,
+                t,
                 "Chmod calculator",
                 "Tick the permission bits and read off the octal, symbolic and command forms.",
             ))
             .child(
-                theme::card(&t)
+                card(t)
                     .flex()
                     .flex_col()
                     .gap(space::S2)
-                    .child(theme::section_label(&t, "Permissions").px_0().pt_0())
+                    .child(section_label(t, "Permissions").px_0().pt_0())
                     .child(grid),
             )
             .child(
-                theme::card(&t)
+                card(t)
                     .flex()
                     .flex_col()
                     .gap(space::S2)
-                    .child(theme::section_label(&t, "Result").px_0().pt_0())
+                    .child(section_label(t, "Result").px_0().pt_0())
                     // The octal on its own, big: it is the number you actually
                     // came for, and a 12pt line in a text area buried it.
                     .child(
                         div()
-                            .font_family(theme::FONT_MONO)
+                            .font_family(FONT_MONO)
                             .text_size(text::H3)
                             .text_color(t.accent)
                             .child(SharedString::from(octal.clone())),
                     )
-                    .child(self.result_row(&t, "Octal", octal.clone(), cx))
-                    .child(self.result_row(&t, "Symbolic", symbolic, cx))
-                    .child(self.result_row(&t, "Command", format!("chmod {octal} path"), cx)),
+                    .child(self.result_row(t, "Octal", octal.clone(), cx))
+                    .child(self.result_row(t, "Symbolic", symbolic, cx))
+                    .child(self.result_row(t, "Command", format!("chmod {octal} path"), cx)),
             )
-            .child(note(&t, self.status.clone(), Note::Info))
+            .child(note(t, self.status.clone(), Note::Info))
     }
 }
 

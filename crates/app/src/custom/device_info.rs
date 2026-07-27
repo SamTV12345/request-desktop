@@ -12,9 +12,11 @@
 //! triple is *not* included: reaching it needs a `build.rs` to bake `TARGET`
 //! in, and os/arch/family/pointer-width already say the same thing.
 use super::{Note, Tone, button, header, meta_row, note};
-use crate::editor::Editor;
-use crate::theme::{self, size, space};
 use gpui::{ClipboardItem, Context, Entity, SharedString, Window, div, prelude::*};
+use rp_ui::input::Editor;
+use rp_ui::layout::{card, divider, section_label};
+use rp_ui::theme;
+use rp_ui::tokens::{size, space};
 
 /// The bits of the report that need a live window; everything else is `std`.
 /// Split out so the text assembly is testable without one.
@@ -207,15 +209,12 @@ impl Render for Pane {
         let mut sections = Vec::new();
         for (i, (heading, rows)) in groups(&geo).into_iter().enumerate() {
             if i > 0 {
-                sections.push(theme::divider(&t).into_any_element());
+                sections.push(divider(t).into_any_element());
             }
-            let group = div()
-                .flex()
-                .flex_col()
-                .child(theme::section_label(&t, heading));
+            let group = div().flex().flex_col().child(section_label(t, heading));
             let mut body = div().flex().flex_col().px(space::S3);
             for (label, value) in rows {
-                body = body.child(meta_row(&t, label, value, false));
+                body = body.child(meta_row(t, label, value, false));
             }
             sections.push(group.child(body).pb(space::S3).into_any_element());
         }
@@ -235,7 +234,7 @@ impl Render for Pane {
                     .gap(space::S4)
                     .child(
                         header(
-                            &t,
+                            t,
                             "Device information",
                             "The desktop environment this build is running in — upstream's \
                              browser report has no meaning here.",
@@ -245,7 +244,7 @@ impl Render for Pane {
                         .min_w_0(),
                     )
                     .child(button(
-                        &t,
+                        t,
                         "copy-device-info",
                         "Copy all",
                         "copy",
@@ -255,7 +254,7 @@ impl Render for Pane {
                     )),
             )
             .child(
-                theme::card(&t)
+                card(t)
                     .id("device-info-groups")
                     .flex()
                     .flex_col()
@@ -275,7 +274,7 @@ impl Render for Pane {
                     .flex_1()
                     .min_h(size::CARD_MIN_H)
                     .max_h(space::S8 * 5.)
-                    .child(theme::section_label(&t, "Copyable report").px_0().pt_0())
+                    .child(section_label(t, "Copyable report").px_0().pt_0())
                     // Kept as a real editor: selecting a couple of lines out of
                     // it is how this ends up in a bug report.
                     .child(
@@ -288,7 +287,7 @@ impl Render for Pane {
                     ),
             )
             .child(note(
-                &t,
+                t,
                 self.status.clone(),
                 if self.copied { Note::Good } else { Note::Info },
             ))

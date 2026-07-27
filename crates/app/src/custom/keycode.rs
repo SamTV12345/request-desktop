@@ -9,11 +9,13 @@
 //! rather than inventing numbers from a lookup table that would be wrong for
 //! every non-US layout.
 use super::{Note, chip, header, label_cell, meta_row, note};
-use crate::theme::{self, radius, space, text};
 use gpui::{
     Context, FocusHandle, Focusable, IntoElement, KeyDownEvent, Keystroke, MouseButton,
     ParentElement, SharedString, Styled, Window, div, prelude::*,
 };
+use rp_ui::layout::{card, divider, section_label};
+use rp_ui::theme::{self, FONT_MONO};
+use rp_ui::tokens::{radius, space, text};
 
 /// Enough to see a chord you just fumbled, bounded so a leaned-on key cannot
 /// grow the pane without limit.
@@ -132,17 +134,17 @@ impl Render for Pane {
         let mut rows = Vec::new();
         match &last {
             Some(s) => {
-                rows.push(meta_row(&t, "key (gpui)", s.key.clone(), false));
+                rows.push(meta_row(t, "key (gpui)", s.key.clone(), false));
                 rows.push(meta_row(
-                    &t,
+                    t,
                     "typed character",
                     s.key_char.clone().unwrap_or_else(|| "—".into()),
                     s.key_char.is_none(),
                 ));
-                rows.push(meta_row(&t, "keystroke (keymap)", s.raw.clone(), false));
-                rows.push(meta_row(&t, "auto-repeat", s.held.to_string(), !s.held));
+                rows.push(meta_row(t, "keystroke (keymap)", s.raw.clone(), false));
+                rows.push(meta_row(t, "auto-repeat", s.held.to_string(), !s.held));
             }
-            None => rows.push(meta_row(&t, "key (gpui)", "waiting for a keystroke", true)),
+            None => rows.push(meta_row(t, "key (gpui)", "waiting for a keystroke", true)),
         }
 
         // Modifier state as chips: which ones are down is a glance, not a
@@ -153,7 +155,7 @@ impl Render for Pane {
             .unwrap_or_default();
         let mut modifier_chips = Vec::new();
         for name in MODIFIERS {
-            modifier_chips.push(chip(&t, name, held.split(" + ").any(|m| m == name)));
+            modifier_chips.push(chip(t, name, held.split(" + ").any(|m| m == name)));
         }
 
         // Honest about the gaps rather than guessing a number. The value slot
@@ -167,14 +169,14 @@ impl Render for Pane {
                     .items_center()
                     .gap(space::S3)
                     .py(space::S1)
-                    .child(label_cell(&t, field))
-                    .child(chip(&t, "not exposed by gpui", false)),
+                    .child(label_cell(t, field))
+                    .child(chip(t, "not exposed by gpui", false)),
             );
         }
 
         let mut recent = Vec::new();
         for shown in self.history.iter().skip(1) {
-            recent.push(chip(&t, shown.raw.clone(), false));
+            recent.push(chip(t, shown.raw.clone(), false));
         }
 
         div()
@@ -195,7 +197,7 @@ impl Render for Pane {
             .p(space::S4)
             .overflow_hidden()
             .child(header(
-                &t,
+                t,
                 "Keycode info",
                 "Find the key name and modifiers of any pressed key.",
             ))
@@ -218,7 +220,7 @@ impl Render for Pane {
                     .rounded(radius::CARD)
                     .child(
                         div()
-                            .font_family(theme::FONT_MONO)
+                            .font_family(FONT_MONO)
                             .text_size(text::H1)
                             .line_height(text::H1)
                             .text_color(if last.is_some() {
@@ -246,7 +248,7 @@ impl Render for Pane {
                     ),
             )
             .child(
-                theme::card(&t)
+                card(t)
                     .id("keycode-fields")
                     .flex()
                     .flex_col()
@@ -254,10 +256,10 @@ impl Render for Pane {
                     .min_h_0()
                     .p_0()
                     .overflow_y_scroll()
-                    .child(theme::section_label(&t, "Reported by gpui"))
+                    .child(section_label(t, "Reported by gpui"))
                     .child(div().flex().flex_col().px(space::S3).children(rows))
-                    .child(theme::divider(&t).mt(space::S2))
-                    .child(theme::section_label(&t, "Not available on this platform"))
+                    .child(divider(t).mt(space::S2))
+                    .child(section_label(t, "Not available on this platform"))
                     .child(div().flex().flex_col().px(space::S3).children(missing))
                     .child(
                         div()
@@ -280,12 +282,12 @@ impl Render for Pane {
                         .flex()
                         .flex_col()
                         .gap(space::S1)
-                        .child(theme::section_label(&t, "Recent").px_0().pt_0())
+                        .child(section_label(t, "Recent").px_0().pt_0())
                         .child(div().flex().flex_wrap().gap(space::S1).children(recent)),
                 )
             })
             .child(note(
-                &t,
+                t,
                 SharedString::from(format!(
                     "{} of the last {HISTORY} keystrokes kept.",
                     self.history.len()

@@ -7,7 +7,8 @@
 //! dropped. Keep the diff against upstream small so it stays easy to re-sync.
 use std::ops::Range;
 
-use crate::theme::{self, control, radius, space, text};
+use crate::theme;
+use crate::tokens::{control, radius, space, text};
 use gpui::{
     App, Bounds, ClipboardItem, Context, CursorStyle, ElementId, ElementInputHandler, Entity,
     EntityInputHandler, FocusHandle, Focusable, GlobalElementId, KeyBinding, LayoutId, MouseButton,
@@ -678,7 +679,7 @@ impl Render for TextInput {
             frame = frame.hover(|s| s.border_color(t.border_hover()));
         }
         if let Some(name) = self.icon {
-            frame = frame.child(theme::icon(name).text_color(t.text_muted()));
+            frame = frame.child(crate::icon::icon(name).text_color(t.text_muted()));
         }
 
         div()
@@ -707,7 +708,7 @@ impl Render for TextInput {
             // The resolved face, not `FONT_BODY` by name: gpui substitutes a
             // missing family without a word, so asking for it directly would
             // silently shape in something else.
-            .font_family(crate::fonts(cx).body)
+            .font_family(crate::fonts::fonts(cx).body)
             .text_size(text::CONTROL)
             .line_height(line_height)
             .text_color(t.text)

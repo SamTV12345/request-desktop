@@ -8,12 +8,13 @@
 //! The arithmetic is [`crate::calendar`]'s — this module only draws it and
 //! collects the totals to feed it.
 use crate::calendar::{MONTHS_SHORT, year_bars};
-use crate::theme;
-use crate::theme::{Theme, radius, space, text};
 use gpui::{
     App, Div, ParentElement, Pixels, SharedString, Stateful, Styled, Window, div, prelude::*, px,
 };
 use rp_store::DaySummary;
+use rp_ui::icon::icon_tinted;
+use rp_ui::theme::{FONT_MONO, Theme};
+use rp_ui::tokens::{radius, space, text};
 
 // The design's own numbers. None of them is on a token scale: the bar is a fixed
 // 34-px track with a 10-px corner, its caption is 10.5 px, and the strip's
@@ -97,7 +98,7 @@ pub fn strip(t: Theme, totals: &[i64; 12], current: Option<usize>) -> Div {
                 )
                 .child(
                     div()
-                        .font_family(theme::FONT_MONO)
+                        .font_family(FONT_MONO)
                         .text_size(CAPTION)
                         .text_color(ink)
                         .child(SharedString::from(*name)),
@@ -147,7 +148,7 @@ pub fn secondary_button(
         .text_size(text::SMALL)
         .text_color(t.text_label())
         .hover(|s| s.bg(t.active()).text_color(t.text))
-        .child(theme::icon_tinted(icon_name, text::SMALL, t.text_label()))
+        .child(icon_tinted(icon_name, text::SMALL, t.text_label()))
         .child(label)
         .on_click(on_click)
 }

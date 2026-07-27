@@ -15,13 +15,16 @@
 //!    inside a text area — with "No" also covering "that is not a bcrypt hash".
 //!    Here it is a badge, and a malformed hash says so.
 use super::{Note, Tone, button, header, note};
-use crate::text_input::TextInput;
-use crate::theme::{self, Theme, radius, size, space, text};
 use gpui::{
     AppContext, ClipboardItem, Context, Entity, IntoElement, ParentElement as _, SharedString,
     Styled as _, Window, div, prelude::*,
 };
 use rp_devtools::tools::crypto::{bcrypt_hash_with_rounds, bcrypt_verify};
+use rp_ui::icon::icon_tinted;
+use rp_ui::input::TextInput;
+use rp_ui::layout::{card, section_label};
+use rp_ui::theme::{self, FONT_MONO, Theme};
+use rp_ui::tokens::{control, radius, size, space, text};
 
 /// What the comparison can say. `Malformed` is its own answer: reporting an
 /// input that is not a bcrypt hash as "does not match" sends you looking for the
@@ -135,7 +138,7 @@ impl Pane {
     }
 
     /// `label` above a field, the rhythm the generic form uses.
-    fn field(t: &Theme, label: &'static str, input: impl IntoElement) -> gpui::Div {
+    fn field(t: Theme, label: &'static str, input: impl IntoElement) -> gpui::Div {
         div()
             .flex()
             .flex_col()
@@ -153,7 +156,7 @@ impl Pane {
 
 /// The verdict badge: the colour carries the answer, the icon repeats it for
 /// anyone who cannot use the colour, and the words repeat it again.
-fn badge(t: &Theme, verdict: &Verdict) -> gpui::Div {
+fn badge(t: Theme, verdict: &Verdict) -> gpui::Div {
     let (label, icon, ink, bg) = match verdict {
         Verdict::Idle => (
             "Waiting for a hash",
@@ -170,7 +173,7 @@ fn badge(t: &Theme, verdict: &Verdict) -> gpui::Div {
         .flex_none()
         .items_center()
         .gap(space::S2)
-        .h(theme::control::MD)
+        .h(control::MD)
         .px(space::S4)
         .rounded(radius::PILL)
         .border_1()
@@ -178,7 +181,7 @@ fn badge(t: &Theme, verdict: &Verdict) -> gpui::Div {
         .bg(bg)
         .text_size(text::CONTROL)
         .text_color(ink)
-        .child(theme::icon_tinted(icon, text::CONTROL, ink))
+        .child(icon_tinted(icon, text::CONTROL, ink))
         .child(label)
 }
 
@@ -200,18 +203,18 @@ impl Render for Pane {
             .p(space::S4)
             .overflow_hidden()
             .child(header(
-                &t,
+                t,
                 "Bcrypt",
                 "Hash a string with a fresh salt, or check a string against a hash.",
             ))
             // ---- hash
             .child(
-                theme::card(&t)
+                card(t)
                     .flex()
                     .flex_col()
                     .gap(space::S3)
                     .min_h(size::CARD_MIN_H)
-                    .child(theme::section_label(&t, "Hash").px_0().pt_0())
+                    .child(section_label(t, "Hash").px_0().pt_0())
                     .child(
                         // The two fields sit side by side until the pane is too
                         // narrow, then they stack instead of squeezing.
@@ -220,12 +223,12 @@ impl Render for Pane {
                             .flex_wrap()
                             .gap(space::S3)
                             .child(
-                                Self::field(&t, "String", self.text.clone())
+                                Self::field(t, "String", self.text.clone())
                                     .flex_1()
                                     .min_w(size::URL_MIN),
                             )
                             .child(
-                                Self::field(&t, "Salt rounds", self.rounds.clone())
+                                Self::field(t, "Salt rounds", self.rounds.clone())
                                     .flex_none()
                                     .w(size::METHOD),
                             ),
@@ -237,7 +240,7 @@ impl Render for Pane {
                             .items_center()
                             .gap(space::S2)
                             .child(button(
-                                &t,
+                                t,
                                 "bcrypt-hash",
                                 "Hash",
                                 "play",
@@ -246,7 +249,7 @@ impl Render for Pane {
                                 cx.listener(|this, _, _, cx| this.hash_now(cx)),
                             ))
                             .child(button(
-                                &t,
+                                t,
                                 "bcrypt-copy",
                                 "Copy",
                                 "copy",
@@ -267,7 +270,7 @@ impl Render for Pane {
                             .py(space::S2)
                             .rounded(radius::MD)
                             .bg(t.bg)
-                            .font_family(theme::FONT_MONO)
+                            .font_family(FONT_MONO)
                             .text_size(text::CONTROL)
                             .text_color(if hashed { t.text } else { t.text_disabled() })
                             .child(shown),
@@ -275,13 +278,13 @@ impl Render for Pane {
             )
             // ---- compare
             .child(
-                theme::card(&t)
+                card(t)
                     .flex()
                     .flex_col()
                     .gap(space::S3)
                     .min_h(size::CARD_MIN_H)
                     .child(
-                        theme::section_label(&t, "Compare a string with a hash")
+                        section_label(t, "Compare a string with a hash")
                             .px_0()
                             .pt_0(),
                     )
@@ -291,20 +294,20 @@ impl Render for Pane {
                             .flex_wrap()
                             .gap(space::S3)
                             .child(
-                                Self::field(&t, "String", self.candidate.clone())
+                                Self::field(t, "String", self.candidate.clone())
                                     .flex_1()
                                     .min_w(size::URL_MIN),
                             )
                             .child(
-                                Self::field(&t, "Hash", self.against.clone())
+                                Self::field(t, "Hash", self.against.clone())
                                     .flex_1()
                                     .min_w(size::URL_MIN),
                             ),
                     )
-                    .child(badge(&t, &verdict)),
+                    .child(badge(t, &verdict)),
             )
             .child(note(
-                &t,
+                t,
                 self.status.clone(),
                 if self.failed { Note::Bad } else { Note::Info },
             ))

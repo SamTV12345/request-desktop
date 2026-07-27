@@ -1,6 +1,13 @@
 [workspace]
 resolver = "2"
-members = ["crates/core", "crates/devtools", "crates/store", "crates/app", "crates/mcp"]
+members = [
+    "crates/core",
+    "crates/devtools",
+    "crates/store",
+    "crates/ui",
+    "crates/app",
+    "crates/mcp",
+]
 # `fuzz` is its own crate: cargo-fuzz needs nightly and its own profile.
 exclude = ["fuzz"]
 

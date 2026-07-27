@@ -11,15 +11,19 @@
 //!   row (`SEG_MAX` options).
 //! * **Radio list** — a wrapped set of dot-and-label choices, for a `Select`
 //!   with too many options to segment.
-use crate::editor::Editor;
 use crate::reference;
-use crate::text_input::TextInput;
-use crate::theme::{self, Theme, control, radius, size, space, text};
 use gpui::{
     ClipboardItem, Context, Entity, IntoElement, ParentElement, SharedString, Styled, Window, div,
     prelude::*,
 };
 use rp_devtools::{Args, Field, FieldKind, Kind, Tool};
+use rp_ui::button::check_box;
+use rp_ui::icon::icon_tinted;
+use rp_ui::input::Editor;
+use rp_ui::input::TextInput;
+use rp_ui::layout::card;
+use rp_ui::theme::{self, FONT_BODY, FONT_HEADING, FONT_MONO, Theme};
+use rp_ui::tokens::{control, radius, size, space, text};
 use std::collections::BTreeMap;
 
 /// Above this many options a segmented control stops being readable and the
@@ -177,7 +181,7 @@ impl ToolPane {
 
     /// `.field > label`: the label above every control, so all 78 tool forms
     /// share one rhythm.
-    fn field_label(t: &Theme, label: &'static str) -> gpui::Div {
+    fn field_label(t: Theme, label: &'static str) -> gpui::Div {
         div()
             .text_size(text::LABEL)
             .text_color(t.text_label())
@@ -185,7 +189,7 @@ impl ToolPane {
     }
 
     /// `.field` — the wrapper both the line and document shapes sit in.
-    fn field(t: &Theme, label: &'static str) -> gpui::Div {
+    fn field(t: Theme, label: &'static str) -> gpui::Div {
         div()
             .flex()
             .flex_col()
@@ -196,7 +200,7 @@ impl ToolPane {
     /// Shapes 1 and 2: a labelled control, full height when it is a document.
     /// A filter over the output: magnifier and field, no heading above it. The
     /// same shape the emoji picker uses, because it is the same job.
-    fn search_row(input: &Input, t: &Theme) -> impl IntoElement + use<> {
+    fn search_row(input: &Input, t: Theme) -> impl IntoElement + use<> {
         let field = match input {
             Input::Line(i) => i.clone().into_any_element(),
             // A filter is never a document field, but rendering one as the editor
@@ -207,13 +211,13 @@ impl ToolPane {
             .flex()
             .items_center()
             .gap(space::S2)
-            .child(theme::icon_tinted("search", text::CONTROL, t.text_muted()))
+            .child(icon_tinted("search", text::CONTROL, t.text_muted()))
             // TextInput asks for `w_full`, so it needs a flexible box of its own
             // or it sizes against the whole row.
             .child(div().flex().flex_1().min_w_0().child(field))
     }
 
-    fn field_row(&self, f: &'static Field, input: &Input, t: &Theme) -> impl IntoElement + use<> {
+    fn field_row(&self, f: &'static Field, input: &Input, t: Theme) -> impl IntoElement + use<> {
         match input {
             Input::Line(i) => {
                 Self::field(t, f.label).child(div().flex().min_w_0().child(i.clone()))
@@ -229,7 +233,7 @@ impl ToolPane {
                         .flex_1()
                         .min_h_0()
                         .overflow_hidden()
-                        .font_family(theme::FONT_MONO)
+                        .font_family(FONT_MONO)
                         .child(e.clone()),
                 ),
         }
@@ -241,7 +245,7 @@ impl ToolPane {
         &self,
         f: &'static Field,
         options: &[&'static str],
-        t: &Theme,
+        t: Theme,
         cx: &mut Context<Self>,
     ) -> gpui::Div {
         let current = self.choices.get(f.key).cloned().unwrap_or_default();
@@ -294,7 +298,7 @@ impl ToolPane {
         &self,
         f: &'static Field,
         options: &[&'static str],
-        t: &Theme,
+        t: Theme,
         cx: &mut Context<Self>,
     ) -> gpui::Div {
         let current = self.choices.get(f.key).cloned().unwrap_or_default();
@@ -352,7 +356,7 @@ impl ToolPane {
     fn checkbox_row(
         &self,
         f: &'static Field,
-        t: &Theme,
+        t: Theme,
         cx: &mut Context<Self>,
     ) -> gpui::Stateful<gpui::Div> {
         let checked = self.choices.get(f.key).is_some_and(|v| v == "true");
@@ -366,7 +370,7 @@ impl ToolPane {
             .cursor_pointer()
             .text_color(if checked { t.text } else { t.text_muted() })
             .hover(|s| s.text_color(t.text))
-            .child(theme::check_box(t, checked))
+            .child(check_box(t, checked))
             .child(div().min_w_0().truncate().child(f.label))
             .on_click(cx.listener(move |this, _, _, cx| {
                 let next = if checked { "false" } else { "true" };
@@ -376,7 +380,7 @@ impl ToolPane {
             }))
     }
 
-    fn choice_row(&self, f: &'static Field, t: &Theme, cx: &mut Context<Self>) -> gpui::Div {
+    fn choice_row(&self, f: &'static Field, t: Theme, cx: &mut Context<Self>) -> gpui::Div {
         if f.kind == FieldKind::Bool {
             // The label belongs beside the box, so this shape brings its own row
             // rather than going through `field`. Wrapped so every arm here still
@@ -401,7 +405,7 @@ impl ToolPane {
         id: impl Into<gpui::ElementId>,
         icon: &'static str,
         label: &'static str,
-        t: &Theme,
+        t: Theme,
     ) -> gpui::Stateful<gpui::Div> {
         div()
             .id(id)
@@ -417,7 +421,7 @@ impl ToolPane {
             .text_color(t.text_muted())
             .cursor_pointer()
             .hover(|s| s.bg(t.accent_wash()).text_color(t.accent))
-            .child(theme::icon_tinted(icon, text::SMALL, t.text_muted()))
+            .child(icon_tinted(icon, text::SMALL, t.text_muted()))
             .child(label)
     }
 
@@ -429,7 +433,7 @@ impl ToolPane {
     /// each row copies only its own value. Rows appear only when the tool
     /// actually labelled something: a single-value tool has nothing to
     /// disambiguate, and "Copy all" already covers it.
-    fn copyable_rows(&self, t: &Theme, cx: &mut Context<Self>) -> Vec<gpui::AnyElement> {
+    fn copyable_rows(&self, t: Theme, cx: &mut Context<Self>) -> Vec<gpui::AnyElement> {
         let Ok(output) = &self.output else {
             return Vec::new();
         };
@@ -489,12 +493,7 @@ impl ToolPane {
     /// filtering the parsed blocks as well is what keeps a hit's heading with it
     /// and a matched table row under its header, which no amount of filtering
     /// lines of text can do.
-    fn reference_page(
-        &self,
-        text: &str,
-        t: &Theme,
-        cx: &Context<Self>,
-    ) -> impl IntoElement + use<> {
+    fn reference_page(&self, text: &str, t: Theme, cx: &Context<Self>) -> impl IntoElement + use<> {
         let blocks = reference::parse(text);
         let query = self
             .tool
@@ -527,17 +526,17 @@ impl ToolPane {
 
     /// Result or error, in a card with a copy affordance. An error is styled as
     /// one, so a failure never reads as output.
-    fn result_panel(&self, t: &Theme, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    fn result_panel(&self, t: Theme, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let failed = self.output.is_err();
         let ink = if failed { t.danger() } else { t.text_muted() };
         let mut title = div().flex().items_center().gap(space::S1).text_color(ink);
         if failed {
-            title = title.child(theme::icon_tinted("alert", text::SMALL, ink));
+            title = title.child(icon_tinted("alert", text::SMALL, ink));
         }
         title = title.child(
             div()
                 .text_size(text::H6)
-                .font_family(theme::FONT_HEADING)
+                .font_family(FONT_HEADING)
                 // "Result" claims something was computed from what you typed. On
                 // a lookup table nothing was — see `is_reference`.
                 .child(match (failed, self.is_reference()) {
@@ -547,7 +546,7 @@ impl ToolPane {
                 }),
         );
 
-        theme::card(t)
+        card(t)
             .flex_1()
             .min_h(size::CARD_MIN_H)
             .overflow_hidden()
@@ -578,7 +577,7 @@ impl ToolPane {
                     .flex_1()
                     .min_h_0()
                     .overflow_hidden()
-                    .font_family(theme::FONT_MONO)
+                    .font_family(FONT_MONO)
                     .child(self.output_view.clone()),
             )
     }
@@ -593,7 +592,7 @@ impl Render for ToolPane {
         for f in self.tool.fields {
             match f.kind {
                 FieldKind::Select | FieldKind::Bool => {
-                    rows.push(self.choice_row(f, &t, cx).into_any_element())
+                    rows.push(self.choice_row(f, t, cx).into_any_element())
                 }
                 _ => {
                     if let Some((_, input)) = self.inputs.iter().find(|(g, _)| g.key == f.key) {
@@ -601,9 +600,9 @@ impl Render for ToolPane {
                         // heading: the label already says "search…", so repeating
                         // it above the field was chrome twice over.
                         if f.key == FILTER_KEY {
-                            rows.push(Self::search_row(input, &t).into_any_element());
+                            rows.push(Self::search_row(input, t).into_any_element());
                         } else {
-                            rows.push(self.field_row(f, input, &t).into_any_element());
+                            rows.push(self.field_row(f, input, t).into_any_element());
                         }
                     }
                 }
@@ -618,7 +617,7 @@ impl Render for ToolPane {
             .p(space::S6)
             .bg(t.bg)
             .text_color(t.text)
-            .font_family(theme::FONT_BODY)
+            .font_family(FONT_BODY)
             .overflow_hidden()
             .child(
                 div()
@@ -628,7 +627,7 @@ impl Render for ToolPane {
                     .child(
                         div()
                             .text_size(text::H4)
-                            .font_family(theme::FONT_HEADING)
+                            .font_family(FONT_HEADING)
                             .text_color(t.text)
                             .child(self.tool.name),
                     )
@@ -655,8 +654,8 @@ impl Render for ToolPane {
             // prose, code and tables. Only computed output goes in the result
             // card, where "Result" and a copy button mean something.
             .map(|d| match (self.is_reference(), &self.output) {
-                (true, Ok(text)) => d.child(self.reference_page(text, &t, cx)),
-                _ => d.child(self.result_panel(&t, cx)),
+                (true, Ok(text)) => d.child(self.reference_page(text, t, cx)),
+                _ => d.child(self.result_panel(t, cx)),
             })
     }
 }

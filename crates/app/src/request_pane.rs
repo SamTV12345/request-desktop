@@ -1,14 +1,19 @@
 //! Method + URL + headers + body + Send + response viewer.
-use crate::editor::Editor;
-use crate::text_input::TextInput;
-use crate::theme;
-use crate::theme::{Theme, control, radius, size, space, text};
 use gpui::{
     Context, Entity, IntoElement, ParentElement, Rgba, SharedString, Styled, Window, div,
     prelude::*,
 };
 use rp_core::interp::Vars;
 use rp_core::{Body, MultipartField, Request, Response, exec};
+use rp_ui::button::{seg_option, seg_track};
+use rp_ui::icon::icon_tinted;
+use rp_ui::input::Editor;
+use rp_ui::input::TextInput;
+use rp_ui::layout::card;
+use rp_ui::theme::{
+    self, FONT_BODY, FONT_HEADING, FONT_MONO, Theme, alpha, method_color, status_color,
+};
+use rp_ui::tokens::{control, radius, size, space, text};
 use std::sync::OnceLock;
 
 const METHODS: &[&str] = &["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
@@ -171,7 +176,7 @@ impl RequestPane {
     /// The seven methods as one segmented control. `.seg` in Organic is a pill
     /// track holding pill options, so there are no hairlines between cells —
     /// the selected option is marked by its own fill and the method's colour.
-    fn method_control(&self, t: &Theme, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    fn method_control(&self, t: Theme, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let current = self.request.method.to_ascii_uppercase();
         let mut cells = Vec::with_capacity(METHODS.len());
         for m in METHODS {
@@ -184,7 +189,7 @@ impl RequestPane {
                     // says which method it is. `bg` after `seg_option`'s, which is
                     // what makes this an override rather than a second fill.
                     .when(active, |d| {
-                        d.bg(theme::method_color(t, m)).text_color(t.on_accent())
+                        d.bg(method_color(t, m)).text_color(t.on_accent())
                     })
                     .child(*m)
                     .on_click(cx.listener(move |this, _, _, cx| {
@@ -196,7 +201,7 @@ impl RequestPane {
         seg_track(t).children(cells)
     }
 
-    fn toolbar(&self, t: &Theme, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    fn toolbar(&self, t: Theme, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let sending = self.sending;
         let send_ink = if sending {
             t.text_disabled()
@@ -234,7 +239,7 @@ impl RequestPane {
                     .h(control::MD)
                     .px(space::S4)
                     .rounded(radius::PILL)
-                    .font_family(theme::FONT_BODY)
+                    .font_family(FONT_BODY)
                     .text_size(text::CONTROL)
                     .bg(if sending { t.hover() } else { t.accent })
                     .text_color(send_ink)
@@ -244,13 +249,13 @@ impl RequestPane {
                             .hover(|s| s.bg(t.accent_ramp.s400))
                             .active(|s| s.bg(t.accent_ramp.s600))
                     })
-                    .child(theme::icon_tinted("send", text::CONTROL, send_ink))
+                    .child(icon_tinted("send", text::CONTROL, send_ink))
                     .child(if sending { "Sending…" } else { "Send" })
                     .on_click(cx.listener(|this, _, _, cx| this.send(cx))),
             )
     }
 
-    fn request_editor(&self, t: &Theme, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    fn request_editor(&self, t: Theme, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let mut tabs = Vec::new();
         for (label, tab) in [("Body", Tab::Body), ("Headers", Tab::Headers)] {
             let active = self.tab == tab;
@@ -273,7 +278,7 @@ impl RequestPane {
             Tab::Body => self.body.clone().into_any_element(),
             Tab::Headers => self.headers.clone().into_any_element(),
         };
-        theme::card(t)
+        card(t)
             .flex_1()
             // A floor, not a height: the request and response cards share what
             // is left after the toolbar, and on a short window they shrink
@@ -294,7 +299,7 @@ impl RequestPane {
                     .flex_1()
                     .min_h_0()
                     .overflow_hidden()
-                    .font_family(theme::FONT_MONO)
+                    .font_family(FONT_MONO)
                     .child(editor),
             )
     }
@@ -310,17 +315,15 @@ impl RequestPane {
             .px(space::S2)
             .py(space::S1)
             .rounded(radius::PILL)
-            .bg(theme::alpha(ink, 0.16))
-            .font_family(theme::FONT_BODY)
+            .bg(alpha(ink, 0.16))
+            .font_family(FONT_BODY)
             .text_size(text::TINY)
             .text_color(ink)
-            .when_some(icon, |d, name| {
-                d.child(theme::icon_tinted(name, text::TINY, ink))
-            })
+            .when_some(icon, |d, name| d.child(icon_tinted(name, text::TINY, ink)))
             .child(label)
     }
 
-    fn response_header(&self, t: &Theme) -> impl IntoElement + use<> {
+    fn response_header(&self, t: Theme) -> impl IntoElement + use<> {
         let mut row = div()
             .flex()
             .items_center()
@@ -337,7 +340,7 @@ impl RequestPane {
                     "no request sent yet"
                 };
                 row = row
-                    .child(theme::icon_tinted("clock", text::TINY, t.text_meta()))
+                    .child(icon_tinted("clock", text::TINY, t.text_meta()))
                     .child(
                         div()
                             .text_size(text::SMALL)
@@ -353,7 +356,7 @@ impl RequestPane {
                 ));
             }
             Some(Ok(res)) => {
-                let ink = theme::status_color(t, res.status);
+                let ink = status_color(t, res.status);
                 row = row
                     .child(Self::badge(
                         ink,
@@ -367,7 +370,7 @@ impl RequestPane {
                             .gap(space::S3)
                             // Timing and size are digits: mono so they do not
                             // jitter as they change.
-                            .font_family(theme::FONT_MONO)
+                            .font_family(FONT_MONO)
                             .text_size(text::TINY)
                             .text_color(t.text_meta())
                             .child(SharedString::from(format!("{} ms", res.duration_ms)))
@@ -378,8 +381,8 @@ impl RequestPane {
         row
     }
 
-    fn response_section(&self, t: &Theme) -> impl IntoElement + use<> {
-        theme::card(t)
+    fn response_section(&self, t: Theme) -> impl IntoElement + use<> {
+        card(t)
             .flex_1()
             .min_h(size::CARD_MIN_H)
             .child(self.response_header(t))
@@ -390,7 +393,7 @@ impl RequestPane {
                     .min_h_0()
                     .overflow_hidden()
                     // Alignment carries meaning in a response body.
-                    .font_family(theme::FONT_MONO)
+                    .font_family(FONT_MONO)
                     .child(self.response_view.clone()),
             )
     }
@@ -398,72 +401,13 @@ impl RequestPane {
 
 /// `h6` as the system defines it, without `section_label`'s sidebar padding —
 /// these labels sit inline inside a card that already has its own.
-fn label_h6(t: &Theme, label: &'static str) -> gpui::Div {
+fn label_h6(t: Theme, label: &'static str) -> gpui::Div {
     div()
         .flex_none()
-        .font_family(theme::FONT_HEADING)
+        .font_family(FONT_HEADING)
         .text_size(text::H6)
         .text_color(t.text_muted())
         .child(label)
-}
-
-/// `.seg` — the pill track a segmented control sits in.
-/// ponytail: below roughly 470 px of pane the cells ellipsize to `GE…`/`OPT…`.
-/// Measured, and deliberately left there: the segment stays on one line and
-/// every cell stays clickable, which beats clipping the tail — including the
-/// selected method — off the pane.
-///
-/// The upgrade is *not* a per-control dropdown. Cycling seven methods costs up
-/// to six clicks to reach `OPTIONS`, and a real popover here would be the
-/// largest piece of UI in the pane, spent below a width nobody works at: the
-/// segment only shrinks once the window is under ~590 px, and by then the URL
-/// field has wrapped to its own line and the response body is ten characters
-/// wide. The right shape, if it is ever wanted, is one compact mode for the
-/// whole toolbar driven by a single measured width — gpui has no media queries,
-/// so that means an element reading its own bounds and re-rendering. The cheap
-/// 80% of it is dropping cell padding to `space::S1` or three-letter labels,
-/// and it needs the same measured trigger.
-fn seg_track(t: &Theme) -> gpui::Div {
-    div()
-        .flex()
-        // Never wraps — a segmented control split over two lines stops reading
-        // as one track. It does shrink, though: below its content width the
-        // cells ellipsize rather than the far end of the track being clipped
-        // away, which would make the selected method unreachable.
-        .flex_shrink()
-        .min_w_0()
-        .items_center()
-        .gap(space::S1)
-        .h(control::MD)
-        .p(space::S1)
-        .rounded(radius::PILL)
-        .bg(t.hover())
-}
-
-/// `.seg-opt` — one option inside a [`seg_track`].
-///
-/// The checked option used to be `t.surface` on a `t.hover()` track, which on the
-/// dark ground are within a few percent of each other: you could not see which
-/// method was selected. It is now a filled pill against an unfilled one. The
-/// method control paints over this fill with the method's own colour, so the
-/// selection carries which method it is as well as that there is one.
-fn seg_option(t: &Theme, active: bool) -> gpui::Div {
-    div()
-        .flex()
-        .items_center()
-        .h(control::MD - space::S2)
-        .px(space::S3)
-        .rounded(radius::PILL)
-        .font_family(theme::FONT_BODY)
-        .text_size(text::SMALL)
-        .min_w_0()
-        .truncate()
-        .cursor_pointer()
-        .when(active, |d| d.bg(t.accent).text_color(t.on_accent()))
-        .when(!active, |d| {
-            d.text_color(t.text_muted())
-                .hover(|s| s.bg(t.hover()).text_color(t.text))
-        })
 }
 
 // ------------------------------------------------------------------ text <-> model
@@ -603,14 +547,14 @@ impl Render for RequestPane {
             .size_full()
             .p(space::S4)
             .bg(t.bg)
-            .font_family(theme::FONT_BODY)
+            .font_family(FONT_BODY)
             .text_size(text::BODY)
             .line_height(text::BODY_LINE)
             .text_color(t.text)
             .overflow_hidden()
-            .child(self.toolbar(&t, cx))
-            .child(self.request_editor(&t, cx))
-            .child(self.response_section(&t))
+            .child(self.toolbar(t, cx))
+            .child(self.request_editor(t, cx))
+            .child(self.response_section(t))
     }
 }
 

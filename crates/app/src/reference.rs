@@ -18,8 +18,9 @@
 //! is prose. That is the property `parse_keeps_every_line` asserts over the real
 //! output of every reference tool, which is what stops a format change upstream
 //! from quietly swallowing half a page.
-use crate::theme::{self, radius, space, text};
 use gpui::{IntoElement, ParentElement as _, Styled as _, div, prelude::*};
+use rp_ui::theme::{self, FONT_HEADING, FONT_MONO};
+use rp_ui::tokens::{radius, space, text};
 use std::collections::BTreeSet;
 
 /// One piece of a reference page.
@@ -327,12 +328,12 @@ pub fn filter(blocks: &[Block], query: &str) -> Vec<Block> {
 /// cards with four interactive elements each. If a reference an order of magnitude
 /// longer ever lands, the upgrade is the same `uniform_list` treatment — the
 /// blocks are already a flat indexable list, which is the hard part.
-pub fn page(blocks: &[Block], t: &theme::Theme) -> Vec<gpui::AnyElement> {
+pub fn page(blocks: &[Block], t: theme::Theme) -> Vec<gpui::AnyElement> {
     let mut out = Vec::with_capacity(blocks.len());
     for (i, block) in blocks.iter().enumerate() {
         out.push(match block {
             Block::Heading { level, text } => div()
-                .font_family(theme::FONT_HEADING)
+                .font_family(FONT_HEADING)
                 .text_color(t.text)
                 // Levels map onto the type scale rather than each getting their
                 // own size: the pages only use two or three depths.
@@ -358,7 +359,7 @@ pub fn page(blocks: &[Block], t: &theme::Theme) -> Vec<gpui::AnyElement> {
                 .bg(t.bg)
                 .border_1()
                 .border_color(t.divider)
-                .font_family(theme::FONT_MONO)
+                .font_family(FONT_MONO)
                 .text_size(text::CONTROL)
                 .text_color(t.text)
                 .child(body.clone())
@@ -369,7 +370,7 @@ pub fn page(blocks: &[Block], t: &theme::Theme) -> Vec<gpui::AnyElement> {
                 .gap(space::S1 * 0.5)
                 .child(
                     div()
-                        .font_family(theme::FONT_MONO)
+                        .font_family(FONT_MONO)
                         .text_size(text::CONTROL)
                         .text_color(t.accent)
                         .child(term.clone()),
@@ -393,7 +394,7 @@ pub fn page(blocks: &[Block], t: &theme::Theme) -> Vec<gpui::AnyElement> {
                         .py(space::S1)
                         .text_size(if head { text::LABEL } else { text::CONTROL })
                         .text_color(if head { t.text_label() } else { t.text })
-                        .when(!head, |d| d.font_family(theme::FONT_MONO))
+                        .when(!head, |d| d.font_family(FONT_MONO))
                         .child(value.clone())
                 };
                 let mut table = div()

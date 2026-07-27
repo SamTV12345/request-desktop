@@ -14,17 +14,23 @@
 //! (`local_day_start`) and renders every clock face relative to that. std has
 //! no local-time API and no date dependency is allowed, so probing the store is
 //! the only way both sides can agree on what "today" and "12:36" mean.
-use crate::editor::Editor;
+use crate::Persist;
 use crate::filters::{self, Filters};
-use crate::text_input::TextInput;
-use crate::theme::{Theme, control, radius, size, space, text};
 use crate::year_strip;
-use crate::{Persist, theme};
 use gpui::{
     App, ClipboardItem, Context, Div, Entity, IntoElement, ParentElement, Pixels, Rgba,
     SharedString, Stateful, Styled, Task, Window, div, prelude::*, px, relative,
 };
 use rp_store::{DaySummary, Entry, Store};
+use rp_ui::button::icon_button;
+use rp_ui::data::{col, table_head, table_row};
+use rp_ui::feedback::{error_banner, hint};
+use rp_ui::icon::icon_tinted;
+use rp_ui::input::Editor;
+use rp_ui::input::TextInput;
+use rp_ui::layout::{card, divider};
+use rp_ui::theme::{self, FONT_BODY, FONT_HEADING, FONT_MONO, Theme, alpha};
+use rp_ui::tokens::{control, radius, size, space, text};
 
 /// The week's hour grid and its inspector. A child module so it can read this
 /// view's state and reuse its buttons rather than growing a second set.
@@ -1004,7 +1010,7 @@ impl Track {
                 .p(space::S4)
                 .rounded(radius::CARD)
                 .bg(t.hover())
-                .child(theme::icon_tinted("clock", text::H4, t.text_disabled()))
+                .child(icon_tinted("clock", text::H4, t.text_disabled()))
                 .child(heading(t, "No timer running"))
                 .child(hint(t, "Name a task below and press Start."))
                 .into_any_element();
@@ -1048,7 +1054,7 @@ impl Track {
                 // The heading face, not mono: the design sets the digits in
                 // Caprasimo and lets its figures carry the size.
                 div()
-                    .font_family(theme::FONT_HEADING)
+                    .font_family(FONT_HEADING)
                     .text_size(text::H1)
                     .text_color(ink)
                     .child(SharedString::from(fmt_hms(entry.seconds(now)))),
@@ -1104,7 +1110,7 @@ impl Track {
                     )
                     .child(icon_button(
                         t,
-                        "drop-running".into(),
+                        "drop-running",
                         "trash",
                         cx.listener(move |this, _, _, cx| this.delete(id, cx)),
                     )),
@@ -1124,7 +1130,7 @@ impl Track {
     fn timer_block(&self, t: Theme, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let now = now();
         let running = self.running.is_some();
-        theme::card(&t)
+        card(t)
             .gap(space::S3)
             .child(self.hero(t, now, cx))
             .when(!running, |d| {
@@ -1179,7 +1185,7 @@ impl Track {
         let mut head = div()
             .flex()
             .gap(space::S1 * 0.75)
-            .font_family(theme::FONT_MONO)
+            .font_family(FONT_MONO)
             .text_size(text::TINY)
             .text_color(t.text_meta());
         for name in WEEKDAY_NAMES {
@@ -1210,7 +1216,7 @@ impl Track {
                 } else if has_time {
                     t.tag_accent_2()
                 } else {
-                    (theme::alpha(t.divider, 0.), t.text)
+                    (alpha(t.divider, 0.), t.text)
                 };
                 cells.push(
                     div()
@@ -1223,7 +1229,7 @@ impl Track {
                         .py(space::S1 * 0.5)
                         .rounded(radius::PILL)
                         .bg(fill)
-                        .font_family(theme::FONT_MONO)
+                        .font_family(FONT_MONO)
                         .text_size(text::TINY)
                         .cursor_pointer()
                         .text_color(if inside { ink } else { t.text_disabled() })
@@ -1241,7 +1247,7 @@ impl Track {
             weeks.push(div().flex().min_w_0().gap(space::S1 * 0.75).children(cells));
         }
 
-        theme::card(&t)
+        card(t)
             .gap(space::S2)
             .child(
                 div()
@@ -1253,7 +1259,7 @@ impl Track {
                             .flex_1()
                             .min_w_0()
                             .truncate()
-                            .font_family(theme::FONT_HEADING)
+                            .font_family(FONT_HEADING)
                             .text_size(text::H5)
                             .child(SharedString::from(fmt_long_month(self.date))),
                     )
@@ -1265,7 +1271,7 @@ impl Track {
     }
 
     fn nav_block(&self, t: Theme, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        theme::card(&t)
+        card(t)
             .gap(space::S3)
             .child(
                 // `.seg`: one pill trough with a pill thumb, not loose chips.
@@ -1315,14 +1321,14 @@ impl Track {
                     .gap(space::S2)
                     .child(icon_button(
                         t,
-                        "prev".into(),
+                        "prev",
                         "chevron_left",
                         cx.listener(|this, _, _, cx| this.step(-1, cx)),
                     ))
                     .child(div().flex_1().min_w_0().child(self.jump.clone()))
                     .child(icon_button(
                         t,
-                        "next".into(),
+                        "next",
                         "chevron_right",
                         cx.listener(|this, _, _, cx| this.step(1, cx)),
                     ))
@@ -1381,11 +1387,11 @@ impl Track {
                 }),
             ));
         }
-        theme::card(&t)
+        card(t)
             .flex_1()
             .min_h_0()
             .child(filters::section(t, "PROJECTS", projects))
-            .child(theme::divider(&t))
+            .child(divider(t))
             // The kinds are read out of task names, so there is no bound on how
             // many there are; they scroll and the search box below stays put.
             .child(
@@ -1510,7 +1516,7 @@ impl Track {
                         .text_size(text::SMALL)
                         .text_color(t.text_meta())
                         .hover(|s| s.bg(t.hover()).text_color(t.text))
-                        .child(theme::icon_tinted("plus", text::BODY, t.text_meta()))
+                        .child(icon_tinted("plus", text::BODY, t.text_meta()))
                         .child("Add entry manually")
                         .on_click(cx.listener(|this, _, _, cx| this.edit(None, cx)))
                         .into_any_element(),
@@ -1530,7 +1536,7 @@ impl Track {
                     table_row(t, SharedString::from(format!("day-{}", day.date)))
                         .child(
                             col(COL_DATE)
-                                .font_family(theme::FONT_MONO)
+                                .font_family(FONT_MONO)
                                 .text_size(text::SMALL)
                                 .text_color(if is_weekend(shown) {
                                     t.text_meta()
@@ -1557,7 +1563,7 @@ impl Track {
                         .child(
                             col(COL_TOTAL)
                                 .text_right()
-                                .font_family(theme::FONT_MONO)
+                                .font_family(FONT_MONO)
                                 .text_color(t.text)
                                 .child(SharedString::from(fmt_hm(day.total_seconds))),
                         )
@@ -1648,7 +1654,7 @@ impl Track {
                                     .child(
                                         div()
                                             .truncate()
-                                            .font_family(theme::FONT_HEADING)
+                                            .font_family(FONT_HEADING)
                                             .text_size(text::H3)
                                             .text_color(t.text)
                                             .child(SharedString::from(self.title())),
@@ -1668,14 +1674,19 @@ impl Track {
                                     )
                                     .child(
                                         div()
-                                            .font_family(theme::FONT_HEADING)
+                                            .font_family(FONT_HEADING)
                                             .text_size(text::H2)
                                             .text_color(t.accent_ramp.s700)
                                             .child(SharedString::from(fmt_hm(total))),
                                     ),
                             ),
                     )
-                    .when_some(self.error.clone(), |d, e| d.child(error_banner(t, e))),
+                    .when_some(self.error.clone(), |d, e| {
+                        // "no database" is expected on a first run and is not an
+                        // error; the crate draws, the caller knows which it has.
+                        let calm = e.as_ref() == NO_STORE;
+                        d.child(error_banner(t, e, calm))
+                    }),
             )
             // A month is a grid; a day and a week are a table. The design makes
             // that switch, and it is the right one: a table of a whole month's
@@ -1728,7 +1739,7 @@ impl Track {
             ));
         }
         let total: i64 = self.year.iter().sum();
-        theme::card(&t)
+        card(t)
             // The wide half of the 1.35:1 pair — see `CHART_SHARE`.
             .flex_basis(relative(CHART_SHARE))
             .flex_shrink()
@@ -1741,7 +1752,7 @@ impl Track {
                     .child(
                         div()
                             .flex_none()
-                            .font_family(theme::FONT_HEADING)
+                            .font_family(FONT_HEADING)
                             .text_size(text::H5)
                             .text_color(t.text)
                             .child(SharedString::from(self.date.y.to_string())),
@@ -1758,7 +1769,7 @@ impl Track {
                     .child(
                         div()
                             .flex_none()
-                            .font_family(theme::FONT_MONO)
+                            .font_family(FONT_MONO)
                             .text_size(text::SMALL)
                             .text_color(t.accent_ramp.s700)
                             .child(SharedString::from(fmt_hm(total))),
@@ -1810,7 +1821,7 @@ impl Track {
         table_row(t, SharedString::from(format!("hist-{}", entry.id)))
             .child(
                 col(COL_DATE)
-                    .font_family(theme::FONT_MONO)
+                    .font_family(FONT_MONO)
                     .text_size(text::SMALL)
                     .text_color(t.text_muted())
                     .child(SharedString::from(date)),
@@ -1839,7 +1850,7 @@ impl Track {
             .child(
                 col(COL_TOTAL)
                     .text_right()
-                    .font_family(theme::FONT_MONO)
+                    .font_family(FONT_MONO)
                     .text_color(t.text)
                     .child(SharedString::from(fmt_hm(entry.seconds(now)))),
             )
@@ -1865,12 +1876,12 @@ impl Track {
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
         let _ = cx;
-        theme::card(&t)
+        card(t)
             .flex_1()
             .min_h_0()
             .gap(space::S1)
             .child(head)
-            .child(theme::divider(&t))
+            .child(divider(t))
             .child(
                 div()
                     .id("track-rows")
@@ -1888,7 +1899,7 @@ impl Track {
                                 .justify_center()
                                 .gap(space::S2)
                                 .p(space::S8)
-                                .child(theme::icon_tinted("clock", text::H3, t.text_disabled()))
+                                .child(icon_tinted("clock", text::H3, t.text_disabled()))
                                 .child(heading(t, "Nothing booked here"))
                                 .child(hint(t, empty_hint)),
                         )
@@ -1970,7 +1981,7 @@ impl Track {
                             .gap(space::S2)
                             .child(
                                 div()
-                                    .font_family(theme::FONT_MONO)
+                                    .font_family(FONT_MONO)
                                     .text_size(text::CONTROL)
                                     .text_color(match (today, inside) {
                                         (true, _) => t.accent,
@@ -1982,7 +1993,7 @@ impl Track {
                             .when(total > 0, |d| {
                                 d.child(
                                     div()
-                                        .font_family(theme::FONT_MONO)
+                                        .font_family(FONT_MONO)
                                         .text_size(text::TINY)
                                         .text_color(t.accent)
                                         .child(SharedString::from(fmt_hm(total))),
@@ -2094,7 +2105,7 @@ impl Track {
             } else if secs > 0 {
                 t.accent_2_ramp.s300
             } else if future {
-                theme::alpha(t.neutral.s300, 0.5)
+                alpha(t.neutral.s300, 0.5)
             } else {
                 t.neutral.s300
             };
@@ -2124,13 +2135,13 @@ impl Track {
         for d in [1, 8, 15, 22, days] {
             axis.push(
                 div()
-                    .font_family(theme::FONT_MONO)
+                    .font_family(FONT_MONO)
                     .text_size(text::TINY)
                     .text_color(t.text_meta())
                     .child(SharedString::from(format!("{d:02}"))),
             );
         }
-        theme::card(&t)
+        card(t)
             // The wide half of the 1.35:1 pair — see `CHART_SHARE`.
             .flex_basis(relative(CHART_SHARE))
             .flex_shrink()
@@ -2145,7 +2156,7 @@ impl Track {
                             .flex_shrink()
                             .min_w_0()
                             .truncate()
-                            .font_family(theme::FONT_HEADING)
+                            .font_family(FONT_HEADING)
                             .text_size(text::H5)
                             .text_color(t.text)
                             .child(SharedString::from(fmt_long_month(self.date))),
@@ -2162,7 +2173,7 @@ impl Track {
                     .child(
                         div()
                             .flex_none()
-                            .font_family(theme::FONT_MONO)
+                            .font_family(FONT_MONO)
                             .text_size(text::SMALL)
                             .text_color(t.accent_ramp.s700)
                             .child(SharedString::from(fmt_hm(total))),
@@ -2181,7 +2192,7 @@ impl Track {
     }
 
     fn summary_card(&self, t: Theme, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        theme::card(&t)
+        card(t)
             // The narrow half of the 1.35:1 pair — see `CHART_SHARE`.
             .flex_basis(relative(1. - CHART_SHARE))
             .flex_shrink()
@@ -2196,7 +2207,7 @@ impl Track {
                             .flex_1()
                             .min_w_0()
                             .truncate()
-                            .font_family(theme::FONT_HEADING)
+                            .font_family(FONT_HEADING)
                             .text_size(text::H5)
                             .text_color(t.text)
                             .child("Summary"),
@@ -2261,7 +2272,7 @@ impl Track {
             .child(
                 col(COL_TOTAL)
                     .text_right()
-                    .font_family(theme::FONT_MONO)
+                    .font_family(FONT_MONO)
                     .text_color(t.text_muted())
                     .child(SharedString::from(span)),
             )
@@ -2275,7 +2286,7 @@ impl Track {
             ))
             .child(icon_button(
                 t,
-                "draft-cancel".into(),
+                "draft-cancel",
                 "close",
                 cx.listener(|this, _, _, cx| {
                     this.draft = None;
@@ -2285,7 +2296,7 @@ impl Track {
             .when_some(id, |d, id| {
                 d.child(icon_button(
                     t,
-                    "draft-delete".into(),
+                    "draft-delete",
                     "trash",
                     cx.listener(move |this, _, _, cx| this.delete(id, cx)),
                 ))
@@ -2337,7 +2348,7 @@ impl Track {
             // Ranges in mono so they align into a column.
             .child(
                 col(COL_RANGE)
-                    .font_family(theme::FONT_MONO)
+                    .font_family(FONT_MONO)
                     .text_size(text::SMALL)
                     .text_color(t.text_muted())
                     .child(SharedString::from(span)),
@@ -2384,7 +2395,7 @@ impl Track {
             .child(
                 col(COL_ID)
                     .text_right()
-                    .font_family(theme::FONT_MONO)
+                    .font_family(FONT_MONO)
                     .text_size(text::TINY)
                     .text_color(t.text_disabled())
                     .child(SharedString::from(format!("#{id}"))),
@@ -2392,7 +2403,7 @@ impl Track {
             .child(
                 col(COL_TOTAL)
                     .text_right()
-                    .font_family(theme::FONT_MONO)
+                    .font_family(FONT_MONO)
                     .text_color(if running { t.accent_ramp.s700 } else { t.text })
                     .child(SharedString::from(fmt_hm(entry.seconds(now)))),
             )
@@ -2430,7 +2441,7 @@ impl Render for Track {
             .bg(t.bg)
             .text_size(text::CONTROL)
             .line_height(text::BODY_LINE)
-            .font_family(theme::FONT_BODY)
+            .font_family(FONT_BODY)
             .text_color(t.text)
             .child(self.list(t, cx))
             .child(self.detail(t, cx))
@@ -2462,7 +2473,7 @@ fn chip(t: Theme, task: &str, seconds: i64) -> Div {
         .child(
             div()
                 .flex_none()
-                .font_family(theme::FONT_MONO)
+                .font_family(FONT_MONO)
                 .child(SharedString::from(fmt_hm(seconds))),
         )
         .child(
@@ -2487,7 +2498,7 @@ fn mini_step(t: Theme, glyph: &'static str, delta: i32, cx: &mut Context<Track>)
         .rounded(radius::PILL)
         .cursor_pointer()
         .hover(|s| s.bg(t.hover()))
-        .child(theme::icon_tinted(glyph, text::SMALL, t.text_muted()))
+        .child(icon_tinted(glyph, text::SMALL, t.text_muted()))
         .on_click(cx.listener(move |this, _, _, cx| {
             let date = step_month(this.date, delta as i64);
             let scope = this.scope;
@@ -2497,73 +2508,10 @@ fn mini_step(t: Theme, glyph: &'static str, delta: i32, cx: &mut Context<Track>)
 
 fn heading(t: Theme, label: impl Into<SharedString>) -> Div {
     div()
-        .font_family(theme::FONT_HEADING)
+        .font_family(FONT_HEADING)
         .text_size(text::H5)
         .text_color(t.text)
         .child(label.into())
-}
-
-fn hint(t: Theme, label: impl Into<SharedString>) -> Div {
-    div()
-        .text_size(text::SMALL)
-        .text_color(t.text_muted())
-        .child(label.into())
-}
-
-/// One aligned column of the entry table, in the header and in every row.
-///
-/// The width is a starting size: the cell may shrink to half of it before the
-/// flexible task column gives up any more, and its content ellipsizes rather
-/// than spilling into the neighbouring column. Both the header and the rows go
-/// through here, so a change cannot align one and not the other.
-fn col(w: Pixels) -> Div {
-    div()
-        .flex_basis(w)
-        .w(w)
-        .min_w(w * 0.5)
-        .flex_shrink()
-        .truncate()
-}
-
-/// A `.table` header row: the column names, quiet and letter-spaced-small.
-fn table_head(t: Theme) -> Div {
-    div()
-        .flex()
-        .items_center()
-        .gap(space::S3)
-        .px(space::S3)
-        .pb(space::S1)
-        // The rows carry a 1-px border so a running row can go dashed without
-        // changing height; the header needs the same one or every column sits a
-        // pixel off its heading.
-        .border_1()
-        .border_color(theme::alpha(t.divider, 0.))
-        .text_size(text::LABEL)
-        .text_color(t.text_meta())
-}
-
-/// A `.table` body row. Clickable, so it carries an id and a hover wash; the
-/// corner is the large radius rather than a pill, because a row is not a
-/// control.
-fn table_row(t: Theme, id: SharedString) -> Stateful<Div> {
-    div()
-        .id(id)
-        .flex()
-        .items_center()
-        // The same gap and inset as [`table_head`], and not a wider one: the
-        // columns shrink by the space their line is missing, so a row with more
-        // chrome than its header shrinks further and stops lining up under it.
-        // Measured at 760 px the head still had its full 104-px WHEN column
-        // while the rows were down to 78.
-        .gap(space::S3)
-        .px(space::S3)
-        .py(space::S3)
-        .rounded(radius::LG)
-        // A transparent border, so switching a running row to dashed cannot
-        // change the row's height.
-        .border_1()
-        .border_color(theme::alpha(t.divider, 0.))
-        .hover(|s| s.bg(t.hover()))
 }
 
 /// The one primary action, which changes identity rather than multiplying.
@@ -2598,8 +2546,8 @@ fn primary_button(
         .bg(tint)
         .text_size(text::CONTROL)
         .text_color(ink)
-        .hover(|s| s.bg(theme::alpha(tint, 0.85)))
-        .child(theme::icon_tinted(icon_name, text::BODY, ink))
+        .hover(|s| s.bg(alpha(tint, 0.85)))
+        .child(icon_tinted(icon_name, text::BODY, ink))
         .child(label)
         .on_click(on_click)
 }
@@ -2653,31 +2601,7 @@ fn source_picker(
         .hover(|s| s.bg(t.active()))
         .child(div().size(space::S2).rounded(radius::PILL).bg(t.accent_2))
         .child(SharedString::from(SOURCES[selected]))
-        .child(theme::icon_tinted(
-            "chevron_right",
-            text::SMALL,
-            t.text_meta(),
-        ))
-        .on_click(on_click)
-}
-
-/// A round icon-only button, for the steppers and the delete affordance.
-fn icon_button(
-    t: Theme,
-    id: SharedString,
-    icon_name: &'static str,
-    on_click: impl Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static,
-) -> Stateful<Div> {
-    div()
-        .id(id)
-        .flex()
-        .items_center()
-        .justify_center()
-        .size(control::ICON)
-        .flex_none()
-        .rounded(radius::PILL)
-        .hover(|s| s.bg(t.hover()))
-        .child(theme::icon_tinted(icon_name, text::BODY, t.text_muted()))
+        .child(icon_tinted("chevron_right", text::SMALL, t.text_meta()))
         .on_click(on_click)
 }
 
@@ -2719,35 +2643,6 @@ fn tag(label: SharedString, bg: Rgba, ink: Rgba) -> Div {
         .text_size(text::TINY)
         .text_color(ink)
         .child(label)
-}
-
-/// The failure line. A store error is an error; no store at all is not the
-/// user's fault, so it explains itself instead of shouting.
-fn error_banner(t: Theme, message: SharedString) -> Div {
-    let calm = message.as_ref() == NO_STORE;
-    let ink = if calm { t.text_muted() } else { t.danger() };
-    div()
-        .flex()
-        .items_start()
-        .gap(space::S2)
-        .p(space::S3)
-        .rounded(radius::MD)
-        .bg(if calm { t.hover() } else { t.danger_wash() })
-        .text_size(text::SMALL)
-        .text_color(ink)
-        .child(theme::icon_tinted("alert", text::BODY, ink))
-        .child(if calm {
-            div().flex_1().child(
-                div()
-                    .child("Time tracking is unavailable: the database could not be opened.")
-                    .child(hint(
-                        t,
-                        "Everything else keeps working; nothing here can be saved.",
-                    )),
-            )
-        } else {
-            div().flex_1().child(message)
-        })
 }
 
 #[cfg(test)]

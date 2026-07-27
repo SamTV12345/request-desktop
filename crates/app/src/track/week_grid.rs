@@ -10,13 +10,15 @@
 //! the same basis `Track::clock` and `Track::day_start` use. Deriving a day from
 //! the UTC clock was a real bug once (see `track::today`) and must not come back.
 use super::{
-    Entry, Scope, SharedString, Theme, Track, Ymd, days_from_civil, entry_day_of, fmt_hm, heading,
-    hint, icon_button, now, pill_button, space, step_day, tag, text, week_start, weekday_name,
+    Entry, Scope, Track, Ymd, days_from_civil, entry_day_of, fmt_hm, heading, hint, icon_button,
+    now, pill_button, step_day, tag, week_start, weekday_name,
 };
 use crate::calendar::{HOUR_HEIGHT, MIN_BLOCK, block, hour_window};
-use crate::theme;
-use crate::theme::radius;
-use gpui::{Context, IntoElement, ParentElement, Pixels, Styled, div, prelude::*, px};
+use gpui::{
+    Context, IntoElement, ParentElement, Pixels, SharedString, Styled, div, prelude::*, px,
+};
+use rp_ui::theme::{FONT_HEADING, FONT_MONO, Theme, alpha};
+use rp_ui::tokens::{radius, space, text};
 
 /// The hour gutter's width and the gap between day columns. The design's own
 /// numbers; neither is a spacing step.
@@ -77,9 +79,7 @@ impl Track {
                 .min_w_0()
                 .h(px(hours as f32 * HOUR_HEIGHT));
             if today {
-                column = column
-                    .rounded(WASH_RADIUS)
-                    .bg(theme::alpha(t.accent, TODAY_WASH));
+                column = column.rounded(WASH_RADIUS).bg(alpha(t.accent, TODAY_WASH));
             }
             for (entry, from, to) in blocks {
                 // `None` is an entry outside the shown hours — not drawn at all,
@@ -151,7 +151,7 @@ impl Track {
                                     .flex_col()
                                     .flex_none()
                                     .w(GUTTER)
-                                    .font_family(theme::FONT_MONO)
+                                    .font_family(FONT_MONO)
                                     .text_size(text::TINY)
                                     .text_color(t.text_meta())
                                     .children(gutter),
@@ -204,7 +204,7 @@ impl Track {
             )
             .child(
                 div()
-                    .font_family(theme::FONT_MONO)
+                    .font_family(FONT_MONO)
                     .text_size(text::SMALL)
                     .text_color(if today { ink } else { t.text_label() })
                     .child(SharedString::from(if total == 0 {
@@ -257,7 +257,7 @@ impl Track {
             .border_color(if self.selected == Some(id) {
                 ink
             } else {
-                theme::alpha(bg, 0.)
+                alpha(bg, 0.)
             })
             .child(
                 div()
@@ -269,9 +269,9 @@ impl Track {
                 d.child(
                     div()
                         .truncate()
-                        .font_family(theme::FONT_MONO)
+                        .font_family(FONT_MONO)
                         .text_size(text::TINY)
-                        .text_color(theme::alpha(ink, 0.8))
+                        .text_color(alpha(ink, 0.8))
                         .child(SharedString::from(range)),
                 )
             })
@@ -280,7 +280,7 @@ impl Track {
                     div()
                         .truncate()
                         .text_size(text::TINY)
-                        .text_color(theme::alpha(ink, 0.75))
+                        .text_color(alpha(ink, 0.75))
                         .child(SharedString::from(note)),
                 )
             })
@@ -325,7 +325,7 @@ impl Track {
         let clone = entry.clone();
         card.child(
             div()
-                .font_family(theme::FONT_HEADING)
+                .font_family(FONT_HEADING)
                 .text_size(text::H4)
                 .text_color(t.text)
                 .child(SharedString::from(entry.task.clone())),
@@ -340,8 +340,7 @@ impl Track {
                     tag_ink,
                 ))
                 .child(
-                    tag(SharedString::from(format!("#{id}")), id_bg, id_ink)
-                        .font_family(theme::FONT_MONO),
+                    tag(SharedString::from(format!("#{id}")), id_bg, id_ink).font_family(FONT_MONO),
                 ),
         )
         .child(field(t, "START", self.clock(entry.started_at)))
@@ -381,7 +380,7 @@ impl Track {
                 )
                 .child(icon_button(
                     t,
-                    "inspect-delete".into(),
+                    "inspect-delete",
                     "trash",
                     cx.listener(move |this, _, _, cx| this.delete(id, cx)),
                 )),
