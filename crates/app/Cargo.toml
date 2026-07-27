@@ -15,6 +15,9 @@ gpui = "0.2"
 rp-ui = { version = "0.1.0", path = "../ui" }
 unicode-segmentation = "1.13.3"
 tokio = { version = "1.53.1", features = ["rt-multi-thread"] }
+# The update check and download. Already in the graph via `rp-core`, so this adds
+# a name here and nothing to the build.
+reqwest = { version = "0.12", features = ["json"] }
 serde_json.workspace = true
 rp-store = { version = "0.1.0", path = "../store" }
 # The MCP server, hosted in-process over HTTP when the user turns it on in

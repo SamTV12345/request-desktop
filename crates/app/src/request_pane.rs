@@ -20,7 +20,10 @@ const METHODS: &[&str] = &["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPT
 
 /// reqwest needs a tokio reactor; gpui's executors are not one. One runtime for
 /// the process, driven from gpui's background thread pool.
-fn runtime() -> &'static tokio::runtime::Runtime {
+///
+/// `pub(crate)` so the updater shares it. A second runtime for the update check
+/// would be a second thread pool for two HTTP requests a session.
+pub(crate) fn runtime() -> &'static tokio::runtime::Runtime {
     static RT: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
     RT.get_or_init(|| tokio::runtime::Runtime::new().expect("tokio runtime"))
 }

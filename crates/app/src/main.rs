@@ -40,6 +40,7 @@ mod tabs;
 mod tool_pane;
 mod tools;
 mod track;
+mod update;
 mod year_strip;
 
 use gpui::{
@@ -487,6 +488,16 @@ struct Workspace {
     captured: Vec<(String, String)>,
     // Tools
     tool_query: Entity<TextInput>,
+    /// A release newer than this build, once the startup check has answered.
+    ///
+    /// `None` covers three cases that are all the same to the user: still checking,
+    /// nothing newer, and the check failed. A failure is logged and otherwise
+    /// silent — an app that cannot reach GitHub is not broken, and a dialog about it
+    /// on every launch behind a corporate proxy would be.
+    update: Option<update::Available>,
+    /// A download is running. Only stops a second click; the swap is fast enough
+    /// that there is nothing to show progress for.
+    updating: bool,
     /// The category the tools list is narrowed to, or all of them.
     ///
     /// Not persisted: a filter is where you are right now, unlike a favourite. A
@@ -590,6 +601,18 @@ impl Workspace {
             }
         })
         .detach();
+        // Clear the build the last update left behind. It is still on disk because
+        // a running program cannot delete its own image — the process that held it
+        // is the one that started this one, and it has exited by now.
+        if let Ok(exe) = std::env::current_exe() {
+            update::sweep(&exe);
+        }
+        // And ask whether there is a newer one. Fire-and-forget: the window is built
+        // and shown regardless of what GitHub says or how long it takes to say it.
+        cx.spawn(async move |this, cx| {
+            this.update(cx, |this, cx| this.check_for_update(cx)).ok();
+        })
+        .detach();
         Self {
             section: Section::Requests,
             sources: Vec::new(),
@@ -600,6 +623,8 @@ impl Workspace {
             var_rows: Vec::new(),
             captured: Vec::new(),
             tool_query,
+            update: None,
+            updating: false,
             tool_filter: None,
             favorites: stored_favorites(cx),
             palette_query,
@@ -1401,6 +1426,27 @@ impl Workspace {
                     ),
             )
             .child(div().flex_1())
+            // Only there when there is something to say. A permanent "up to date"
+            // badge is noise on every launch for a fact nobody needs confirmed.
+            .when_some(self.update.clone(), |d, found| {
+                d.child(
+                    rp_ui::data::FilterTag::new(
+                        "update",
+                        if self.updating {
+                            SharedString::from("Updating…")
+                        } else {
+                            SharedString::from(format!("Update to {}", found.tag))
+                        },
+                    )
+                    .on(true)
+                    .render(
+                        t,
+                        cx.listener(move |this, _, window, cx| {
+                            this.offer_update(found.clone(), window, cx)
+                        }),
+                    ),
+                )
+            })
             // Where the mockups had minimise/maximise/close pills. The app runs
             // with native decorations, so Windows already draws those a few
             // pixels higher; a second, differently-behaving set was a trap.
@@ -1874,6 +1920,131 @@ impl Workspace {
                         ))),
                 )
             })
+    }
+
+    /// Ask GitHub whether there is a newer release, once, at startup.
+    ///
+    /// On gpui's background pool with the shared tokio runtime, so a slow or
+    /// unreachable network never touches the frame the window is drawing. Silent on
+    /// failure past the log line, for the reason on [`Workspace::update`].
+    fn check_for_update(&mut self, cx: &mut Context<Self>) {
+        cx.spawn(async move |this, cx| {
+            let found = cx
+                .background_executor()
+                .spawn(async move { request_pane::runtime().block_on(update::check()) })
+                .await;
+            match found {
+                Ok(Some(found)) => {
+                    note!(
+                        "update available: {} (this build is {})",
+                        found.tag,
+                        update::current()
+                    );
+                    this.update(cx, |this, cx| {
+                        this.update = Some(found);
+                        cx.notify();
+                    })
+                    .ok();
+                }
+                Ok(None) => {}
+                Err(e) => note!("could not check for updates: {e:#}"),
+            }
+        })
+        .detach();
+    }
+
+    /// The one question, then do all of it.
+    ///
+    /// `window.prompt` is the platform's own dialog — a Windows task dialog — rather
+    /// than a modal drawn in the window. It is the thing users already trust for
+    /// "this will replace the program", and it is one call instead of a component.
+    fn offer_update(
+        &mut self,
+        found: update::Available,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.updating {
+            return;
+        }
+        let answer = window.prompt(
+            gpui::PromptLevel::Info,
+            &format!("Update to {}?", found.tag),
+            Some(concat!(
+                "The new version is downloaded, put in place of this one, and started. ",
+                "Toolbench closes and reopens by itself — there is nothing else to do.\n\n",
+                "Anything unsaved in an open request is lost, as it would be on any restart."
+            )),
+            &[
+                gpui::PromptButton::ok("Update and restart"),
+                gpui::PromptButton::cancel("Not now"),
+            ],
+            cx,
+        );
+        self.updating = true;
+        cx.notify();
+        cx.spawn(async move |this, cx| {
+            // Anything other than the first button — including closing the dialog —
+            // is "no". Defaulting a dismissed dialog to "yes" would replace the
+            // program because someone pressed Escape.
+            if answer.await.ok() != Some(0) {
+                this.update(cx, |this, cx| {
+                    this.updating = false;
+                    cx.notify();
+                })
+                .ok();
+                return;
+            }
+            let url = found.url.clone();
+            let outcome = cx
+                .background_executor()
+                .spawn(async move {
+                    let exe = anyhow::Context::context(
+                        std::env::current_exe(),
+                        "cannot find my own executable",
+                    )?;
+                    let bytes = request_pane::runtime().block_on(update::download(&url))?;
+                    update::swap(&exe, &bytes)
+                })
+                .await;
+            match outcome {
+                Ok(exe) => {
+                    note!("updated to {}, restarting", found.tag);
+                    // Start the replacement before quitting: once this process is
+                    // gone nothing is left to do it, and the user was promised they
+                    // would not have to.
+                    match std::process::Command::new(&exe).spawn() {
+                        Ok(_) => cx.update(|cx| cx.quit()).ok(),
+                        Err(e) => {
+                            note!("the new build is installed but would not start: {e:#}");
+                            this.update(cx, |this, cx| {
+                                this.updating = false;
+                                this.error = Some(
+                                    format!(
+                                        "Updated to {}, but starting it failed: {e}. \
+                                         Close Toolbench and open it again.",
+                                        found.tag
+                                    )
+                                    .into(),
+                                );
+                                cx.notify();
+                            })
+                            .ok()
+                        }
+                    };
+                }
+                Err(e) => {
+                    note!("the update failed: {e:#}");
+                    this.update(cx, |this, cx| {
+                        this.updating = false;
+                        this.error = Some(format!("The update failed: {e:#}").into());
+                        cx.notify();
+                    })
+                    .ok();
+                }
+            }
+        })
+        .detach();
     }
 
     /// Open the pinned tool in `slot`, if there is one.
