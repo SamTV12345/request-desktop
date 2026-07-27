@@ -48,6 +48,10 @@ const SEARCH_LIMIT: usize = 100;
 /// it and explain it calmly instead of shouting a query error at the user.
 const NO_STORE: &str = "the database could not be opened — time tracking is unavailable";
 
+/// What that means for the reader. Kept out of [`NO_STORE`] because that string is
+/// also the sentinel `with_store` compares against.
+const NO_STORE_HINT: &str = "Everything else keeps working; nothing here can be saved.";
+
 /// A day at or over this total reads as a heavy day in the month chart.
 const HEAVY_DAY: i64 = 6 * 3_600;
 
@@ -1675,8 +1679,15 @@ impl Track {
                     .when_some(self.error.clone(), |d, e| {
                         // "no database" is expected on a first run and is not an
                         // error; the crate draws, the caller knows which it has.
+                        // The banner shows whatever message it is handed, so the
+                        // consequence sentence is ours to add, not its to know.
                         let calm = e.as_ref() == NO_STORE;
-                        d.child(ErrorBanner::new(e).calm(calm).render(t))
+                        let msg = if calm {
+                            SharedString::from(format!("{NO_STORE}. {NO_STORE_HINT}"))
+                        } else {
+                            e
+                        };
+                        d.child(ErrorBanner::new(msg).calm(calm).render(t))
                     }),
             )
             // A month is a grid; a day and a week are a table. The design makes

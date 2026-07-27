@@ -35,7 +35,7 @@ pub fn hint(t: Theme, label: impl Into<SharedString>) -> Div {
         .child(label.into())
 }
 /// The failure line. A store error is an error; no store at all is not the
-/// user's fault, so it explains itself instead of shouting.
+/// user's fault, so it says the same thing without shouting.
 ///
 /// ```ignore
 /// ErrorBanner::new(e).calm(e.as_ref() == NO_STORE).render(t)
@@ -47,8 +47,11 @@ pub struct ErrorBanner {
     /// strings the app considers routine. "No database" is expected on a first run
     /// and is not an error; a parse failure is. The caller knows which it has.
     ///
-    /// A calm banner explains itself and **ignores `message`** — the string that
-    /// reached it is the store's, and the reader needs the consequence instead.
+    /// `calm` changes the *look* only — muted ink on a plain wash instead of red.
+    /// The message is always shown: a banner that swallows what it was handed is
+    /// a banner that reassures the reader about a failure it never named. If the
+    /// calm case needs to spell out the consequence too, that sentence belongs in
+    /// the caller's message.
     pub calm: bool,
 }
 
@@ -85,18 +88,7 @@ impl ErrorBanner {
             .text_size(text::SMALL)
             .text_color(ink)
             .child(icon_tinted("alert", text::BODY, ink))
-            .child(if self.calm {
-                div().flex_1().child(
-                    div()
-                        .child("Time tracking is unavailable: the database could not be opened.")
-                        .child(hint(
-                            t,
-                            "Everything else keeps working; nothing here can be saved.",
-                        )),
-                )
-            } else {
-                div().flex_1().child(self.message)
-            })
+            .child(div().flex_1().child(self.message))
     }
 }
 
