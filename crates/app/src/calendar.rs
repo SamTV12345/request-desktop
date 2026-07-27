@@ -123,6 +123,65 @@ pub fn block(
     Some((top.min(limit - height).max(0.), height))
 }
 
+/// How wide each block in one day column is, and how far in from the left, as
+/// fractions of the column: `(left, width)` per input span, in input order.
+///
+/// A block drawn full width over another one hides it completely — and an
+/// invisible block cannot be clicked to correct or delete it, which is the real
+/// cost. Overlapping blocks therefore share the column side by side.
+///
+/// Blocks that overlap are grouped into runs of transitively overlapping ones,
+/// each block takes the leftmost lane that is free at its start, and every block
+/// in a run is `1 / lanes` wide. Sharing per run rather than per column keeps a
+/// lone morning entry full width when the afternoon has three stacked on top of
+/// each other.
+///
+/// ponytail: the lane count is the run's, so a run of three where only two ever
+/// overlap at once draws all three at a third of the width. Narrower than it has
+/// to be, never wrong, and no interval tree.
+pub fn lanes(spans: &[(i64, i64)]) -> Vec<(f32, f32)> {
+    let mut out = vec![(0., 1.); spans.len()];
+    // Sorted by start, so "the first lane free at my start" only has to look at
+    // where each lane's last block ended.
+    let mut order: Vec<usize> = (0..spans.len()).collect();
+    order.sort_by_key(|i| spans[*i]);
+
+    let mut run: Vec<usize> = Vec::new();
+    let mut lane_of = vec![0usize; spans.len()];
+    // Where each lane of the current run is free from, and where the run ends.
+    let mut lane_free: Vec<i64> = Vec::new();
+    let mut run_end = i64::MIN;
+    for i in order {
+        let (start, end) = spans[i];
+        if start >= run_end && !run.is_empty() {
+            share(&run, &lane_of, lane_free.len(), &mut out);
+            run.clear();
+            lane_free.clear();
+        }
+        let lane = match lane_free.iter().position(|free| *free <= start) {
+            Some(lane) => lane,
+            None => {
+                lane_free.push(start);
+                lane_free.len() - 1
+            }
+        };
+        lane_free[lane] = end;
+        lane_of[i] = lane;
+        run.push(i);
+        run_end = run_end.max(end);
+    }
+    share(&run, &lane_of, lane_free.len(), &mut out);
+    out
+}
+
+/// Give every block of one run its slice of the column.
+fn share(run: &[usize], lane_of: &[usize], lanes: usize, out: &mut [(f32, f32)]) {
+    let width = 1. / lanes.max(1) as f32;
+    for i in run {
+        out[*i] = (lane_of[*i] as f32 * width, width);
+    }
+}
+
 /// The hours worth showing: the span the entries actually occupy, padded an hour
 /// each side, never narrower than a working day and never past midnight.
 ///
@@ -265,6 +324,96 @@ mod tests {
         let (top, height) = block(hour(18) + 3480, hour(19), 8, 11).expect("late");
         assert!(top + height <= 11. * 56. + 1e-3, "{top} + {height}");
         assert!(top >= 0.);
+    }
+
+    #[test]
+    fn overlapping_blocks_split_the_column_and_a_lone_one_keeps_all_of_it() {
+        let hour = |h: i64| h * 3600;
+        assert!(lanes(&[]).is_empty());
+        assert_eq!(lanes(&[(hour(9), hour(10))]), [(0., 1.)]);
+        // Back to back is not an overlap: an entry ending at 10:00 and one
+        // starting at 10:00 both keep the whole column.
+        assert_eq!(
+            lanes(&[(hour(9), hour(10)), (hour(10), hour(11))]),
+            [(0., 1.), (0., 1.)]
+        );
+        // Two overlapping: half each, side by side, no gap and no overhang.
+        let two = lanes(&[(hour(9), hour(11)), (hour(10), hour(12))]);
+        assert_eq!(two, [(0., 0.5), (0.5, 0.5)]);
+        // Three at once: thirds, and the last one ends at the right edge.
+        let three = lanes(&[
+            (hour(9), hour(12)),
+            (hour(9), hour(12)),
+            (hour(9), hour(12)),
+        ]);
+        assert_eq!(three.len(), 3);
+        for (i, (left, width)) in three.iter().enumerate() {
+            assert!((width - 1. / 3.).abs() < 1e-6, "{i}: {width}");
+            assert!((left - i as f32 / 3.).abs() < 1e-6, "{i}: {left}");
+        }
+        // Independent runs are independent: the morning pair does not narrow the
+        // lone afternoon entry.
+        assert_eq!(
+            lanes(&[
+                (hour(9), hour(11)),
+                (hour(10), hour(12)),
+                (hour(14), hour(15)),
+            ]),
+            [(0., 0.5), (0.5, 0.5), (0., 1.)]
+        );
+        // A lane is reused once it is free: the third entry sits under the first.
+        assert_eq!(
+            lanes(&[
+                (hour(9), hour(10)),
+                (hour(9), hour(13)),
+                (hour(10), hour(11)),
+            ]),
+            [(0., 0.5), (0.5, 0.5), (0., 0.5)]
+        );
+        // Input order does not decide the lanes: the same spans given backwards
+        // get the same placement per span.
+        let forwards = lanes(&[(hour(9), hour(11)), (hour(10), hour(12))]);
+        let backwards = lanes(&[(hour(10), hour(12)), (hour(9), hour(11))]);
+        assert_eq!(forwards[0], backwards[1]);
+        assert_eq!(forwards[1], backwards[0]);
+    }
+
+    /// Whatever the spans, the column is never over-filled and never left with a
+    /// block hidden behind another.
+    #[test]
+    fn lanes_stay_inside_the_column_and_never_share_a_slot() {
+        let hour = |h: i64| h * 3600;
+        for spans in [
+            vec![],
+            vec![(hour(9), hour(9))],
+            vec![(hour(9), hour(9)), (hour(9), hour(9))],
+            vec![(0, 86_400), (hour(12), hour(13)), (hour(12), hour(13))],
+            vec![
+                (hour(8), hour(9)),
+                (hour(8), hour(17)),
+                (hour(16), hour(18)),
+            ],
+        ] {
+            let placed = lanes(&spans);
+            assert_eq!(placed.len(), spans.len());
+            for (i, (left, width)) in placed.iter().enumerate() {
+                assert!(*left >= 0. && *width > 0., "{i}: {left} {width}");
+                assert!(left + width <= 1. + 1e-6, "{i}: {left} + {width}");
+            }
+            // Two blocks that overlap in time must not overlap in space.
+            for (i, (from, to)) in spans.iter().enumerate() {
+                for (j, (other_from, other_to)) in spans.iter().enumerate().skip(i + 1) {
+                    if from.max(other_from) >= to.min(other_to) {
+                        continue; // no overlap in time, sharing is fine
+                    }
+                    let (a, b) = (placed[i], placed[j]);
+                    assert!(
+                        a.0 + a.1 <= b.0 + 1e-6 || b.0 + b.1 <= a.0 + 1e-6,
+                        "{i} and {j} are drawn on top of each other: {a:?} {b:?}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]

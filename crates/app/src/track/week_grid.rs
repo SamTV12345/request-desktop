@@ -13,9 +13,10 @@ use super::{
     Entry, Scope, Track, Ymd, days_from_civil, entry_day_of, fmt_hm, heading, hint, now, step_day,
     tag, week_start, weekday_name,
 };
-use crate::calendar::{HOUR_HEIGHT, MIN_BLOCK, block, hour_window};
+use crate::calendar::{HOUR_HEIGHT, MIN_BLOCK, block, hour_window, lanes};
 use gpui::{
     Context, IntoElement, ParentElement, Pixels, SharedString, Styled, div, prelude::*, px,
+    relative,
 };
 use rp_ui::button::{Button, IconButton, Size, Tone};
 use rp_ui::theme::{FONT_HEADING, FONT_MONO, Theme, alpha};
@@ -82,11 +83,16 @@ impl Track {
             if today {
                 column = column.rounded(WASH_RADIUS).bg(alpha(t.accent, TODAY_WASH));
             }
-            for (entry, from, to) in blocks {
+            // Blocks that overlap share the column's width, so neither is hidden
+            // behind the other — the decision is `calendar::lanes`, this only draws
+            // the fractions it hands back.
+            let side_by_side = lanes(&blocks.iter().map(|(_, f, t)| (*f, *t)).collect::<Vec<_>>());
+            for ((entry, from, to), (left, width)) in blocks.into_iter().zip(side_by_side) {
                 // `None` is an entry outside the shown hours — not drawn at all,
                 // rather than pinned to an edge where it would read as real.
                 if let Some((top, height)) = block(from, to, first_hour, hours) {
-                    column = column.child(self.entry_block(t, &entry, top, height, cx));
+                    column =
+                        column.child(self.entry_block(t, &entry, top, height, left, width, cx));
                 }
             }
             columns.push(column);
@@ -217,12 +223,18 @@ impl Track {
     }
 
     /// One entry, placed in its day column. Clicking it fills the inspector.
+    ///
+    /// `left` and `width` are fractions of the column from [`lanes`]: a lone entry
+    /// gets all of it, overlapping ones a slice each.
+    #[allow(clippy::too_many_arguments)]
     fn entry_block(
         &self,
         t: Theme,
         entry: &Entry,
         top: f32,
         height: f32,
+        left: f32,
+        width: f32,
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
         let id = entry.id;
@@ -243,9 +255,13 @@ impl Track {
             .id(SharedString::from(format!("wk-{id}")))
             .absolute()
             .top(px(top))
-            .left_0()
-            .right_0()
+            .left(relative(left))
+            .w(relative(width))
             .h(px(height))
+            // Every link of the chain that has to shrink, not just the innermost:
+            // a third-width lane is where an untruncated task name would push its
+            // own block out of the column.
+            .min_w_0()
             .overflow_hidden()
             .rounded(if short { SHORT_RADIUS } else { radius::MD })
             .px(space::S3)
@@ -263,6 +279,7 @@ impl Track {
             .child(
                 div()
                     .truncate()
+                    .min_w_0()
                     .text_size(text::SMALL)
                     .child(SharedString::from(entry.task.clone())),
             )
@@ -270,6 +287,7 @@ impl Track {
                 d.child(
                     div()
                         .truncate()
+                        .min_w_0()
                         .font_family(FONT_MONO)
                         .text_size(text::TINY)
                         .text_color(alpha(ink, 0.8))
@@ -280,6 +298,7 @@ impl Track {
                 d.child(
                     div()
                         .truncate()
+                        .min_w_0()
                         .text_size(text::TINY)
                         .text_color(alpha(ink, 0.75))
                         .child(SharedString::from(note)),
@@ -548,6 +567,29 @@ mod tests {
         );
         assert!(top > 0.0, "09:00 is not the top of a padded window");
         assert!(top + height < hours as f32 * HOUR_HEIGHT);
+    }
+
+    /// The path the grid actually takes for two entries booked over each other:
+    /// clip to the day, then place. Neither may end up hidden behind the other.
+    #[test]
+    fn two_entries_over_the_same_hour_are_drawn_side_by_side() {
+        let hour = |h: i64| MIDNIGHT + h * 3_600;
+        let day: Vec<(i64, i64)> = [(9, 11), (10, 12), (14, 15)]
+            .iter()
+            .map(|(from, to)| within_day(hour(*from), hour(*to), MIDNIGHT).unwrap())
+            .collect();
+        let placed = crate::calendar::lanes(&day);
+        let (first, second, alone) = (placed[0], placed[1], placed[2]);
+        assert_eq!(first.1, second.1, "the two share the column evenly");
+        assert!(
+            first.0 + first.1 <= second.0 + 1e-6,
+            "{first:?} would cover {second:?}"
+        );
+        assert_eq!(
+            alone,
+            (0., 1.),
+            "the afternoon entry keeps the whole column"
+        );
     }
 
     #[test]
