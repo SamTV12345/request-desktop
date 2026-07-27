@@ -93,7 +93,7 @@ impl Pane {
         let focus_handle = cx.focus_handle();
         // Without focus the panel receives nothing, which looks broken, so take
         // it as soon as the tool is opened.
-        focus_handle.focus(window);
+        focus_handle.focus(window, cx);
         Self {
             focus_handle,
             history: Vec::new(),
@@ -200,7 +200,7 @@ impl Render for Pane {
             .on_mouse_down(
                 MouseButton::Left,
                 cx.listener(|this, _, window, cx| {
-                    this.focus_handle.focus(window);
+                    this.focus_handle.focus(window, cx);
                     cx.notify();
                 }),
             )

@@ -1457,7 +1457,7 @@ impl Track {
             .w(size::COLUMN)
             .min_w(size::SIDEBAR)
             .max_w_1_2()
-            .flex_shrink()
+            .flex_shrink_1()
             .h_full()
             .gap(space::S3)
             .p(space::S4)
@@ -1776,7 +1776,7 @@ impl Track {
         card(t)
             // The wide half of the 1.35:1 pair — see `CHART_SHARE`.
             .flex_basis(relative(CHART_SHARE))
-            .flex_shrink()
+            .flex_shrink_1()
             .min_w_0()
             .child(
                 div()
@@ -2178,7 +2178,7 @@ impl Track {
         card(t)
             // The wide half of the 1.35:1 pair — see `CHART_SHARE`.
             .flex_basis(relative(CHART_SHARE))
-            .flex_shrink()
+            .flex_shrink_1()
             .min_w_0()
             .child(
                 div()
@@ -2187,7 +2187,7 @@ impl Track {
                     .gap(space::S2)
                     .child(
                         div()
-                            .flex_shrink()
+                            .flex_shrink_1()
                             .min_w_0()
                             .truncate()
                             .font_family(FONT_HEADING)
@@ -2229,7 +2229,7 @@ impl Track {
         card(t)
             // The narrow half of the 1.35:1 pair — see `CHART_SHARE`.
             .flex_basis(relative(1. - CHART_SHARE))
-            .flex_shrink()
+            .flex_shrink_1()
             .min_w_0()
             .child(
                 div()

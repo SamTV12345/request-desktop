@@ -614,7 +614,7 @@ pub fn strip(ws: &Workspace, cx: &mut gpui::Context<Workspace>) -> impl IntoElem
                 this.tabs_mut().activate(i);
                 this.tab_menu = Some((i, req.at));
                 // Escape only reaches the menu if the menu holds focus.
-                window.focus(&this.menu_focus);
+                window.focus(&this.menu_focus, cx);
                 cx.defer(crate::save_session);
                 cx.notify();
             }
@@ -622,7 +622,7 @@ pub fn strip(ws: &Workspace, cx: &mut gpui::Context<Workspace>) -> impl IntoElem
         // The chevron on the `+6` chip: the tabs that did not fit, as a list.
         .on_overflow(cx.listener(|this, req: &TabOverflowRequest, window, cx| {
             this.tab_overflow = Some((req.hidden.clone(), req.at));
-            window.focus(&this.menu_focus);
+            window.focus(&this.menu_focus, cx);
             cx.notify();
         }))
         // The `+` at the end of the strip. It opens the command palette rather

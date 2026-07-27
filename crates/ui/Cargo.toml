@@ -8,7 +8,10 @@ publish = false
 [dependencies]
 # `AssetSource` hands back an `anyhow::Result`, so the icon source needs it.
 anyhow = "1"
-gpui = "0.2"
+# EXPERIMENT: gpui straight from zed's repo instead of the crates.io snapshot.
+# Pinned by `rev` on purpose — a floating git dependency means CI builds
+# something different tomorrow, from a repo we do not control.
+gpui = { git = "https://github.com/zed-industries/zed", rev = "3b79b56201f35dc87788e6a8ed9d432575484769" }
 # The two input widgets walk by grapheme, not by byte, so a flag or an accented
 # character deletes as one thing.
 unicode-segmentation = "1.13.3"

@@ -973,7 +973,7 @@ impl Workspace {
         // has already dealt with, and clearing it by hand is three keys.
         self.palette_query.update(cx, |q, cx| q.set_text("", cx));
         self.palette_scroll.scroll_to_item(0);
-        window.focus(&gpui::Focusable::focus_handle(&self.palette_query, cx));
+        window.focus(&gpui::Focusable::focus_handle(&self.palette_query, cx), cx);
         cx.notify();
     }
 
@@ -1752,7 +1752,7 @@ impl Workspace {
                     .flex_col()
                     .gap(space::S1)
                     .flex_basis(size::GRID_CELL)
-                    .flex_grow()
+                    .flex_grow_1()
                     .min_w(size::GRID_CELL_MIN)
                     .child(
                         div()
@@ -2014,7 +2014,9 @@ impl Workspace {
                     // gone nothing is left to do it, and the user was promised they
                     // would not have to.
                     match std::process::Command::new(&exe).spawn() {
-                        Ok(_) => cx.update(|cx| cx.quit()).ok(),
+                        Ok(_) => {
+                            cx.update(|cx| cx.quit());
+                        }
                         Err(e) => {
                             note!("the new build is installed but would not start: {e:#}");
                             this.update(cx, |this, cx| {
@@ -2029,7 +2031,7 @@ impl Workspace {
                                 );
                                 cx.notify();
                             })
-                            .ok()
+                            .ok();
                         }
                     };
                 }
@@ -3259,7 +3261,7 @@ fn main() {
     // during startup would otherwise leave nothing at all behind.
     log::install_panic_hook();
     // Icons are compiled in; without an asset source `svg()` renders nothing.
-    Application::new()
+    Application::with_platform(gpui_platform::current_platform(false))
         .with_assets(rp_ui::Assets)
         .run(|cx: &mut App| {
             let resolved = resolve_fonts(cx);
@@ -3277,7 +3279,7 @@ fn main() {
             }));
             // Tabs can be pulled out into their own windows; the app lives until
             // the last one is gone.
-            cx.on_window_closed(|cx| {
+            cx.on_window_closed(|cx, _id| {
                 if cx.windows().is_empty() {
                     // Release the port before the process goes, so a restart
                     // never meets its own listener. Closing the settings window

@@ -22,7 +22,7 @@ pub fn col(w: Pixels) -> Div {
         .flex_basis(w)
         .w(w)
         .min_w(w * 0.5)
-        .flex_shrink()
+        .flex_shrink_1()
         .truncate()
 }
 /// A `.table` header row: the column names, quiet and letter-spaced-small.

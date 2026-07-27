@@ -922,7 +922,7 @@ impl Element for EditorElement {
                     bounds.left() - scroll.x,
                     bounds.top() + line_height * (first_line + i) as f32 - scroll.y,
                 );
-                line.paint(origin, line_height, window, cx).ok();
+                line.paint(origin, line_height, gpui::TextAlign::Left, None, window, cx).ok();
             }
             if focused && let Some(cursor) = prepaint.cursor.take() {
                 window.paint_quad(cursor);

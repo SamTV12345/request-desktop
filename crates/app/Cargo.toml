@@ -9,7 +9,13 @@ publish = false
 anyhow.workspace = true
 rp-core = { path = "../core" }
 rp-devtools = { path = "../devtools" }
-gpui = "0.2"
+# EXPERIMENT: gpui straight from zed's repo instead of the crates.io snapshot.
+# Pinned by `rev` on purpose — a floating git dependency means CI builds
+# something different tomorrow, from a repo we do not control.
+gpui = { git = "https://github.com/zed-industries/zed", rev = "3b79b56201f35dc87788e6a8ed9d432575484769" }
+# The platform backends live in their own crate since the gpui split; the app
+# must now hand one to `Application::with_platform`.
+gpui_platform = { git = "https://github.com/zed-industries/zed", rev = "3b79b56201f35dc87788e6a8ed9d432575484769" }
 # The design system: tokens, the theme, and every shared building block. The app
 # draws from here rather than growing its own second copy of a button.
 rp-ui = { version = "0.1.0", path = "../ui" }

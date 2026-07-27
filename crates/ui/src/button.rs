@@ -269,7 +269,7 @@ pub fn seg_track(t: Theme) -> Div {
         // one track. It does shrink — the cells ellipsize rather than the far end
         // of the track being clipped away, which would make the last option
         // unreachable.
-        .flex_shrink()
+        .flex_shrink_1()
         .min_w_0()
         .items_center()
         .gap(space::S1)
