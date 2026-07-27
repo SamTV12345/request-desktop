@@ -124,7 +124,7 @@ pub(crate) fn days_from_civil(date: Ymd) -> i64 {
 }
 
 /// Inverse of `days_from_civil`.
-fn civil_from_days(z: i64) -> Ymd {
+pub(crate) fn civil_from_days(z: i64) -> Ymd {
     let z = z + 719_468;
     let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
     let doe = z - era * 146_097;
@@ -244,7 +244,7 @@ fn fmt_week(date: Ymd) -> String {
     }
 }
 
-fn fmt_date(date: Ymd) -> String {
+pub(crate) fn fmt_date(date: Ymd) -> String {
     format!("{:04}-{:02}-{:02}", date.y, date.m, date.d)
 }
 
@@ -417,7 +417,7 @@ fn csv_text(days: &[DaySummary]) -> String {
     out
 }
 
-fn now() -> i64 {
+pub(crate) fn now() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)

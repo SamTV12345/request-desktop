@@ -16,7 +16,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod calendar;
+mod log;
 // The design system. Everything about how this app looks lives in `rp-ui`.
+use crate::log::note;
 use rp_ui::button::{Button, Tone, check_box};
 use rp_ui::data::method_badge;
 use rp_ui::fonts::fonts;
@@ -131,7 +133,7 @@ fn stored_dark(store: Option<&Store>) -> bool {
     match store.get(THEME_KEY) {
         Ok(value) => value.as_deref() != Some("light"),
         Err(e) => {
-            eprintln!("request-pilot: cannot read the stored theme: {e:#}");
+            note!("cannot read the stored theme: {e:#}");
             true
         }
     }
@@ -141,7 +143,7 @@ fn save_dark(store: Option<&Store>, dark: bool) {
     if let Some(store) = store
         && let Err(e) = store.set(THEME_KEY, if dark { "dark" } else { "light" })
     {
-        eprintln!("request-pilot: cannot store the theme: {e:#}");
+        note!("cannot store the theme: {e:#}");
     }
 }
 
@@ -224,7 +226,7 @@ fn save_session(cx: &mut App) {
     if let Some(store) = persist.store.as_mut()
         && let Err(e) = store.save_session(&sessions)
     {
-        eprintln!("request-pilot: cannot save the session: {e:#}");
+        note!("cannot save the session: {e:#}");
     }
 }
 
@@ -344,7 +346,7 @@ fn toggle_mcp_bind(cx: &mut App) {
             },
         )
     {
-        eprintln!("request-pilot: could not remember the MCP bind: {e:#}");
+        note!("could not remember the MCP bind: {e:#}");
     }
     cx.refresh_windows();
 }
@@ -383,7 +385,7 @@ fn toggle_mcp(cx: &mut App) {
             (MCP_PORT_KEY, &port.to_string()),
         ] {
             if let Err(e) = store.set(key, value) {
-                eprintln!("request-pilot: cannot store {key}: {e:#}");
+                note!("cannot store {key}: {e:#}");
             }
         }
     }
@@ -639,7 +641,7 @@ impl Workspace {
         {
             // Not worth interrupting the user over: the width is right for this
             // session either way, it just will not come back.
-            eprintln!("request-pilot: could not remember the sidebar width: {e:#}");
+            note!("could not remember the sidebar width: {e:#}");
         }
         // Every other window shows the same list, so they follow along.
         cx.refresh_windows();
@@ -2102,7 +2104,7 @@ fn open_workspace(session: Option<WindowSession>, cx: &mut App) {
         },
     );
     if let Err(e) = opened {
-        eprintln!("request-pilot: could not open a window: {e:#}");
+        note!("could not open a window: {e:#}");
     }
 }
 
@@ -2219,7 +2221,7 @@ fn open_settings(cx: &mut App) {
         |_, cx| cx.new(|_| Settings::default()),
     ) {
         Ok(handle) => cx.set_global(SettingsWindow(Some(handle))),
-        Err(e) => eprintln!("request-pilot: could not open settings: {e:#}"),
+        Err(e) => note!("could not open settings: {e:#}"),
     }
 }
 
@@ -2249,7 +2251,7 @@ impl Settings {
             // A failed store write leaves the old token in force, which is the
             // safe end of that failure; say so rather than implying it rotated.
             Some(Err(e)) => {
-                eprintln!("request-pilot: could not regenerate the token: {e:#}");
+                note!("could not regenerate the token: {e:#}");
                 self.note(
                     "Could not regenerate — the old token still works.".into(),
                     cx,
@@ -3082,6 +3084,9 @@ fn unavailable(tool: &'static Tool) -> bool {
 }
 
 fn main() {
+    // Before anything that can fail. A release build has no stderr, so a panic
+    // during startup would otherwise leave nothing at all behind.
+    log::install_panic_hook();
     // Icons are compiled in; without an asset source `svg()` renders nothing.
     Application::new()
         .with_assets(rp_ui::Assets)
@@ -3123,7 +3128,7 @@ fn main() {
             let store = match Store::open_default() {
                 Ok(store) => Some(store),
                 Err(e) => {
-                    eprintln!("request-pilot: persistence disabled: {e:#}");
+                    note!("persistence disabled: {e:#}");
                     None
                 }
             };
@@ -3132,7 +3137,7 @@ fn main() {
                 .map(|s| s.load_session())
                 .transpose()
                 .unwrap_or_else(|e| {
-                    eprintln!("request-pilot: cannot read the stored session: {e:#}");
+                    note!("cannot read the stored session: {e:#}");
                     None
                 })
                 .unwrap_or_default();
@@ -3153,11 +3158,11 @@ fn main() {
             if start_mcp {
                 cx.update_global::<Mcp, _>(|mcp, _| mcp.start());
                 if let Some(e) = cx.global::<Mcp>().error.clone() {
-                    eprintln!("request-pilot: the MCP server did not start: {e}");
+                    note!("the MCP server did not start: {e}");
                 }
                 if let Some(h) = cx.global::<Mcp>().server.as_ref() {
                     // Never the token: stderr goes to logs and terminals.
-                    eprintln!("request-pilot: the MCP server is listening on {}", h.url());
+                    note!("the MCP server is listening on {}", h.url());
                 }
             }
 

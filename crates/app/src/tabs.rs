@@ -12,6 +12,7 @@
 //! The index bookkeeping lives on `Tabs<C>`, generic over the content, so the
 //! interesting part (open / activate / close / move out) is testable without a
 //! window or an `App`.
+use crate::log::note;
 use gpui::{
     AnyElement, AnyView, Entity, IntoElement, MouseDownEvent, ParentElement, SharedString, Styled,
     div, prelude::*,
@@ -900,7 +901,7 @@ fn reveal(path: &Path) {
         .arg(format!("/select,{}", path.display()))
         .spawn()
     {
-        eprintln!("request-pilot: cannot reveal {}: {e:#}", path.display());
+        note!("cannot reveal {}: {e:#}", path.display());
     }
 }
 
