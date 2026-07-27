@@ -58,6 +58,22 @@ jobs:
           cargo clippy --workspace --all-targets -- -D warnings
           cargo test --workspace
 
+      # The tag and the crate version must be the same thing, because the updater
+      # compares the *compiled-in* version against the latest tag. They had drifted:
+      # releases were tagged v0.5.x while the workspace still said 0.1.0, so a build
+      # installed from v0.5.1 would have gone on offering v0.5.1 for ever — the
+      # update would appear to do nothing, which is worse than not offering it.
+      - name: The tag must match the crate version
+        shell: pwsh
+        run: |
+          $tag = '${{ inputs.tag || github.ref_name }}' -replace '^v', ''
+          $crate = (cargo metadata --no-deps --format-version 1 | ConvertFrom-Json).packages |
+            Where-Object { $_.name -eq 'request-pilot' } | Select-Object -First 1 -ExpandProperty version
+          if ($tag -ne $crate) {
+            throw "tag is '$tag' but Cargo.toml says '$crate' — bump the workspace version, or the updater will loop"
+          }
+          Write-Host "version ok: $crate"
+
       - name: Build
         run: cargo build --release -p request-pilot -p rp-mcp
 

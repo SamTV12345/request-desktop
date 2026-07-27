@@ -55,6 +55,11 @@ allow = [
     "MPL-2.0",
     # Required by the ICU crates that `idna`/`url` pull in.
     "Unicode-3.0",
+    # A BSD-style permissive licence — no copyleft, no reach into our source. It
+    # arrived with gpui's move to zed's repo: gpui's `http_client` pulls
+    # `async-compression`, which pulls `bzip2`. Listed here with a reason like every
+    # other entry, rather than as a blanket exception.
+    "bzip2-1.0.6",
     "Unlicense",
     "Zlib",
 ]
@@ -85,3 +90,19 @@ deny = [
 unknown-registry = "deny"
 unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+# gpui and its platform backends come from zed's own repository rather than the
+# crates.io snapshot, which was nine months behind — the point being to get fixes
+# instead of sitting on versions where they are already known. This is the *only*
+# git source allowed, and it stays a named exception rather than
+# `unknown-git = "allow"`, so a second one still turns the job red and somebody
+# makes a decision. The revision is pinned in both manifests; the URL is what
+# cargo-deny checks.
+# Three URLs, not one: gpui itself depends on two zed forks — `zed-font-kit` and
+# `scap` — each pinned to a rev by zed. They are theirs, not ours, and they arrive
+# whether we like it or not; listing them states a fact about the dependency rather
+# than widening the policy.
+allow-git = [
+    "https://github.com/zed-industries/zed",
+    "https://github.com/zed-industries/font-kit",
+    "https://github.com/zed-industries/scap",
+]
