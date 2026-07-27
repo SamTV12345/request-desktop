@@ -379,6 +379,40 @@ impl Store {
             })?)
     }
 
+    /// Local midnight, in Unix seconds, for `days` consecutive local days starting
+    /// at `date` (`YYYY-MM-DD`), oldest first.
+    ///
+    /// One per day, and one query for all of them, because the UTC offset is *not*
+    /// constant across a span: on the two days a year DST moves, consecutive
+    /// midnights are 23 or 25 hours apart. A caller that takes one offset and adds
+    /// 86 400 for the following days draws those days an hour off. SQLite applies
+    /// the operating system's own rules here, which is what keeps this agreeing
+    /// with the day grouping every summary uses — and why no timezone database is
+    /// needed.
+    pub fn local_midnights(&self, date: &str, days: i64) -> Result<Vec<i64>> {
+        check_shape(date, "YYYY-MM-DD", &[4, 2, 2])?;
+        if days <= 0 {
+            return Ok(Vec::new());
+        }
+        let mut stmt = self.conn.prepare(
+            // The `date(?1) = ?1` guard rejects a normalising date like
+            // "2024-02-31" instead of quietly answering about 2 March.
+            "WITH RECURSIVE d(day, n) AS ( \
+                 SELECT date(?1), 0 WHERE date(?1) = ?1 \
+                 UNION ALL \
+                 SELECT date(day, '+1 day'), n + 1 FROM d WHERE n + 1 < ?2 \
+             ) \
+             SELECT CAST(strftime('%s', day || ' 00:00:00', 'utc') AS INTEGER) FROM d",
+        )?;
+        let midnights: Vec<i64> = stmt
+            .query_map(params![date, days], |r| r.get(0))?
+            .collect::<rusqlite::Result<_>>()?;
+        if midnights.is_empty() {
+            bail!("{date:?} is not a valid date; expected YYYY-MM-DD");
+        }
+        Ok(midnights)
+    }
+
     /// The local month (`YYYY-MM`) that `now` falls on.
     pub fn local_month(&self, now: i64) -> Result<String> {
         Ok(self.conn.query_row(
@@ -1098,6 +1132,43 @@ mod tests {
         assert_eq!(store.local_date(late).unwrap(), "2024-05-14");
         let just_after = at(&store, "2024-05-15 00:00:00");
         assert_eq!(store.local_date(just_after).unwrap(), "2024-05-15");
+    }
+
+    /// The UI places a whole week or month off these, so each one has to be the
+    /// same instant that day's own summary starts at — including the two days a
+    /// year that are 23 or 25 hours long, wherever this test happens to run.
+    #[test]
+    fn local_midnights_are_one_per_day_and_agree_with_each_day_bounds() {
+        let store = Store::open_in_memory().unwrap();
+        // A spring-forward week, an autumn-back week, and an ordinary one.
+        for (first, days) in [("2024-03-25", 7), ("2024-10-21", 7), ("2026-07-27", 7)] {
+            let midnights = store.local_midnights(first, days).unwrap();
+            assert_eq!(midnights.len(), days as usize);
+            let mut date = first.to_string();
+            for (i, midnight) in midnights.iter().enumerate() {
+                assert_eq!(
+                    *midnight,
+                    store.day_bounds(&date).unwrap().0,
+                    "{date} (day {i} of {first})"
+                );
+                date = next_day(&store, &date);
+            }
+            // Strictly increasing, and a day is never more than an hour off 24.
+            for pair in midnights.windows(2) {
+                let length = pair[1] - pair[0];
+                assert!(
+                    (82_800..=90_000).contains(&length),
+                    "{first}: a day of {length} seconds"
+                );
+            }
+        }
+        assert_eq!(store.local_midnights("2026-07-27", 1).unwrap().len(), 1);
+        assert!(store.local_midnights("2026-07-27", 0).unwrap().is_empty());
+        assert!(
+            store.local_midnights("2024-02-31", 3).is_err(),
+            "no such day"
+        );
+        assert!(store.local_midnights("nope", 3).is_err());
     }
 
     #[test]

@@ -6,12 +6,13 @@
 //! pixel arithmetic is `crate::calendar`; the rest of what can be decided without
 //! a window is a free function at the bottom of this file, with a test.
 //!
-//! Every day is placed against the *store's* local midnight — `Track::offset`,
-//! the same basis `Track::clock` and `Track::day_start` use. Deriving a day from
-//! the UTC clock was a real bug once (see `track::today`) and must not come back.
+//! Every day is placed against the *store's* local midnight for that day —
+//! `Track::local_midnight`, the same basis `Track::clock` and `Track::day_start`
+//! use, and one probe per day rather than one for the week, so the week a DST
+//! change falls in still lines up. Deriving a day from the UTC clock was a real
+//! bug once (see `track::today`) and must not come back.
 use super::{
-    Entry, Scope, Track, Ymd, days_from_civil, entry_day_of, fmt_hm, heading, hint, now, step_day,
-    tag, week_start, weekday_name,
+    Entry, Scope, Track, Ymd, fmt_hm, heading, hint, now, step_day, tag, week_start, weekday_name,
 };
 use crate::calendar::{HOUR_HEIGHT, MIN_BLOCK, block, hour_window, lanes};
 use gpui::{
@@ -390,11 +391,7 @@ impl Track {
                                 .render(
                                     t,
                                     cx.listener(move |this, _, _, cx| {
-                                        this.go_to(
-                                            entry_day_of(clone.started_at, this.offset),
-                                            Scope::Day,
-                                            cx,
-                                        );
+                                        this.go_to(this.day_of(clone.started_at), Scope::Day, cx);
                                         this.edit(Some(&clone), cx);
                                     }),
                                 ),
@@ -415,15 +412,6 @@ impl Track {
     fn selected_entry(&self) -> Option<&Entry> {
         let id = self.selected?;
         self.span.iter().find(|e| e.id == id)
-    }
-
-    /// Local midnight of `date`, on the same basis as [`Track::day_start`].
-    ///
-    /// ponytail: one offset for the whole week, so the two days a year a DST
-    /// change lands inside the shown week put that week's columns an hour off.
-    /// The upgrade path is probing the store per day — seven bisects a reload.
-    fn local_midnight(&self, date: Ymd) -> i64 {
-        days_from_civil(date) * 86_400 + self.offset
     }
 }
 
@@ -490,6 +478,9 @@ pub(super) fn keep_selected(selected: Option<i64>, entries: &[Entry]) -> Option<
 mod tests {
     use super::*;
     use crate::calendar::HOUR_HEIGHT;
+    // Only the tests need it here: the view goes through `Track::day_of`, which
+    // picks the offset for the day the instant is in.
+    use crate::track::entry_day_of;
 
     /// A local midnight that is not a UTC one, so a test that quietly assumed UTC
     /// fails here.

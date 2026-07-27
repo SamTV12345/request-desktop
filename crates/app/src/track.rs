@@ -316,38 +316,42 @@ fn fmt_clock(ts: i64) -> String {
     format!("{:02}:{:02}", secs / 3600, (secs / 60) % 60)
 }
 
-/// The Unix timestamp at which `date` begins locally, found by asking the store
-/// which local day a given instant falls in and bisecting for the boundary.
+/// The local-midnight shift in force at `ts`: local midnight minus UTC midnight,
+/// so it is negative east of UTC (Berlin's midnight is 23:00 the day before).
 ///
-/// The store groups every day with SQLite's `'localtime'`, so it is the only
-/// authority on the offset — including historic DST, which a fixed offset would
-/// get wrong. `probe` is `Store::local_date`; `None` from it means the store
-/// cannot answer and the caller should fall back to UTC.
-fn local_day_start(date: Ymd, probe: impl Fn(i64) -> Option<String>) -> Option<i64> {
-    let want = fmt_date(date);
-    let utc = days_from_civil(date) * 86_400;
-    // Every real offset is inside ±15h, so the boundary is inside this window.
-    let (mut lo, mut hi) = (utc - 15 * 3_600, utc + 15 * 3_600);
-    if probe(lo)? >= want || probe(hi)? < want {
-        return None;
+/// `midnights` is the store's local midnight for *each* day of the shown span,
+/// day 0 being `span_start` — one number per day rather than one for the span,
+/// because the offset is not constant: on the two days a year DST moves, the days
+/// either side of it sit an hour apart, and one shared offset draws one of them an
+/// hour off.
+///
+/// An instant outside the span borrows the nearest day's shift, which is the
+/// closest thing to right that is known without another query — a search hit from
+/// last August is still a local clock face and not a UTC one. Empty `midnights`
+/// means the store could not be asked at all, which is UTC, the old behaviour.
+fn offset_at(span_start: Ymd, midnights: &[i64], ts: i64) -> i64 {
+    if midnights.is_empty() {
+        return 0;
     }
-    // Invariant: lo is before the day, hi is inside it.
-    while hi - lo > 1 {
-        let mid = lo + (hi - lo) / 2;
-        if probe(mid)? < want {
-            lo = mid;
-        } else {
-            hi = mid;
-        }
-    }
-    Some(hi)
+    let i = midnights.iter().rposition(|m| *m <= ts).unwrap_or(0);
+    midnights[i] - (days_from_civil(span_start) + i as i64) * 86_400
 }
 
-/// The local day an instant falls in. `offset` is the shown day's local-midnight
-/// shift, so this is the inverse of `Track::day_start`: local midnight is
-/// `day * 86_400 + offset`, and the day is what is left once that shift comes back
-/// off the instant. Never derive a day from a UTC timestamp instead — see
-/// [`today`].
+/// Local midnight of `date`: the store's own answer where the span covers that
+/// day, and the nearest day's shift where it does not.
+fn local_midnight_of(span_start: Ymd, midnights: &[i64], date: Ymd) -> i64 {
+    let day = days_from_civil(date);
+    usize::try_from(day - days_from_civil(span_start))
+        .ok()
+        .and_then(|i| midnights.get(i).copied())
+        .unwrap_or_else(|| day * 86_400 + offset_at(span_start, midnights, day * 86_400))
+}
+
+/// The local day an instant falls in. `offset` is that instant's local-midnight
+/// shift — [`offset_at`], not one offset for the whole span — so this is the
+/// inverse of `Track::local_midnight`: local midnight is `day * 86_400 + offset`,
+/// and the day is what is left once that shift comes back off the instant. Never
+/// derive a day from a UTC timestamp instead — see [`today`].
 fn entry_day_of(ts: i64, offset: i64) -> Ymd {
     civil_from_days((ts - offset).div_euclid(86_400))
 }
@@ -475,10 +479,16 @@ pub struct Track {
     /// Whether `date` has been resolved through the store's local-time
     /// definition rather than the UTC fallback.
     date_from_store: bool,
-    /// Seconds the shown day's local midnight sits ahead of UTC midnight, so
-    /// every clock face agrees with the store's own day grouping. Zero when the
-    /// store cannot say, which is exactly the old UTC behaviour.
-    offset: i64,
+    /// The store's local midnight for every day of the shown span, day 0 being
+    /// `span_start`, so every clock face agrees with the store's own day grouping.
+    ///
+    /// Per day, not per span: a week containing a DST change has two different
+    /// offsets in it, and one offset for all seven days drew the wrong side of the
+    /// change an hour off. Empty when the store cannot say, which is exactly the
+    /// old UTC behaviour.
+    midnights: Vec<i64>,
+    /// The first day `midnights` describes.
+    span_start: Ymd,
     scope: Scope,
     /// Which of `SOURCES` a newly started timer is attributed to.
     source: usize,
@@ -549,7 +559,8 @@ impl Track {
             date: today(None),
             today: today(None),
             date_from_store: false,
-            offset: 0,
+            midnights: Vec::new(),
+            span_start: today(None),
             scope: Scope::Day,
             source: 0,
             running: None,
@@ -691,7 +702,6 @@ impl Track {
         }
         let date = fmt_date(self.date);
         let month = fmt_month(self.date);
-        let shown = self.date;
         let needle = self.search.read(cx).text().trim().to_string();
         // A week can straddle two months, and the only per-day summary the store
         // offers is per month, so ask for both and keep the seven days.
@@ -727,11 +737,18 @@ impl Track {
                 }
                 week.sort_by(|a, b| a.date.cmp(&b.date));
             }
-            // The span is asked for in instants, so it needs the local midnight
-            // it starts at. A store that cannot say falls back to UTC, which is
-            // what every other clock face here does.
-            let base = local_day_start(span_start, |ts| store.local_date(ts).ok())
-                .unwrap_or_else(|| days_from_civil(span_start) * 86_400);
+            // One local midnight per day of the span, plus the one that closes it:
+            // the span is asked for in instants, and both ends — and every column
+            // in between — have to be the store's own boundaries rather than
+            // multiples of 86 400 from the first. A store that cannot say falls
+            // back to UTC, which is what every other clock face here does.
+            let midnights = store.local_midnights(&fmt_date(span_start), span_days + 1)?;
+            let utc = days_from_civil(span_start) * 86_400;
+            let base = midnights.first().copied().unwrap_or(utc);
+            let span_end = midnights
+                .last()
+                .copied()
+                .unwrap_or(utc + span_days * 86_400);
             Ok((
                 store.change_counter()?,
                 store.track_running()?,
@@ -746,8 +763,8 @@ impl Track {
                 },
                 week,
                 today(Some(store)),
-                local_day_start(shown, |ts| store.local_date(ts).ok()),
-                store.track_entries_between(base, base + span_days * 86_400)?,
+                midnights,
+                store.track_entries_between(base, span_end)?,
                 if month_scope {
                     year_strip::year_totals(shown_year, |m| store.track_summary_month(m, now))?
                 } else {
@@ -765,7 +782,7 @@ impl Track {
             hits,
             week,
             today,
-            day_start,
+            midnights,
             span,
             year,
         )) = loaded
@@ -778,9 +795,8 @@ impl Track {
         self.tasks = tasks.into_iter().map(|t| t.name).collect();
         self.hits = hits;
         self.today = today;
-        self.offset = day_start
-            .map(|s| s - days_from_civil(self.date) * 86_400)
-            .unwrap_or(0);
+        self.midnights = midnights;
+        self.span_start = span_start;
         let text = match self.scope {
             Scope::Day => summary_text(&date, std::slice::from_ref(&day)),
             Scope::Week => summary_text(&fmt_week(self.date), &week),
@@ -812,16 +828,33 @@ impl Track {
         }
     }
 
-    /// A clock face in the store's local time. `offset` is zero when the store
-    /// could not be asked, which is the old UTC rendering.
+    /// A clock face in the store's local time, using the offset in force on the
+    /// day *that instant* falls in — see [`offset_at`]. Zero when the store could
+    /// not be asked, which is the old UTC rendering.
     fn clock(&self, ts: i64) -> String {
-        fmt_clock(ts - self.offset)
+        fmt_clock(ts - self.offset_at(ts))
+    }
+
+    /// The local-midnight shift at `ts`, per day rather than per span.
+    fn offset_at(&self, ts: i64) -> i64 {
+        offset_at(self.span_start, &self.midnights, ts)
+    }
+
+    /// The local day `ts` falls in, on the store's definition.
+    fn day_of(&self, ts: i64) -> Ymd {
+        entry_day_of(ts, self.offset_at(ts))
+    }
+
+    /// Local midnight of `date`, the basis every clock face and every day column
+    /// is placed against.
+    pub(crate) fn local_midnight(&self, date: Ymd) -> i64 {
+        local_midnight_of(self.span_start, &self.midnights, date)
     }
 
     /// Local midnight of the shown day, for turning a typed `HH:MM` back into
     /// an instant.
     fn day_start(&self) -> i64 {
-        days_from_civil(self.date) * 86_400 + self.offset
+        self.local_midnight(self.date)
     }
 
     /// Reload only when the write went through, so a failed call keeps its
@@ -1812,7 +1845,7 @@ impl Track {
         // an instant falls in takes that shift back *off* it. Adding it put every
         // entry within the offset of midnight on the wrong date — in Berlin, the
         // two hours after 22:00 UTC landed on tomorrow.
-        let date = fmt_date(entry_day_of(entry.started_at, self.offset));
+        let date = fmt_date(self.day_of(entry.started_at));
         let jump = parse_date(&date);
         let (tag_bg, tag_ink) = if entry.source == "mcp" {
             t.tag_accent_2()
@@ -2787,25 +2820,81 @@ mod tests {
         assert_eq!(parse_hm("23:59"), Some(86_340));
     }
 
-    /// The store owns the offset, so the bisection has to land on the exact
-    /// instant its own `date(…,'localtime')` flips — including a half-hour zone
-    /// and a negative one.
+    /// A week with a spring-forward Sunday in it, as the store reports it: the
+    /// midnights are 23 hours apart across the change, and the offset is +1h before
+    /// it and +2h after. One offset for the week draws one of the two an hour off,
+    /// which is the bug these two functions exist to prevent.
+    ///
+    /// The numbers are the store's to produce; this only checks that the view reads
+    /// whatever it is given per day. No DST rule is implemented here.
+    fn dst_week() -> (Ymd, Vec<i64>) {
+        let monday = ymd(2026, 3, 23); // the Sunday is 2026-03-29
+        let utc = days_from_civil(monday) * 86_400;
+        let midnights = (0..8)
+            .map(|i| {
+                // Days 0..=5 begin at 23:00 UTC the evening before (UTC+1), days 6
+                // and 7 at 22:00 (UTC+2) — the change is on day 6. East of UTC the
+                // local midnight is *earlier* than the UTC one, so the shift these
+                // functions return is negative.
+                let east = if i < 6 { 3_600 } else { 7_200 };
+                utc + i * 86_400 - east
+            })
+            .collect();
+        (monday, midnights)
+    }
+
     #[test]
-    fn local_midnight_is_found_by_asking_the_store() {
-        fn probe(shift: i64) -> impl Fn(i64) -> Option<String> {
-            move |ts| Some(fmt_date(civil_from_days((ts + shift).div_euclid(86_400))))
-        }
-        let date = ymd(2026, 7, 26);
-        let utc = days_from_civil(date) * 86_400;
-        for shift in [0, 2 * 3_600, -5 * 3_600, 5 * 3_600 + 1_800, 14 * 3_600] {
+    fn the_offset_is_per_day_so_a_dst_week_keeps_every_column_on_its_own_hour() {
+        let (monday, midnights) = dst_week();
+        // Each day's own midnight comes back exactly, whichever side it is on.
+        for (i, midnight) in midnights.iter().enumerate() {
+            let date = step_day(monday, i as i64);
             assert_eq!(
-                local_day_start(date, probe(shift)),
-                Some(utc - shift),
-                "shift {shift}"
+                local_midnight_of(monday, &midnights, date),
+                *midnight,
+                "{i}"
+            );
+            // 09:00 local on that day reads as 09:00, not 08:00 or 10:00.
+            let nine = midnight + 9 * 3_600;
+            assert_eq!(
+                fmt_clock(nine - offset_at(monday, &midnights, nine)),
+                "09:00"
+            );
+            assert_eq!(
+                entry_day_of(nine, offset_at(monday, &midnights, nine)),
+                date
             );
         }
-        // A store that cannot answer must not be guessed at.
-        assert_eq!(local_day_start(date, |_| None), None);
+        // The change really is in there: 23 hours between Saturday and Sunday.
+        assert_eq!(midnights[6] - midnights[5], 82_800);
+        assert_eq!(offset_at(monday, &midnights, midnights[0]), -3_600);
+        assert_eq!(offset_at(monday, &midnights, midnights[6]), -7_200);
+        // Monday's offset used for the whole week draws Sunday an hour off, which
+        // is what this is instead of.
+        let sunday_nine = midnights[6] + 9 * 3_600;
+        assert_eq!(fmt_clock(sunday_nine + 3_600), "08:00");
+    }
+
+    #[test]
+    fn an_instant_outside_the_span_borrows_the_nearest_day_and_no_store_is_utc() {
+        let (monday, midnights) = dst_week();
+        // Before the span: the first day's offset. After it: the last one's.
+        let earlier = midnights[0] - 30 * 86_400;
+        assert_eq!(offset_at(monday, &midnights, earlier), -3_600);
+        let later = midnights[7] + 30 * 86_400;
+        assert_eq!(offset_at(monday, &midnights, later), -7_200);
+        // A day outside the span is still placed, off the nearest offset.
+        let far = step_day(monday, 40);
+        assert_eq!(
+            local_midnight_of(monday, &midnights, far),
+            days_from_civil(far) * 86_400 - 7_200
+        );
+        // No store, no offset: UTC, exactly the old rendering.
+        assert_eq!(offset_at(monday, &[], midnights[0]), 0);
+        assert_eq!(
+            local_midnight_of(monday, &[], monday),
+            days_from_civil(monday) * 86_400
+        );
     }
 
     #[test]
