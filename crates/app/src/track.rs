@@ -447,15 +447,13 @@ enum Scope {
     Month,
 }
 
-/// The inline entry form: one row that either adds a manual entry or replaces
+/// The inline entry form: one row that either adds a manual entry or corrects
 /// an existing one.
 ///
-/// ponytail: "replace" is literally delete + `track_log`, because `rp_store`
-/// has no update path and is not ours to extend. The visible cost is that an
-/// edited entry gets a new id — see the report; the upgrade path is a
-/// `Store::track_update_entry`.
+/// An edit goes through `Store::track_update_entry`, so the entry keeps its id
+/// and whatever is selected in the week grid stays selected across a save.
 struct Draft {
-    /// `None` adds a new entry; `Some(id)` replaces that one.
+    /// `None` adds a new entry; `Some(id)` updates that one.
     id: Option<i64>,
     range: Entity<TextInput>,
     task: Entity<TextInput>,
@@ -907,9 +905,8 @@ impl Track {
         cx.notify();
     }
 
-    /// Commit the inline form. An edit is a delete followed by a fresh log, so
-    /// the two halves are ordered to fail safe: nothing is deleted until the
-    /// replacement has been validated.
+    /// Commit the inline form: a new entry is logged, an edited one is updated in
+    /// place so it keeps its id and stays selected.
     fn save_draft(&mut self, cx: &mut Context<Self>) {
         let Some(draft) = self.draft.as_ref() else {
             return;
@@ -935,11 +932,13 @@ impl Track {
         // entries; a day-crossing edit is the case this form does not serve.
         let (from, to) = (base + from, base + to);
         let done = self
-            .with_store(cx, |store| {
-                if let Some(id) = id {
-                    store.track_delete_entry(id)?;
-                }
-                store.track_log(&task, note.as_deref(), from, to, source)
+            .with_store(cx, |store| match id {
+                Some(id) => store
+                    .track_update_entry(id, &task, note.as_deref(), from, to, source)?
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("entry #{id} is gone — it was deleted while you edited it")
+                    }),
+                None => store.track_log(&task, note.as_deref(), from, to, source),
             })
             .is_some();
         if done {

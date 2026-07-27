@@ -214,6 +214,60 @@ impl Store {
             .context("the entry just logged has disappeared")
     }
 
+    /// Correct an existing entry in place, keeping its id.
+    ///
+    /// The id is the whole point: it is what the UI's selection, the inspector and
+    /// anything else holding a reference are keyed on, so an edit must not be a
+    /// delete plus a fresh insert. `Ok(None)` means there is no such entry —
+    /// another process may have deleted it while it was being edited — and nothing
+    /// was written, not even the task.
+    ///
+    /// Only finished entries: a running entry has no end to correct, and clearing
+    /// `stopped_at` here would let two timers run at once.
+    pub fn track_update_entry(
+        &mut self,
+        id: i64,
+        task: &str,
+        note: Option<&str>,
+        started_at: i64,
+        stopped_at: i64,
+        source: &str,
+    ) -> Result<Option<Entry>> {
+        let task = clean_task(task)?;
+        if stopped_at < started_at {
+            bail!(
+                "cannot save {task}: it ends before it starts \
+                 (started_at {started_at}, stopped_at {stopped_at})"
+            );
+        }
+        let tx = self.conn.transaction()?;
+        // Checked before `task_id`, so editing an entry that has just been deleted
+        // elsewhere does not leave a task behind that nothing uses.
+        if tx
+            .query_row("SELECT 1 FROM track_entry WHERE id = ?1", [id], |_| Ok(()))
+            .optional()?
+            .is_none()
+        {
+            return Ok(None);
+        }
+        let task_id = task_id(&tx, task, started_at)?;
+        tx.execute(
+            "UPDATE track_entry \
+                SET task_id = ?2, note = ?3, started_at = ?4, stopped_at = ?5, source = ?6 \
+              WHERE id = ?1",
+            params![
+                id,
+                task_id,
+                clean_note(note),
+                started_at,
+                stopped_at,
+                source
+            ],
+        )?;
+        tx.commit()?;
+        self.entry(id)
+    }
+
     /// Entries overlapping the given local day (`YYYY-MM-DD`), oldest first.
     ///
     /// Whole entries, not clipped to the day: see the module docs.
@@ -908,6 +962,82 @@ mod tests {
                 "summary_month({bad:?})"
             );
         }
+    }
+
+    /// The id is what the UI's selection is keyed on, so an edit that changes it
+    /// is the bug this method exists to prevent.
+    #[test]
+    fn updating_an_entry_keeps_its_id_and_replaces_every_field() {
+        let mut store = Store::open_in_memory().unwrap();
+        let start = at(&store, "2024-05-14 09:00:00");
+        let entry = store
+            .track_log("coding", Some("first"), start, start + 600, "app")
+            .unwrap();
+
+        let saved = store
+            .track_update_entry(
+                entry.id,
+                " review ",
+                Some("  second  "),
+                start + 60,
+                start + 900,
+                "mcp",
+            )
+            .unwrap()
+            .expect("the entry is there");
+        assert_eq!(saved.id, entry.id, "the id must survive an edit");
+        assert_eq!(saved.task, "review");
+        assert_eq!(saved.note.as_deref(), Some("second"));
+        assert_eq!(
+            (saved.started_at, saved.stopped_at),
+            (start + 60, Some(start + 900))
+        );
+        assert_eq!(saved.source, "mcp");
+        // Persisted, and still exactly one row.
+        assert_eq!(store.entry(entry.id).unwrap(), Some(saved));
+        assert_eq!(store.track_entries_on("2024-05-14").unwrap().len(), 1);
+        // A blank note clears it rather than storing "".
+        let cleared = store
+            .track_update_entry(entry.id, "review", Some("  "), start, start, "app")
+            .unwrap()
+            .unwrap();
+        assert_eq!(cleared.note, None);
+    }
+
+    #[test]
+    fn updating_refuses_a_reversed_range_and_reports_a_missing_entry() {
+        let mut store = Store::open_in_memory().unwrap();
+        let entry = store.track_log("coding", None, 100, 200, "app").unwrap();
+        let err = store
+            .track_update_entry(entry.id, "coding", None, 200, 100, "app")
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("ends before it starts"), "{err}");
+        assert!(
+            err.contains("coding"),
+            "the message must name the task: {err}"
+        );
+        assert!(
+            store
+                .track_update_entry(entry.id, " ", None, 100, 200, "app")
+                .is_err(),
+            "an empty task name"
+        );
+        // The failed attempts changed nothing.
+        assert_eq!(store.entry(entry.id).unwrap().unwrap(), entry);
+
+        assert_eq!(
+            store
+                .track_update_entry(4_242, "ghost", None, 100, 200, "app")
+                .unwrap(),
+            None,
+            "no such entry"
+        );
+        assert_eq!(
+            store.track_tasks().unwrap().len(),
+            1,
+            "editing a missing entry must not create its task"
+        );
     }
 
     #[test]
