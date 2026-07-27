@@ -14,7 +14,9 @@
 use super::{
     Entry, Scope, Track, Ymd, fmt_hm, heading, hint, now, step_day, tag, week_start, weekday_name,
 };
-use crate::calendar::{HOUR_HEIGHT, MIN_BLOCK, block, hour_window, lanes};
+use crate::calendar::{
+    BLOCK_LABEL_LINE, BLOCK_META_LINE, HOUR_HEIGHT, block, block_text, hour_window, lanes,
+};
 use gpui::{
     Context, IntoElement, ParentElement, Pixels, SharedString, Styled, div, prelude::*, px,
     relative,
@@ -33,9 +35,9 @@ const WASH_RADIUS: Pixels = px(14.);
 const SHORT_RADIUS: Pixels = px(12.);
 /// The inspector's width, from the design.
 const INSPECTOR_W: Pixels = px(308.);
-/// A block shows its note only once it has room for a third line; below that the
-/// note would be a clipped sliver.
-const NOTE_MIN_H: f32 = 74.0;
+// `NOTE_MIN_H = 74.0` used to gate the note on a hand-picked height. The line
+// count from `calendar::block_text` decides it now, against the same arithmetic
+// that sizes the padding — one answer to "what fits", not two that can disagree.
 /// The accent wash behind today's column: `accent 7%`, as the design mixes it.
 const TODAY_WASH: f32 = 0.07;
 
@@ -246,12 +248,16 @@ impl Track {
         } else {
             (t.accent_2_ramp.s200, t.accent_2_ramp.s900)
         };
-        let short = height <= MIN_BLOCK;
+        // How much padding this height can afford and how many lines fit — see
+        // `calendar::block_text`. Fixed padding is what made a quarter-hour block
+        // clip its own title.
+        let (pad_y, lines) = block_text(height);
+        let short = lines < 2;
         let range = match entry.stopped_at {
             Some(end) => format!("{}–{}", self.clock(entry.started_at), self.clock(end)),
             None => format!("{}–now", self.clock(entry.started_at)),
         };
-        let note = entry.note.clone().filter(|_| height >= NOTE_MIN_H);
+        let note = entry.note.clone().filter(|_| lines >= 3);
         div()
             .id(SharedString::from(format!("wk-{id}")))
             .absolute()
@@ -266,7 +272,7 @@ impl Track {
             .overflow_hidden()
             .rounded(if short { SHORT_RADIUS } else { radius::MD })
             .px(space::S3)
-            .py(space::S2)
+            .py(px(pad_y))
             .bg(bg)
             .text_color(ink)
             // A transparent border always, so selecting a block cannot move the
@@ -277,30 +283,35 @@ impl Track {
             } else {
                 alpha(bg, 0.)
             })
+            // Every line's height is *set*, not left to gpui's default, because
+            // `block_text` counted them against these exact numbers.
             .child(
                 div()
                     .truncate()
                     .min_w_0()
                     .text_size(text::SMALL)
+                    .line_height(px(BLOCK_LABEL_LINE))
                     .child(SharedString::from(entry.task.clone())),
             )
-            .when(!short, |d| {
+            .when(lines >= 2, |d| {
                 d.child(
                     div()
                         .truncate()
                         .min_w_0()
                         .font_family(FONT_MONO)
                         .text_size(text::TINY)
+                        .line_height(px(BLOCK_META_LINE))
                         .text_color(alpha(ink, 0.8))
                         .child(SharedString::from(range)),
                 )
             })
-            .when_some(note.filter(|_| !short), |d, note| {
+            .when_some(note, |d, note| {
                 d.child(
                     div()
                         .truncate()
                         .min_w_0()
                         .text_size(text::TINY)
+                        .line_height(px(BLOCK_META_LINE))
                         .text_color(alpha(ink, 0.75))
                         .child(SharedString::from(note)),
                 )

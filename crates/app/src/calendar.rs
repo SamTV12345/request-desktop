@@ -95,6 +95,51 @@ pub const HOUR_HEIGHT: f32 = 56.;
 /// arrived at independently by the agent that built the week grid.
 pub const MIN_BLOCK: f32 = 26.;
 
+/// A block's border, top and bottom together. Always drawn, transparent when the
+/// block is not selected, so selecting one cannot shift the text inside it.
+pub const BLOCK_BORDER: f32 = 4.;
+/// The task name's line, `text::SMALL_LINE`.
+pub const BLOCK_LABEL_LINE: f32 = 20.;
+/// The time range's and the note's line, `text::TINY` at the same ratio.
+pub const BLOCK_META_LINE: f32 = 16.;
+/// The vertical padding a block uses when it has the room, `space::S2`.
+pub const BLOCK_PAD_Y: f32 = 8.8;
+
+/// How a block of `height` divides up: vertical padding, and how many of its three
+/// lines fit.
+///
+/// This exists because the padding used to be a constant while the height is not,
+/// and the two disagreed badly. At [`MIN_BLOCK`] the sums were
+/// `26 − 4 (border) − 17.6 (padding) = 4.4` px of room for a 20 px line, so the
+/// task name was clipped to a sliver — and since the second line appeared for
+/// anything over `MIN_BLOCK`, the name stayed clipped all the way up to 40 px, the
+/// first height at which two lines genuinely fit. 40 px is about three quarters of
+/// an hour; a quarter of an hour is 14 px, so it was drawn at the `MIN_BLOCK` floor
+/// with 4.4 px for its title.
+///
+/// So the lines are counted first, at no padding, and the padding gets what is
+/// left over — capped at [`BLOCK_PAD_Y`], so a tall block still breathes.
+///
+/// The line constants here are the ones the view *sets*, not gpui's defaults; that
+/// is the whole point, since arithmetic against a line height nobody set is a
+/// guess that happens to be close.
+pub fn block_text(height: f32) -> (f32, usize) {
+    let inner = (height - BLOCK_BORDER).max(0.);
+    // The name always counts, even where it does not strictly fit: a block with no
+    // line at all is an unlabelled smear, and clipping one line is still better
+    // than drawing none. `MIN_BLOCK` leaves 22 px for it, so this is a guard.
+    let lines = if inner >= BLOCK_LABEL_LINE + 2. * BLOCK_META_LINE {
+        3
+    } else if inner >= BLOCK_LABEL_LINE + BLOCK_META_LINE {
+        2
+    } else {
+        1
+    };
+    let used = BLOCK_LABEL_LINE + (lines - 1) as f32 * BLOCK_META_LINE;
+    let pad_y = ((inner - used) / 2.).clamp(0., BLOCK_PAD_Y);
+    (pad_y, lines)
+}
+
 /// Where an entry sits in the hour grid: `(top, height)` in pixels from the top of
 /// the first shown hour.
 ///
@@ -211,6 +256,72 @@ pub fn hour_window(spans: &[(i64, i64)]) -> (u32, u32) {
 
 #[cfg(test)]
 mod tests {
+    /// The bug this was reported as: a quarter-hour entry whose title had no room.
+    ///
+    /// The old arithmetic gave every block `BLOCK_PAD_Y` regardless of height, so
+    /// the assertion that matters is not "the padding is smaller" but "the name's
+    /// line actually fits" — at every height, including the smallest one drawn.
+    #[test]
+    fn a_blocks_first_line_always_fits_inside_it() {
+        // Every height a block can be drawn at, from the floor to a whole day.
+        let mut h = super::MIN_BLOCK;
+        while h <= super::HOUR_HEIGHT * 24. {
+            let (pad, lines) = super::block_text(h);
+            let used = super::BLOCK_BORDER
+                + 2. * pad
+                + super::BLOCK_LABEL_LINE
+                + (lines - 1) as f32 * super::BLOCK_META_LINE;
+            assert!(
+                used <= h + 0.001,
+                "at {h}px: {lines} lines and {pad}px padding need {used}px"
+            );
+            assert!((1..=3).contains(&lines), "at {h}px: {lines} lines");
+            h += 0.5;
+        }
+    }
+
+    /// A quarter of an hour is 14 px, so it is drawn at the `MIN_BLOCK` floor —
+    /// which must still hold the name.
+    #[test]
+    fn a_quarter_hour_block_keeps_its_title() {
+        let quarter = super::HOUR_HEIGHT / 4.;
+        assert!(quarter < super::MIN_BLOCK, "so it is drawn at the floor");
+        let (pad, lines) = super::block_text(super::MIN_BLOCK);
+        assert_eq!(lines, 1, "one line at the floor, not three squeezed in");
+        let room = super::MIN_BLOCK - super::BLOCK_BORDER - 2. * pad;
+        assert!(
+            room >= super::BLOCK_LABEL_LINE,
+            "{room}px for a {}px line",
+            super::BLOCK_LABEL_LINE
+        );
+    }
+
+    /// The second and third lines appear only once they fit, and the padding grows
+    /// back to its full value once there is room — a tall block should not be
+    /// cramped just because a short one has to be.
+    #[test]
+    fn lines_appear_in_order_and_the_padding_returns_when_there_is_room() {
+        assert_eq!(super::block_text(30.).1, 1);
+        assert_eq!(super::block_text(40.).1, 2, "label plus range");
+        assert_eq!(super::block_text(56.).1, 3, "and the note");
+        let (pad, lines) = super::block_text(super::HOUR_HEIGHT * 2.);
+        assert_eq!(lines, 3);
+        assert_eq!(pad, super::BLOCK_PAD_Y, "a tall block breathes as before");
+    }
+
+    /// The old code showed the range for anything over `MIN_BLOCK`. At 30 px that
+    /// meant two lines in 8.4 px of room.
+    ///
+    /// The second line first fits at exactly 40 px — `4 + 20 + 16`, with no padding
+    /// left — so 39 is the last height that must stay on one line.
+    #[test]
+    fn the_band_that_used_to_clip_now_shows_one_line_instead_of_two() {
+        for h in [27., 30., 35., 39.] {
+            assert_eq!(super::block_text(h).1, 1, "at {h}px");
+        }
+        assert_eq!(super::block_text(40.).1, 2, "and 40 is where it fits");
+    }
+
     use super::*;
     use crate::track::weekday;
 
