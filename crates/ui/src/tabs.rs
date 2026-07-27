@@ -28,14 +28,21 @@
 //!
 //! There is no dirty/unsaved state here: the design draws none, and a tab this app
 //! cannot mark dirty has nothing to show.
+//!
+//! At the end of the strip the design puts a **tail**, divided off by a hairline:
+//! a `+6`-style count of the tabs that did not fit, with a chevron, and a `+` for
+//! a new tab. The tab run itself is `overflow:hidden` and does *not* scroll —
+//! which is why the count has to be right, and why [`visible_range`] is the one
+//! piece of this module worth testing.
 use crate::icon::icon_tinted;
-use crate::theme::Theme;
+use crate::theme::{Theme, alpha};
 use crate::tokens::{radius, space, text};
 use gpui::{
     AnyElement, App, ClickEvent, ElementId, InteractiveElement as _, IntoElement, MouseButton,
     MouseDownEvent, ParentElement as _, Pixels, Point, SharedString,
-    StatefulInteractiveElement as _, Styled as _, Window, div, prelude::*, px,
+    StatefulInteractiveElement as _, Styled as _, Window, canvas, div, prelude::*, px,
 };
+use std::ops::Range;
 use std::rc::Rc;
 
 /// One tab, as the strip needs to draw it.
@@ -86,6 +93,18 @@ pub type TabHandler = Rc<dyn Fn(&SharedString, &mut Window, &mut App)>;
 /// event carries more than a key.
 pub type TabMenuHandler = Rc<dyn Fn(&TabMenuRequest, &mut Window, &mut App)>;
 
+/// A handler for the overflow chip's chevron.
+pub type TabOverflowHandler = Rc<dyn Fn(&TabOverflowRequest, &mut Window, &mut App)>;
+
+/// A handler for something that names no tab at all — the `+`.
+pub type ClickHandler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
+
+/// A handler for the measured width of the tab run.
+///
+/// Takes `&Pixels` for the same reason [`TabHandler`] takes `&SharedString`: it is
+/// what `Context::listener` yields, so the call site is one `cx.listener`.
+pub type WidthHandler = Rc<dyn Fn(&Pixels, &mut Window, &mut App)>;
+
 /// A right-click on a tab: which tab, and where the pointer was.
 ///
 /// The position travels with it because a context menu is anchored at the pointer
@@ -98,10 +117,26 @@ pub struct TabMenuRequest {
     pub at: Point<Pixels>,
 }
 
+/// A click on the overflow chip: which tabs are hidden, and where the pointer was.
+///
+/// The keys travel with it because only the strip knows which tabs it dropped, and
+/// the position because the list it opens is an `anchored()` surface the caller has
+/// to draw — the tab run is `overflow:hidden` and would clip one of its own.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TabOverflowRequest {
+    /// In strip order, so the list reads the way the strip would have.
+    pub hidden: Vec<SharedString>,
+    pub at: Point<Pixels>,
+}
+
 #[derive(Clone)]
 pub struct TabStrip {
     pub id: ElementId,
     pub items: Vec<TabItem>,
+    /// Width the tab run had during the last frame, `0` when nothing has been
+    /// measured yet — an unmeasured strip draws every tab rather than guessing.
+    /// See [`TabStrip::on_measure`].
+    pub width: Pixels,
     pub on_activate: Option<TabHandler>,
     pub on_close: Option<TabHandler>,
     /// Wired to the pinned marker, which is the only place a pin can be undone
@@ -109,6 +144,14 @@ pub struct TabStrip {
     pub on_toggle_pin: Option<TabHandler>,
     pub on_detach: Option<TabHandler>,
     pub on_menu: Option<TabMenuHandler>,
+    /// Wired to the chevron on the overflow chip. Without it the count is still
+    /// drawn — it is information — but the chevron is not.
+    pub on_overflow: Option<TabOverflowHandler>,
+    pub on_new_tab: Option<ClickHandler>,
+    /// Called with the tab run's width, once per width. Feed it back through
+    /// [`TabStrip::width`]; there is no other way for the strip to learn it, since
+    /// [`TabStrip::render`] gets no bounds.
+    pub on_measure: Option<WidthHandler>,
 }
 
 /// The design's own numbers, which the token scale does not carry.
@@ -124,23 +167,129 @@ mod design {
     pub const DOT: Pixels = px(6.);
     /// The accent edge along the top of the active tab.
     pub const ACTIVE_EDGE: Pixels = px(2.);
+    /// The tail's two controls are both 26-px: `height:26px` on the count chip and
+    /// `width:26px;height:26px` on the `+`.
+    pub const TAIL: Pixels = px(26.);
+    /// `gap:2px` between them — tighter than `space::S1`, and deliberately so:
+    /// the design reads them as one control, not two.
+    pub const TAIL_GAP: Pixels = px(2.);
+    /// The chip's own `padding:0 10px`, which is not a `--space-*` step.
+    pub const CHIP_PAD: Pixels = px(10.);
+    /// `gap:6px` inside the chip, between the count and the chevron.
+    pub const CHIP_GAP: Pixels = px(6.);
+    /// The chip's `font-size:11.5px`, half a pixel off `text::TINY`.
+    pub const CHIP_TEXT: Pixels = px(11.5);
+    /// Average advance of one character at [`crate::tokens::text::SMALL`].
+    ///
+    /// ponytail: an estimate, and the one calibration knob in [`super::wanted_width`].
+    /// gpui can only measure text through a `Window`, which the fit decision does
+    /// not get and must not need, or it stops being testable. Half an em is the
+    /// usual average for a humanist sans; turn this if titles start being
+    /// mis-priced, rather than reworking the arithmetic around it.
+    pub const CHAR: Pixels = px(6.5);
 }
 
 /// Uppercase in the literal: the design applies `text-transform`, and gpui has no
 /// equivalent.
 const PINNED_LABEL: &str = "PINNED";
 
+// -- the fit decision: pure, because nothing inside `render` can be tested -----
+
+/// Roughly how wide one tab wants to be, `actions` being how many of the hover
+/// icons the caller wired up.
+///
+/// Everything but the title is exact — the design's `padding:0 14px`, its `gap:9px`
+/// and this module's own icon boxes. The title is priced at [`design::CHAR`] per
+/// character; see that constant for why it cannot be measured here.
+pub fn wanted_width(item: &TabItem, actions: usize) -> Pixels {
+    // One `gap` plus one padded icon box, which is what both the pinned dot and
+    // each hover action costs.
+    let marker = space::S2 + space::S1 * 2.;
+    let mut w = space::S3 * 2. + design::CHAR * item.title.chars().count() as f32;
+    if item.pinned {
+        w += marker + design::DOT;
+    }
+    w += (marker + text::SMALL) * actions as f32;
+    // The tab is capped, so a very long title costs no more than the cap.
+    if w > design::TAB_MAX {
+        design::TAB_MAX
+    } else {
+        w
+    }
+}
+
+/// What the pinned run's header and its trailing hairline take before a single tab
+/// is drawn.
+///
+/// Priced with [`design::CHAR`] too, which over-estimates it — the label is set at
+/// `text::KICKER`, not `text::SMALL`. Erring high is the safe direction: it hides
+/// one tab too early rather than clipping one.
+fn header_width() -> Pixels {
+    space::S3 + space::S2 + text::KICKER + space::S1
+        + design::CHAR * PINNED_LABEL.len() as f32
+        // The hairline between the runs.
+        + px(1.)
+}
+
+/// Which slice of the strip is drawn, given what each tab wants and which one is
+/// active. Everything outside it is what the overflow chip counts.
+///
+/// Two rules beyond "fill until full":
+///
+/// * **At least one tab**, even one that does not fit. A strip that is nothing but
+///   a count does not say what you are looking at.
+/// * **The active tab is always in the range.** Without that, choosing a tab out of
+///   the overflow list would switch the pane and leave the strip unchanged, which
+///   reads as a click that did nothing.
+pub fn visible_range(available: Pixels, widths: &[Pixels], active: Option<usize>) -> Range<usize> {
+    if widths.is_empty() {
+        return 0..0;
+    }
+    // Nothing measured yet — the first frame draws everything and the canvas
+    // corrects it on the next one.
+    if available <= px(0.) {
+        return 0..widths.len();
+    }
+    let mut end = 0;
+    let mut used = px(0.);
+    while end < widths.len() && used + widths[end] <= available {
+        used += widths[end];
+        end += 1;
+    }
+    let end = end.max(1);
+    let Some(active) = active.filter(|a| *a >= end && *a < widths.len()) else {
+        return 0..end;
+    };
+    // The active tab is past the fold, so fill backwards from it instead.
+    let mut start = active;
+    let mut used = widths[active];
+    while start > 0 && used + widths[start - 1] <= available {
+        start -= 1;
+        used += widths[start];
+    }
+    start..active + 1
+}
+
 impl TabStrip {
     pub fn new(id: impl Into<ElementId>, items: Vec<TabItem>) -> Self {
         Self {
             id: id.into(),
             items,
+            width: px(0.),
             on_activate: None,
             on_close: None,
             on_toggle_pin: None,
             on_detach: None,
             on_menu: None,
+            on_overflow: None,
+            on_new_tab: None,
+            on_measure: None,
         }
+    }
+
+    pub fn width(mut self, width: Pixels) -> Self {
+        self.width = width;
+        self
     }
 
     pub fn on_activate(
@@ -174,6 +323,24 @@ impl TabStrip {
         self
     }
 
+    pub fn on_overflow(
+        mut self,
+        f: impl Fn(&TabOverflowRequest, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_overflow = Some(Rc::new(f));
+        self
+    }
+
+    pub fn on_new_tab(mut self, f: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static) -> Self {
+        self.on_new_tab = Some(Rc::new(f));
+        self
+    }
+
+    pub fn on_measure(mut self, f: impl Fn(&Pixels, &mut Window, &mut App) + 'static) -> Self {
+        self.on_measure = Some(Rc::new(f));
+        self
+    }
+
     // -- the pure part: which items land in which run, and in what order -----
 
     /// The items in drawing order: the pinned run, then the rest.
@@ -200,14 +367,36 @@ impl TabStrip {
     }
 
     pub fn render(self, t: Theme) -> impl IntoElement {
+        let id = self.id.clone();
         let pinned = self.pinned_count();
-        let mut children: Vec<AnyElement> = Vec::with_capacity(self.items.len() + 2);
-        if pinned > 0 {
+        let ordered = self.ordered();
+        let actions = self.on_detach.is_some() as usize + self.on_close.is_some() as usize;
+        let widths: Vec<Pixels> = ordered.iter().map(|i| wanted_width(i, actions)).collect();
+        let header = if pinned > 0 { header_width() } else { px(0.) };
+        let shown = visible_range(
+            (self.width - header).max(px(0.)),
+            &widths,
+            ordered.iter().position(|i| i.active),
+        );
+        let hidden: Vec<SharedString> = ordered
+            .iter()
+            .enumerate()
+            .filter(|(n, _)| !shown.contains(n))
+            .map(|(_, i)| i.key.clone())
+            .collect();
+
+        let mut children: Vec<AnyElement> = Vec::with_capacity(shown.len() + 2);
+        // Only while the run it heads is actually on screen: with the window
+        // shifted right past the pins, a "PINNED" label over unpinned tabs lies.
+        if pinned > 0 && shown.start < pinned {
             children.push(pinned_label(t).into_any_element());
         }
         // A `for` loop, not `map`: the handlers are cloned per tab, and a lazy
         // adaptor would keep borrowing `self` past the point the vector is built.
-        for (n, item) in self.ordered().into_iter().enumerate() {
+        for (n, item) in ordered.iter().enumerate() {
+            if !shown.contains(&n) {
+                continue;
+            }
             // The hairline the design draws between the two runs. Only between:
             // one at either end would look like a missing tab.
             if n == pinned && pinned > 0 {
@@ -222,22 +411,127 @@ impl TabStrip {
             }
             children.push(self.tab(t, item));
         }
+        // The tab run: `flex_1` so the tail keeps its width, `overflow_hidden`
+        // because the design does not scroll this — the count is what says a tab
+        // is missing. The `canvas` is absolute so it measures this box without
+        // becoming a third item in the row.
+        let run = div()
+            .relative()
+            .flex()
+            .flex_1()
+            .min_w_0()
+            .overflow_hidden()
+            .children(self.measure())
+            .children(children);
+        let tail = self.tail(t, hidden);
         div()
-            .id(self.id)
+            .id(id)
             .flex()
             .flex_none()
-            // `min_w_0` here as well as on the tabs: a horizontal scroller that is
-            // itself allowed to grow past its parent takes the whole row with it,
-            // which is the "it hangs off the right edge" bug this app has had four
-            // times.
+            // `min_w_0` here as well as on the run and on the tabs: a row that is
+            // itself allowed to grow past its parent takes the whole layout with
+            // it, which is the "it hangs off the right edge" bug this app has had
+            // four times.
             .min_w_0()
             .w_full()
             .h(design::HEIGHT)
-            .overflow_x_scroll()
             .bg(t.chrome)
             .border_b_1()
             .border_color(t.divider)
-            .children(children)
+            .child(run)
+            .children(tail)
+    }
+
+    /// A zero-height `canvas` that reports the tab run's width for the next frame.
+    ///
+    /// The established trick in this codebase (see `custom/emoji_picker.rs`, which
+    /// sizes a grid the same way): a `render` gets no bounds, so the one element
+    /// that does is asked instead. One frame behind during a resize drag, which is
+    /// not visible. Reports only a width that changed, or every frame would ask for
+    /// another one.
+    fn measure(&self) -> Option<AnyElement> {
+        let f = self.on_measure.clone()?;
+        let known = self.width;
+        Some(
+            canvas(
+                move |bounds, window, cx| {
+                    let width = bounds.size.width;
+                    if width != known {
+                        f(&width, window, cx);
+                    }
+                },
+                |_, _: (), _, _| {},
+            )
+            .absolute()
+            .w_full()
+            .h(px(0.))
+            .into_any_element(),
+        )
+    }
+
+    /// The strip's tail: what did not fit, and the `+`. Absent entirely when it
+    /// would hold neither.
+    fn tail(&self, t: Theme, hidden: Vec<SharedString>) -> Option<AnyElement> {
+        if hidden.is_empty() && self.on_new_tab.is_none() {
+            return None;
+        }
+        Some(
+            div()
+                .flex()
+                .flex_none()
+                .items_center()
+                .gap(design::TAIL_GAP)
+                .px(space::S2)
+                .border_l_1()
+                .border_color(t.divider)
+                .when(!hidden.is_empty(), |d| d.child(self.chip(t, hidden)))
+                .when_some(self.on_new_tab.clone(), |d, f| d.child(new_tab(t, f)))
+                .into_any_element(),
+        )
+    }
+
+    /// The `+6` count of the tabs that did not fit.
+    ///
+    /// The number is drawn whether or not anything is wired up, because it is
+    /// information and a tab silently missing is worse than a tab you cannot reach
+    /// from here. The **chevron** is the affordance, and follows this module's rule:
+    /// no handler, not drawn.
+    fn chip(&self, t: Theme, hidden: Vec<SharedString>) -> AnyElement {
+        // The design's own `opacity:0.8` — quieter than a tab title, louder than
+        // `text_label`, and no colour role in the theme sits at 0.8.
+        let ink = alpha(t.text, 0.8);
+        let chip = div()
+            .flex()
+            .flex_none()
+            .items_center()
+            .gap(design::CHIP_GAP)
+            .h(design::TAIL)
+            .px(design::CHIP_PAD)
+            .rounded(radius::SM)
+            .bg(t.hover())
+            .text_size(design::CHIP_TEXT)
+            .text_color(ink)
+            .child(SharedString::from(format!("+{}", hidden.len())));
+        let Some(f) = self.on_overflow.clone() else {
+            return chip.into_any_element();
+        };
+        chip.id("tab-overflow")
+            .cursor_pointer()
+            .hover(|s| s.bg(t.active()))
+            .child(icon_tinted("chevron_down", text::TINY, ink))
+            // Mouse-down rather than click, for the position: the list it opens is
+            // anchored at the pointer, as the tab menu is.
+            .on_mouse_down(MouseButton::Left, move |ev: &MouseDownEvent, window, cx| {
+                f(
+                    &TabOverflowRequest {
+                        hidden: hidden.clone(),
+                        at: ev.position,
+                    },
+                    window,
+                    cx,
+                )
+            })
+            .into_any_element()
     }
 
     /// One tab. Its own hover group, so hovering it reveals only its own actions:
@@ -362,8 +656,33 @@ impl TabStrip {
     }
 }
 
+/// The `+` at the end of the strip.
+///
+/// Hand-rolled rather than a [`crate::button::Button`]: the design's square is
+/// 26 px on an 8-px corner, and `Size::Sm` is 28 px on a pill — overriding the
+/// height, the radius and the padding is more code than the box itself.
+fn new_tab(t: Theme, f: ClickHandler) -> impl IntoElement {
+    div()
+        .id("tab-new")
+        .flex()
+        .flex_none()
+        .items_center()
+        .justify_center()
+        .size(design::TAIL)
+        .rounded(radius::SM)
+        .cursor_pointer()
+        .hover(|s| s.bg(t.hover()))
+        // The design's `opacity:0.55` is exactly `text_muted`.
+        .child(icon_tinted("plus", text::SMALL, t.text_muted()))
+        .on_click(move |ev, window, cx| f(ev, window, cx))
+}
+
 /// The run header, in the voice the design gives its section labels: uppercase,
 /// quiet, and small enough to sit under the tab titles.
+///
+/// The mark is a **star**, filled, which is what the design puts over both this run
+/// and the sidebar's `Pinned` group. It was a `pin` only because there was no star
+/// in the icon set.
 fn pinned_label(t: Theme) -> impl IntoElement {
     div()
         .flex()
@@ -374,7 +693,7 @@ fn pinned_label(t: Theme) -> impl IntoElement {
         .pr(space::S2)
         .text_size(text::KICKER)
         .text_color(t.text_meta())
-        .child(icon_tinted("pin", text::KICKER, t.text_meta()))
+        .child(icon_tinted("star", text::KICKER, t.text_meta()))
         .child(PINNED_LABEL)
 }
 
@@ -434,6 +753,86 @@ mod tests {
         // No handler means no affordance, rather than an inert one.
         assert!(s.on_close.is_none() && s.on_detach.is_none());
         assert!(s.on_activate.is_none() && s.on_toggle_pin.is_none());
+        assert!(s.on_overflow.is_none() && s.on_new_tab.is_none());
+        // Unmeasured, which is what makes the first frame draw everything.
+        assert_eq!(s.width, px(0.));
+    }
+
+    // --- what fits, and what the overflow chip counts ----------------------
+
+    fn w(n: &[f32]) -> Vec<Pixels> {
+        n.iter().copied().map(px).collect()
+    }
+
+    #[test]
+    fn an_unmeasured_strip_draws_every_tab_rather_than_guessing() {
+        let widths = w(&[100., 100., 100.]);
+        assert_eq!(visible_range(px(0.), &widths, Some(0)), 0..3);
+        // A negative width is the same non-answer.
+        assert_eq!(visible_range(px(-5.), &widths, None), 0..3);
+        // And an empty strip is an empty range, not a range of one.
+        assert_eq!(visible_range(px(500.), &[], None), 0..0);
+    }
+
+    #[test]
+    fn tabs_are_dropped_from_the_end_once_the_run_is_full() {
+        let widths = w(&[100., 100., 100., 100.]);
+        assert_eq!(visible_range(px(400.), &widths, Some(0)), 0..4, "exact fit");
+        assert_eq!(visible_range(px(399.), &widths, Some(0)), 0..3);
+        assert_eq!(visible_range(px(250.), &widths, Some(0)), 0..2);
+        // Tabs are not all the same width, and the accumulation has to respect that.
+        let uneven = w(&[60., 200., 60.]);
+        assert_eq!(visible_range(px(260.), &uneven, Some(0)), 0..2);
+        assert_eq!(visible_range(px(259.), &uneven, Some(0)), 0..1);
+    }
+
+    #[test]
+    fn one_tab_is_always_drawn_even_when_it_does_not_fit() {
+        let widths = w(&[210., 210.]);
+        assert_eq!(visible_range(px(30.), &widths, Some(0)), 0..1);
+        assert_eq!(visible_range(px(1.), &widths, None), 0..1);
+    }
+
+    /// The rule that makes the overflow list worth having: picking a tab out of it
+    /// has to move the window onto that tab, or the click looks like it did nothing.
+    #[test]
+    fn the_window_shifts_to_keep_the_active_tab_in_view() {
+        let widths = w(&[100., 100., 100., 100., 100.]);
+        // Room for two. The active tab is the last one, so the window ends there.
+        assert_eq!(visible_range(px(200.), &widths, Some(4)), 3..5);
+        assert_eq!(visible_range(px(200.), &widths, Some(2)), 1..3);
+        // Already inside the leading window: nothing shifts.
+        assert_eq!(visible_range(px(200.), &widths, Some(1)), 0..2);
+        // Room for one only, so the window is exactly the active tab.
+        assert_eq!(visible_range(px(100.), &widths, Some(3)), 3..4);
+        // A stale index — the list changed under a click — is not a panic.
+        assert_eq!(visible_range(px(200.), &widths, Some(9)), 0..2);
+    }
+
+    #[test]
+    fn a_title_costs_more_the_longer_it_is_and_stops_at_the_cap() {
+        let short = wanted_width(&TabItem::new("a", "A"), 0);
+        let long = wanted_width(&TabItem::new("a", "A much longer tab title"), 0);
+        assert!(long > short, "{long:?} vs {short:?}");
+        // Nothing is ever priced above the width a tab is allowed to reach.
+        let huge = TabItem::new("a", "x".repeat(400));
+        assert_eq!(wanted_width(&huge, 2), design::TAB_MAX);
+        // The pin marker and each wired-up action cost width of their own.
+        let item = TabItem::new("a", "A");
+        assert!(wanted_width(&item.clone().pinned(true), 0) > wanted_width(&item, 0));
+        assert!(wanted_width(&item, 2) > wanted_width(&item, 1));
+        assert!(wanted_width(&item, 1) > wanted_width(&item, 0));
+    }
+
+    #[test]
+    fn an_overflow_request_carries_the_hidden_tabs_and_the_pointer() {
+        let at = gpui::point(px(12.), px(34.));
+        let req = TabOverflowRequest {
+            hidden: vec!["b".into(), "c".into()],
+            at,
+        };
+        assert_eq!(req.hidden.len(), 2);
+        assert_eq!(req.at, at);
     }
 
     #[test]

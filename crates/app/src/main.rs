@@ -470,6 +470,15 @@ struct Workspace {
     /// coordinates it was opened. The index is into the strip of whichever
     /// section is current, which is why `set_section` closes the menu.
     tab_menu: Option<(usize, gpui::Point<gpui::Pixels>)>,
+    /// The open overflow list: the keys of the tabs the strip could not fit, and
+    /// where it was opened. Keys rather than indices, so a list that changed
+    /// underneath drops the rows that no longer resolve instead of activating
+    /// whatever now sits at that position.
+    tab_overflow: Option<(Vec<SharedString>, gpui::Point<gpui::Pixels>)>,
+    /// Width the tab run reported during the last frame, so the strip can tell how
+    /// many tabs fit. Written by the strip's measuring `canvas` — see
+    /// `rp_ui::TabStrip::on_measure`.
+    tab_strip_width: Pixels,
     /// The tab menu's focus, so Escape reaches it. Per window, like all focus.
     menu_focus: gpui::FocusHandle,
     /// Width of the list column, dragged by the handle beside it.
@@ -542,6 +551,8 @@ impl Workspace {
             request_tabs: Tabs::default(),
             tool_tabs: Tabs::default(),
             tab_menu: None,
+            tab_overflow: None,
+            tab_strip_width: px(0.),
             menu_focus: cx.focus_handle(),
             sidebar_width: stored_sidebar_width(cx),
             resizing: None,
@@ -606,8 +617,10 @@ impl Workspace {
     /// why the tracker's polling is started and stopped here.
     fn set_section(&mut self, section: Section, cx: &mut Context<Self>) {
         self.section = section;
-        // The menu holds an index into the strip that is about to be replaced.
+        // The menu holds an index into the strip that is about to be replaced, and
+        // the overflow list names tabs of the section being left.
         self.tab_menu = None;
+        self.tab_overflow = None;
         self.track
             .update(cx, |t, cx| t.set_visible(section == Section::Track, cx));
         cx.notify();
@@ -685,6 +698,7 @@ impl Workspace {
             .retain(|k| !matches!(k, TabKey::Request { source, .. } if *source == gone));
         // The menu holds an index into the strip that just shrank.
         self.tab_menu = None;
+        self.tab_overflow = None;
         self.after_sources_changed(cx);
     }
 
@@ -1046,6 +1060,7 @@ impl Workspace {
         self.request_tabs.close_all();
         // The menu points at an index into the strip that just emptied.
         self.tab_menu = None;
+        self.tab_overflow = None;
         self.captured.clear();
         self.add_source(path, cx);
     }
@@ -2565,9 +2580,10 @@ impl Render for Workspace {
         }
         let t = theme::theme(cx);
         let rail = self.rail(cx);
-        // Built here, not inside the tab strip: the strip scrolls horizontally
-        // and would clip an overlay drawn inside it.
+        // Built here, not inside the tab strip: the strip clips its own children,
+        // so an overlay drawn inside it would be cut off.
         let tab_menu = tabs::menu(self, cx);
+        let tab_overflow = tabs::overflow(self, cx);
         // Same reason, one layer higher: the palette covers the whole window, so it
         // is built here and drawn deferred above everything including the menu.
         let command_palette = if self.palette_open {
@@ -2743,6 +2759,7 @@ impl Render for Workspace {
                     .child(body),
             )
             .when_some(tab_menu, |d, menu| d.child(menu))
+            .when_some(tab_overflow, |d, list| d.child(list))
             .when_some(command_palette, |d, p| d.child(p))
     }
 }

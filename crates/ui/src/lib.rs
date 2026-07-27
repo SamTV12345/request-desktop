@@ -67,7 +67,7 @@ pub use fonts::{Fonts, fonts, resolve_fonts};
 pub use palette::Palette;
 pub use search_bar::SearchBar;
 pub use shortcut::{Chord, Platform};
-pub use tabs::{TabItem, TabMenuRequest, TabStrip};
+pub use tabs::{TabItem, TabMenuRequest, TabOverflowRequest, TabStrip};
 pub use theme::{ActiveTheme, Theme, set_theme, theme};
 
 /// Register every key binding the widgets need. Call once at startup.

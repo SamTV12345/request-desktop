@@ -20,7 +20,7 @@ use rp_store::{TabRecord, WindowSession};
 use rp_ui::layout::divider;
 use rp_ui::theme;
 use rp_ui::tokens::{control, radius, space, text};
-use rp_ui::{TabItem, TabMenuRequest, TabStrip};
+use rp_ui::{TabItem, TabMenuRequest, TabOverflowRequest, TabStrip};
 use std::path::{Path, PathBuf};
 
 use crate::Workspace;
@@ -572,6 +572,13 @@ pub fn strip(ws: &Workspace, cx: &mut gpui::Context<Workspace>) -> impl IntoElem
         })
         .collect();
     TabStrip::new("tab-strip", items)
+        // Measured last frame by the strip's own `canvas`; without it the strip
+        // cannot know how many tabs fit and draws them all.
+        .width(ws.tab_strip_width)
+        .on_measure(cx.listener(|this, width: &gpui::Pixels, _, cx| {
+            this.tab_strip_width = *width;
+            cx.notify();
+        }))
         .on_activate(cx.listener(|this, key: &SharedString, _, cx| {
             if let Some(i) = index_of(this, key) {
                 this.tabs_mut().activate(i);
@@ -611,7 +618,106 @@ pub fn strip(ws: &Workspace, cx: &mut gpui::Context<Workspace>) -> impl IntoElem
                 cx.notify();
             }
         }))
+        // The chevron on the `+6` chip: the tabs that did not fit, as a list.
+        .on_overflow(cx.listener(|this, req: &TabOverflowRequest, window, cx| {
+            this.tab_overflow = Some((req.hidden.clone(), req.at));
+            window.focus(&this.menu_focus);
+            cx.notify();
+        }))
+        // The `+` at the end of the strip. It opens the command palette rather
+        // than inventing a blank tab: the design gives the button no behaviour,
+        // and "jump to anything" is already how this app opens a tab. Which tab
+        // a `+` should conjure out of nothing is not a question the strip can
+        // answer for both sections.
+        .on_new_tab(cx.listener(|this, _, window, cx| this.toggle_palette(window, cx)))
         .render(t)
+}
+
+/// The list behind the overflow chip: the tabs the strip could not fit.
+///
+/// Drawn at the root of the window for the same reason the context menu is — the
+/// tab run clips its own children. Rows are resolved from keys per frame, so one
+/// that was closed while the list was open is simply absent.
+///
+/// Activating a row is enough to bring it on screen: `rp_ui::tabs::visible_range`
+/// shifts the drawn window onto the active tab.
+pub fn overflow(
+    ws: &Workspace,
+    cx: &mut gpui::Context<Workspace>,
+) -> Option<impl IntoElement + use<>> {
+    let (hidden, at) = ws.tab_overflow.as_ref()?;
+    let t = theme::theme(cx);
+    let mut children = Vec::new();
+    for key in hidden {
+        let Some(title) = index_of(ws, key)
+            .and_then(|i| ws.tabs().iter().nth(i))
+            .map(|tab| tab.title.clone())
+        else {
+            continue;
+        };
+        let key = key.clone();
+        children.push(
+            div()
+                .id(key.clone())
+                .flex()
+                .flex_none()
+                .items_center()
+                .h(control::MD)
+                .px(space::S3)
+                .rounded(radius::SM)
+                .overflow_hidden()
+                .child(div().min_w_0().overflow_hidden().truncate().child(title))
+                .hover(|s| s.bg(t.hover()))
+                // Resolved again on click, not held as an index: the list may have
+                // been open while a tab was closed.
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    if let Some(i) = index_of(this, &key) {
+                        this.tabs_mut().activate(i);
+                    }
+                    this.tab_overflow = None;
+                    cx.defer(crate::save_session);
+                    cx.notify();
+                })),
+        );
+    }
+    if children.is_empty() {
+        return None;
+    }
+    Some(
+        gpui::deferred(
+            gpui::anchored()
+                .position(*at)
+                .snap_to_window_with_margin(space::S2)
+                .child(
+                    div()
+                        .id("tab-overflow-list")
+                        .track_focus(&ws.menu_focus)
+                        .occlude()
+                        .flex()
+                        .flex_col()
+                        .w(popup::WIDTH)
+                        .p(space::S1)
+                        .rounded(radius::MD)
+                        .bg(t.surface)
+                        .border_1()
+                        .border_color(t.divider)
+                        .shadow_md()
+                        .text_size(text::BODY)
+                        .on_mouse_down_out(cx.listener(|this, _: &MouseDownEvent, _, cx| {
+                            this.tab_overflow = None;
+                            cx.notify();
+                        }))
+                        .on_key_down(cx.listener(|this, ev: &gpui::KeyDownEvent, _, cx| {
+                            if ev.keystroke.key == "escape" {
+                                this.tab_overflow = None;
+                                cx.notify();
+                            }
+                        }))
+                        .children(children),
+                ),
+        )
+        .with_priority(1),
+    )
 }
 
 // ---------------------------------------------------------------------------
