@@ -11,6 +11,7 @@ use rp_ui::theme;
 use rp_ui::tokens::{control, radius, size, space, text};
 mod custom;
 mod filters;
+mod palette;
 mod reference;
 mod request_pane;
 mod session;
@@ -346,7 +347,7 @@ fn toggle_mcp(cx: &mut App) {
     cx.refresh_windows();
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Section {
     Requests,
     Tools,
@@ -441,6 +442,14 @@ struct Workspace {
     captured: Vec<(String, String)>,
     // Tools
     tool_query: Entity<TextInput>,
+    /// The command palette's query field. Built once and reused: it owns the focus
+    /// the palette's key bindings hang off, and rebuilding it per open would mean
+    /// re-focusing something the window has not laid out yet.
+    palette_query: Entity<TextInput>,
+    /// Whether the palette is open, and which row is on. The row list itself is
+    /// derived per frame from the query — it is a function of state, not state.
+    palette_open: bool,
+    palette_selected: usize,
     /// Time tracking. Owns its own list and detail pane, and polls the database
     /// only while its section is on screen.
     track: Entity<track::Track>,
@@ -483,6 +492,14 @@ impl Workspace {
         }
         let request_query = cx.new(|cx| TextInput::new(cx, "Search all open files…"));
         cx.observe(&request_query, |_, _, cx| cx.notify()).detach();
+        let palette_query = cx.new(|cx| TextInput::new(cx, "Jump to anything…"));
+        // Typing narrows the list, so a shorter list must not leave the selection
+        // pointing past its end — that is how Enter opens the wrong thing.
+        cx.observe(&palette_query, |this, _, cx| {
+            this.palette_selected = 0;
+            cx.notify();
+        })
+        .detach();
         // The watcher. One timer for the window, not one per file: it only stats
         // the open paths, which is a handful of syscalls a second and needs no
         // platform notification API or extra dependency to be right.
@@ -508,6 +525,9 @@ impl Workspace {
             var_rows: Vec::new(),
             captured: Vec::new(),
             tool_query,
+            palette_query,
+            palette_open: false,
+            palette_selected: 0,
             track,
             request_tabs: Tabs::default(),
             tool_tabs: Tabs::default(),
@@ -807,6 +827,95 @@ impl Workspace {
             content,
             pinned: false,
         });
+    }
+
+    // -- the command palette --
+
+    /// Every row the palette currently offers, for the query that is typed.
+    ///
+    /// Derived per frame rather than cached: the sources change under a file
+    /// watcher, and a cache that misses that offers rows that no longer exist.
+    fn palette_hits(&self, cx: &App) -> Vec<palette::Hit> {
+        let query = self.palette_query.read(cx).text().to_string();
+        let mut candidates = Vec::new();
+        for source in &self.sources {
+            for (index, r) in source.requests.iter().enumerate() {
+                candidates.push(palette::Candidate {
+                    source: &source.path,
+                    file: &source.label,
+                    index,
+                    name: &r.name,
+                    method: &r.method,
+                    url: &r.url,
+                });
+            }
+        }
+        palette::hits(&query, &candidates)
+    }
+
+    fn toggle_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.palette_open {
+            self.close_palette(window, cx);
+            return;
+        }
+        self.palette_open = true;
+        self.palette_selected = 0;
+        // Cleared on open: re-opening onto the last search means a list the user
+        // has already dealt with, and clearing it by hand is three keys.
+        self.palette_query.update(cx, |q, cx| q.set_text("", cx));
+        window.focus(&gpui::Focusable::focus_handle(&self.palette_query, cx));
+        cx.notify();
+    }
+
+    /// Close it, and give focus back. Without the blur, focus stays on a field
+    /// that is no longer drawn and the next keystroke goes nowhere visible.
+    fn close_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.palette_open {
+            return;
+        }
+        self.palette_open = false;
+        window.blur();
+        cx.notify();
+    }
+
+    fn move_palette(&mut self, down: bool, cx: &mut Context<Self>) {
+        let len = self.palette_hits(cx).len();
+        self.palette_selected = rp_ui::palette::step_selection(self.palette_selected, len, down);
+        cx.notify();
+    }
+
+    /// Take row `i`: close the palette, then do what the row said it would.
+    ///
+    /// The index is re-clamped against the list as it is *now* — the row list is
+    /// rebuilt per frame, so an index from an older, longer one would otherwise
+    /// open whatever has since moved into that slot.
+    fn choose_palette(&mut self, i: usize, window: &mut Window, cx: &mut Context<Self>) {
+        let hits = self.palette_hits(cx);
+        let Some(choice) = hits
+            .get(rp_ui::palette::clamp_selection(i, hits.len()))
+            .map(|h| h.choice.clone())
+        else {
+            // Nothing matched. Enter on an empty list leaves the palette open,
+            // because closing it would look like something had happened.
+            return;
+        };
+        self.close_palette(window, cx);
+        match choice {
+            // Switching section too: a request opened while Tools is on screen
+            // would go into a strip nobody is looking at.
+            palette::Choice::Request { source, index } => {
+                self.set_section(Section::Requests, cx);
+                self.open_request(&source, index, cx);
+            }
+            palette::Choice::Tool(id) => {
+                if let Some(tool) = rp_devtools::find(id) {
+                    self.set_section(Section::Tools, cx);
+                    self.open_tool(tool, window, cx);
+                }
+            }
+            palette::Choice::Section(section) => self.set_section(section, cx),
+        }
+        cx.notify();
     }
 
     /// Rebuild the tabs a previous run had open.
@@ -1178,18 +1287,11 @@ impl Workspace {
                 rp_ui::SearchBar::new("palette")
                     .placeholder("Jump to anything")
                     .chord(PALETTE)
+                    .active(self.palette_open)
                     .render(
                         t,
-                        cx.listener(|_, _: &gpui::ClickEvent, _, cx| {
-                            // ponytail: the palette itself is not built. Saying so
-                            // in the status line beats a button that looks alive
-                            // and does nothing — which is the failure this app has
-                            // already shipped twice.
-                            eprintln!(
-                                "request-pilot: the command palette ({}) is not built yet",
-                                PALETTE.label()
-                            );
-                            cx.refresh_windows();
+                        cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
+                            this.toggle_palette(window, cx)
                         }),
                     ),
             )
@@ -2488,7 +2590,7 @@ impl Render for Tip {
 }
 
 impl Render for Workspace {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         // Variable edits are typed into their own editors, so push the current
         // set into the pane before it can be sent.
         if let Some((path, _, pane)) = self.active_request() {
@@ -2500,6 +2602,36 @@ impl Render for Workspace {
         // Built here, not inside the tab strip: the strip scrolls horizontally
         // and would clip an overlay drawn inside it.
         let tab_menu = tabs::menu(self, cx);
+        // Same reason, one layer higher: the palette covers the whole window, so it
+        // is built here and drawn deferred above everything including the menu.
+        let command_palette = if self.palette_open {
+            let hits = self.palette_hits(cx);
+            let rows = hits.iter().map(|h| h.row.clone()).collect();
+            // The entity, not `cx.listener`: the palette hands its handlers a plain
+            // `&mut App`, which is all a click needs to reach back into the window.
+            let choose = cx.entity();
+            let dismiss = choose.clone();
+            Some(
+                rp_ui::Palette::new("command-palette")
+                    .rows(rows)
+                    .selected(self.palette_selected)
+                    .empty("Nothing matches that")
+                    .render(
+                        t,
+                        window,
+                        self.palette_query.clone().into_any_element(),
+                        move |i, window, cx| {
+                            choose.update(cx, |this, cx| this.choose_palette(i, window, cx))
+                        },
+                        move |window, cx| {
+                            dismiss.update(cx, |this, cx| this.close_palette(window, cx))
+                        },
+                    )
+                    .into_any_element(),
+            )
+        } else {
+            None
+        };
         // Time tracking brings its own list *and* detail pane, so it replaces the
         // whole body instead of borrowing the tab area — tabs are untouched and
         // come back exactly as they were.
@@ -2589,6 +2721,30 @@ impl Render for Workspace {
             .text_size(text::BODY)
             .line_height(text::BODY_LINE)
             .text_color(t.text)
+            // The palette's keys, on the root: the overlay is a child of this
+            // element, so an action raised inside it bubbles up to here. Movement
+            // and Enter are scoped to the palette's own key context and so only
+            // exist while it is open; the chord that opens it is not.
+            .on_action(cx.listener(|this, _: &rp_ui::palette::Toggle, window, cx| {
+                this.toggle_palette(window, cx)
+            }))
+            .on_action(
+                cx.listener(|this, _: &rp_ui::palette::Dismiss, window, cx| {
+                    this.close_palette(window, cx)
+                }),
+            )
+            .on_action(cx.listener(|this, _: &rp_ui::palette::SelectNext, _, cx| {
+                this.move_palette(true, cx)
+            }))
+            .on_action(cx.listener(|this, _: &rp_ui::palette::SelectPrev, _, cx| {
+                this.move_palette(false, cx)
+            }))
+            .on_action(
+                cx.listener(|this, _: &rp_ui::palette::Confirm, window, cx| {
+                    let at = this.palette_selected;
+                    this.choose_palette(at, window, cx)
+                }),
+            )
             // The move and release listeners sit on the root, not on the handle:
             // a pointer dragging a 9-px strip leaves it immediately, and an
             // element only hears about moves over itself. Only while a drag is
@@ -2620,6 +2776,7 @@ impl Render for Workspace {
                     .child(body),
             )
             .when_some(tab_menu, |d, menu| d.child(menu))
+            .when_some(command_palette, |d, p| d.child(p))
     }
 }
 
@@ -2671,7 +2828,7 @@ fn main() {
             let resolved = resolve_fonts(cx);
             cx.set_global(resolved);
             // One call: the design system registers what its widgets need.
-            rp_ui::bind_keys(cx);
+            rp_ui::bind_keys(cx, PALETTE);
             // Tabs can be pulled out into their own windows; the app lives until
             // the last one is gone.
             cx.on_window_closed(|cx| {

@@ -214,6 +214,14 @@ impl Theme {
         self.accent
     }
 
+    /// Behind a modal. Black, on both grounds: the ink washes are light on the
+    /// dark ground, so `alpha(self.text, …)` would *brighten* what it is meant to
+    /// push back. Organic names no scrim, which is why this is a role here rather
+    /// than a value in the dialog that needs it.
+    pub fn scrim(&self) -> Rgba {
+        alpha(c(0x000000), if self.dark { 0.55 } else { 0.35 })
+    }
+
     /// `.tag-*`: a tint from one end of a ramp with the far end as ink.
     pub fn tag_accent(&self) -> (Rgba, Rgba) {
         (self.accent_ramp.s100, self.accent_ramp.s800)

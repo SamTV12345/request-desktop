@@ -31,6 +31,7 @@
 //! | [`input`] | the single-line field and the multi-line editor |
 //! | [`shortcut`] | key chords, spelled per platform, label **and** binding |
 //! | [`search_bar`] | the "jump to anything" bar — and the props pattern, explained |
+//! | [`palette`] | the overlay the bar opens: rows in, the chosen index out |
 //! | [`tabs`] | the tab strip, from a list of items it knows nothing about |
 //! | [`fonts`] | the three design faces, resolved against what is installed |
 //!
@@ -52,6 +53,7 @@ pub mod fonts;
 pub mod icon;
 pub mod input;
 pub mod layout;
+pub mod palette;
 pub mod search_bar;
 pub mod shortcut;
 pub mod tabs;
@@ -61,16 +63,20 @@ pub mod tokens;
 pub use assets::Assets;
 pub use button::Tone;
 pub use fonts::{Fonts, fonts, resolve_fonts};
+pub use palette::Palette;
 pub use search_bar::SearchBar;
 pub use shortcut::{Chord, Platform};
 pub use tabs::{TabItem, TabMenuRequest, TabStrip};
 pub use theme::{ActiveTheme, Theme, set_theme, theme};
 
-/// Register every key binding the input widgets need. Call once at startup.
+/// Register every key binding the widgets need. Call once at startup.
 ///
-/// One call rather than two, so adding a third widget with bindings does not mean
-/// finding the startup path again.
-pub fn bind_keys(cx: &mut gpui::App) {
+/// One call rather than three, so adding a fourth widget with bindings does not
+/// mean finding the startup path again. `palette` is passed in because the chord
+/// that opens the command palette is also the one its search bar advertises, and
+/// the app owns that definition — see [`shortcut`] for why there is only one.
+pub fn bind_keys(cx: &mut gpui::App, palette: Chord) {
     input::line::bind_keys(cx);
     input::document::bind_keys(cx);
+    palette::bind_keys(cx, palette);
 }
