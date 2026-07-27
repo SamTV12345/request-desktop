@@ -7,8 +7,8 @@
 use crate::theme::{self, Theme, method_color};
 use crate::tokens::{radius, size, space, text};
 use gpui::{
-    Div, IntoElement, ParentElement as _, Pixels, SharedString, Stateful, Styled as _, div,
-    prelude::*,
+    Div, ElementId, InteractiveElement as _, IntoElement, ParentElement as _, Pixels, SharedString,
+    Stateful, StatefulInteractiveElement as _, Styled as _, div, prelude::*,
 };
 
 /// One aligned column of the entry table, in the header and in every row.
@@ -183,6 +183,85 @@ impl Chip {
             .child(self.label)
     }
 }
+
+/// A pressable filter tag: "All 86", "Convert", "Crypto".
+///
+/// Its own component and not [`Chip`] with a click handler, because the two are
+/// different things that the design draws differently. A `Chip` *labels* something
+/// — `.tag-accent` is `accent-100` on `accent-800`, a wash. A filter tag is a
+/// *choice*, and the selected one is a full accent fill with the ground's own ink
+/// (`background:var(--color-accent);color:#1b1814` in `Tools Improved.dc.html`),
+/// the same treatment the selected list row gets. It also needs an id, a cursor
+/// and a hover, none of which a label wants.
+///
+/// The count is optional because the design only puts one on "All".
+#[derive(Debug, Clone)]
+pub struct FilterTag {
+    pub id: ElementId,
+    pub label: SharedString,
+    pub count: Option<usize>,
+    pub on: bool,
+}
+
+impl FilterTag {
+    pub fn new(id: impl Into<ElementId>, label: impl Into<SharedString>) -> Self {
+        Self {
+            id: id.into(),
+            label: label.into(),
+            count: None,
+            on: false,
+        }
+    }
+
+    pub fn count(mut self, count: usize) -> Self {
+        self.count = Some(count);
+        self
+    }
+
+    pub fn on(mut self, on: bool) -> Self {
+        self.on = on;
+        self
+    }
+
+    pub fn render(
+        self,
+        t: Theme,
+        on_click: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+    ) -> gpui::Stateful<Div> {
+        let (bg, ink) = if self.on {
+            (t.accent, t.on_accent())
+        } else {
+            (t.hover(), t.text)
+        };
+        let label = match self.count {
+            Some(n) => SharedString::from(format!("{} {n}", self.label)),
+            None => self.label,
+        };
+        div()
+            .id(self.id)
+            .flex()
+            .flex_none()
+            .items_center()
+            // `.tag` is `calc(var(--radius-md) * 0.75)` — 12px, not a pill. The
+            // padding and 11px text are the filter row's own.
+            .rounded(TAG_RADIUS)
+            .px(space::S3)
+            .py(TAG_PAD_Y)
+            .bg(bg)
+            .text_size(TAG_TEXT)
+            .text_color(ink)
+            .whitespace_nowrap()
+            .cursor_pointer()
+            .when(!self.on, |d| d.hover(|s| s.bg(t.active())))
+            .child(label)
+            .on_click(on_click)
+    }
+}
+
+/// `.tag`'s corner and the filter row's own metrics. None is on a token scale.
+const TAG_RADIUS: gpui::Pixels = gpui::px(12.);
+const TAG_PAD_Y: gpui::Pixels = gpui::px(3.);
+const TAG_TEXT: gpui::Pixels = gpui::px(11.);
 
 /// A method badge: the method's own hue on a wash of itself, at a fixed width
 /// so the names to its right form a column.

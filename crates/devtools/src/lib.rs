@@ -205,6 +205,40 @@ impl Category {
             Category::Data => "Data",
         }
     }
+
+    /// The one-word form for a filter tag, where the full heading would not fit.
+    ///
+    /// `Tools Improved.dc.html` writes "Convert", "Crypto" and "Web" in that row
+    /// while the headings below say "Convert & format" and "Crypto & auth", so the
+    /// two forms are the design's, not a shortening of convenience.
+    pub const fn short(self) -> &'static str {
+        match self {
+            Category::Converter => "Convert",
+            Category::Crypto => "Crypto",
+            Category::Web => "Web",
+            Category::Images => "Images",
+            Category::Development => "Dev",
+            Category::Network => "Network",
+            Category::Math => "Maths",
+            Category::Measurement => "Units",
+            Category::Text => "Text",
+            Category::Data => "Data",
+        }
+    }
+
+    /// Every category, for a filter row that should offer them all.
+    pub const ALL: [Category; 10] = [
+        Category::Crypto,
+        Category::Converter,
+        Category::Web,
+        Category::Images,
+        Category::Development,
+        Category::Network,
+        Category::Math,
+        Category::Measurement,
+        Category::Text,
+        Category::Data,
+    ];
 }
 
 pub struct Tool {

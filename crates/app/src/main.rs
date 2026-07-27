@@ -94,6 +94,8 @@ const ROW_PAD_Y: Pixels = px(7.);
 const ROW_TEXT: Pixels = px(13.5);
 const PIN_DOT: Pixels = px(5.);
 const UNAVAILABLE_OPACITY: f32 = 0.6;
+/// The filter row's `gap:5px` — between `space::S1` (4.4) and `S2` (8.8).
+const TAG_GAP: Pixels = px(5.);
 
 /// The maker's mark at the right end of the title bar, where the mockups had
 /// window controls the OS already draws.
@@ -466,6 +468,12 @@ struct Workspace {
     captured: Vec<(String, String)>,
     // Tools
     tool_query: Entity<TextInput>,
+    /// The category the tools list is narrowed to, or all of them.
+    ///
+    /// Not persisted: a filter is where you are right now, unlike a favourite. A
+    /// remembered one would mean opening the app to a list that is missing 80 tools
+    /// for a reason you set last week.
+    tool_filter: Option<rp_devtools::Category>,
     /// Favourite tool ids, in the order they were pinned — which is the order of
     /// the ⌘1…⌘9 shortcuts, so it is a `Vec` and not a set.
     ///
@@ -573,6 +581,7 @@ impl Workspace {
             var_rows: Vec::new(),
             captured: Vec::new(),
             tool_query,
+            tool_filter: None,
             favorites: stored_favorites(cx),
             palette_query,
             palette_open: false,
@@ -1742,7 +1751,11 @@ impl Workspace {
 
     fn tools_list(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let query = self.tool_query.read(cx).text().to_string();
-        let matches = rp_devtools::search(&query);
+        let found = rp_devtools::search(&query);
+        // The tag row is built from what the *search* found, before the category
+        // filter — see `tools::tags` for why that is not interchangeable.
+        let tags = tools::tags(&found, self.tool_filter);
+        let matches = tools::only(&found, self.tool_filter);
         let count = matches.len();
         let selected = self.tool_tabs.active_key().cloned();
         let t = theme::theme(cx);
@@ -1769,13 +1782,36 @@ impl Workspace {
                     .pb(space::S2)
                     .child(self.tool_query.clone()),
             )
+            // The filter row. It wraps: eleven tags do not fit one sidebar line,
+            // and the design's row is a truncated view of four.
             .child(
                 div()
+                    .flex()
+                    .flex_wrap()
+                    .gap(TAG_GAP)
                     .px(space::S3)
                     .pb(space::S2)
-                    .text_size(text::SMALL)
-                    .text_color(t.text_meta())
-                    .child(SharedString::from(format!("{count} tools"))),
+                    .children(tags.into_iter().map(|tag| {
+                        let cat = tag.category;
+                        let mut el = rp_ui::data::FilterTag::new(
+                            SharedString::from(format!("filter-{}", tag.label)),
+                            tag.label,
+                        )
+                        .on(tag.on);
+                        // `when_some` is an element builder, and this is still props.
+                        if let Some(n) = tag.count {
+                            el = el.count(n);
+                        }
+                        el.render(
+                            t,
+                            cx.listener(move |this, _, _, cx| {
+                                // Clicking the lit tag clears the filter, so the way
+                                // back does not depend on finding "All" again.
+                                this.tool_filter = if this.tool_filter == cat { None } else { cat };
+                                cx.notify();
+                            }),
+                        )
+                    })),
             )
             .child(divider(t))
             .child(
@@ -1929,12 +1965,20 @@ impl Workspace {
                     .flex_none()
                     .p(space::S1)
                     .rounded(radius::PILL)
-                    // Without this the row's own hitbox is hit too — gpui counts
-                    // *every* containing hitbox as hovered unless one blocks the
-                    // mouse, so both click handlers fire and pinning would also
-                    // open the tool. `occlude()` is `HitboxBehavior::BlockMouse`,
-                    // which stops the walk before it reaches the row.
-                    .occlude()
+                    // The row is clickable too, and gpui counts *every* containing
+                    // hitbox as hovered, so without this pinning would also open the
+                    // tool. It is `stop_propagation` and **not** `occlude()`:
+                    // `occlude()` blocks the mouse, which takes the row out of the
+                    // hit test — and `group_hover` asks the row whether it is
+                    // hovered, so the star faded out the moment the pointer reached
+                    // it while its click still worked. That was the bug.
+                    //
+                    // The bubble phase runs listeners in reverse registration order,
+                    // i.e. children first, and stops at the first one that refuses to
+                    // propagate. `on_mouse_down` as well as the click: the row
+                    // captures its mouse-down separately and would keep a stale one,
+                    // which fires as a phantom click on the next release over it.
+                    .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .when(!pinned && !active, |d| {
                         d.opacity(0.).group_hover(group.clone(), |s| s.opacity(1.))
                     })
@@ -1945,6 +1989,7 @@ impl Workspace {
                     })
                     .child(icon_tinted("star", text::SMALL, star_ink))
                     .on_click(cx.listener(move |this, _, _, cx| {
+                        cx.stop_propagation();
                         this.toggle_favorite(tool.id, cx);
                     })),
             )

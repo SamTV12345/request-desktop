@@ -64,6 +64,58 @@ pub fn toggle(list: &mut Vec<String>, id: &str) {
     }
 }
 
+/// One tag in the filter row.
+pub struct Tag {
+    pub label: &'static str,
+    /// `None` is the "All" tag, which clears the filter.
+    pub category: Option<Category>,
+    /// Only "All" carries one, as in the design.
+    pub count: Option<usize>,
+    pub on: bool,
+}
+
+/// The filter row for `matches`.
+///
+/// **`matches` must be the search results *before* the category filter is
+/// applied.** Building the row from the filtered set would leave only the selected
+/// tag standing, so picking "Crypto" would hide every other category and the only
+/// way back would be a tag that is no longer beside them. The row has to keep
+/// offering what the search found.
+///
+/// Only categories that actually occur are offered — after a search for "json"
+/// there is nothing behind "Images" but an empty list.
+pub fn tags(matches: &[&'static Tool], active: Option<Category>) -> Vec<Tag> {
+    let mut out = vec![Tag {
+        label: "All",
+        category: None,
+        count: Some(matches.len()),
+        on: active.is_none(),
+    }];
+    for cat in Category::ALL {
+        if matches.iter().any(|t| t.category == cat) {
+            out.push(Tag {
+                label: cat.short(),
+                category: Some(cat),
+                count: None,
+                on: active == Some(cat),
+            });
+        }
+    }
+    out
+}
+
+/// Narrow `matches` to `active`, or leave it alone.
+pub fn only(matches: &[&'static Tool], active: Option<Category>) -> Vec<&'static Tool> {
+    match active {
+        None => matches.to_vec(),
+        Some(cat) => matches
+            .iter()
+            .filter(|t| t.category == cat)
+            .copied()
+            .collect(),
+    }
+}
+
 /// Split `matches` into the favourites group and one group per category.
 ///
 /// `matches` is already filtered by the search box, so a search narrows the
@@ -190,6 +242,52 @@ mod tests {
             "nothing pinned matched, so no pinned heading"
         );
         assert_eq!(groups.len(), 1);
+    }
+
+    /// The trap this exists to prevent: a row built from the *filtered* set holds
+    /// only the tag you already picked, so there is no way back to the others.
+    #[test]
+    fn the_filter_row_still_offers_the_others_while_one_is_active() {
+        let all_tools = all();
+        let with_crypto = tags(&all_tools, Some(Category::Crypto));
+        assert!(with_crypto.len() > 2, "not just All and Crypto");
+        assert!(
+            with_crypto
+                .iter()
+                .any(|tag| tag.category == Some(Category::Converter)),
+            "a different category is still reachable in one click"
+        );
+        // Exactly one is lit, and "All" leads.
+        assert_eq!(with_crypto.iter().filter(|tag| tag.on).count(), 1);
+        assert_eq!(with_crypto[0].label, "All");
+        assert!(!with_crypto[0].on);
+        assert!(tags(&all_tools, None)[0].on, "no filter means All is lit");
+    }
+
+    /// "All" counts what the search found, not what the filter left.
+    #[test]
+    fn all_carries_the_count_and_the_categories_do_not() {
+        let all_tools = all();
+        let row = tags(&all_tools, Some(Category::Crypto));
+        assert_eq!(row[0].count, Some(all_tools.len()));
+        assert!(row[1..].iter().all(|tag| tag.count.is_none()));
+    }
+
+    #[test]
+    fn a_category_with_no_hits_is_not_offered() {
+        let one = vec![tool("bcrypt")];
+        let row = tags(&one, None);
+        assert_eq!(row.len(), 2, "All plus bcrypt's own category");
+        assert_eq!(row[1].category, Some(tool("bcrypt").category));
+    }
+
+    #[test]
+    fn filtering_keeps_only_that_category_and_none_keeps_everything() {
+        let all_tools = all();
+        assert_eq!(only(&all_tools, None).len(), all_tools.len());
+        let crypto = only(&all_tools, Some(Category::Crypto));
+        assert!(!crypto.is_empty());
+        assert!(crypto.iter().all(|t| t.category == Category::Crypto));
     }
 
     #[test]
