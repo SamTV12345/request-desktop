@@ -450,6 +450,10 @@ struct Workspace {
     /// derived per frame from the query — it is a function of state, not state.
     palette_open: bool,
     palette_selected: usize,
+    /// The palette list's scroll offset. Held here rather than in the component,
+    /// which is rebuilt every frame: walking the selection past the fold has to
+    /// move the list, and only a handle that outlives one frame can do that.
+    palette_scroll: gpui::ScrollHandle,
     /// Time tracking. Owns its own list and detail pane, and polls the database
     /// only while its section is on screen.
     track: Entity<track::Track>,
@@ -497,6 +501,9 @@ impl Workspace {
         // pointing past its end — that is how Enter opens the wrong thing.
         cx.observe(&palette_query, |this, _, cx| {
             this.palette_selected = 0;
+            // And back to the top with it, or a narrowed list shows its first row
+            // scrolled out of sight.
+            this.palette_scroll.scroll_to_item(0);
             cx.notify();
         })
         .detach();
@@ -528,6 +535,7 @@ impl Workspace {
             palette_query,
             palette_open: false,
             palette_selected: 0,
+            palette_scroll: gpui::ScrollHandle::new(),
             track,
             request_tabs: Tabs::default(),
             tool_tabs: Tabs::default(),
@@ -850,7 +858,8 @@ impl Workspace {
                 });
             }
         }
-        palette::hits(&query, &candidates)
+        let envs: Vec<&str> = self.environments.iter().map(|e| e.name.as_str()).collect();
+        palette::hits(&query, &candidates, &envs)
     }
 
     fn toggle_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -863,6 +872,7 @@ impl Workspace {
         // Cleared on open: re-opening onto the last search means a list the user
         // has already dealt with, and clearing it by hand is three keys.
         self.palette_query.update(cx, |q, cx| q.set_text("", cx));
+        self.palette_scroll.scroll_to_item(0);
         window.focus(&gpui::Focusable::focus_handle(&self.palette_query, cx));
         cx.notify();
     }
@@ -879,8 +889,15 @@ impl Workspace {
     }
 
     fn move_palette(&mut self, down: bool, cx: &mut Context<Self>) {
-        let len = self.palette_hits(cx).len();
-        self.palette_selected = rp_ui::palette::step_selection(self.palette_selected, len, down);
+        let rows: Vec<rp_ui::palette::Row> =
+            self.palette_hits(cx).into_iter().map(|h| h.row).collect();
+        self.palette_selected =
+            rp_ui::palette::step_selection(self.palette_selected, rows.len(), down);
+        // Here and not in the palette's `render`: a wheel scroll also causes a
+        // render, and asking to scroll to the selection there would snap the list
+        // back on every notch. Only a *move* should move the list.
+        self.palette_scroll
+            .scroll_to_item(rp_ui::palette::child_index(&rows, self.palette_selected));
         cx.notify();
     }
 
@@ -914,6 +931,18 @@ impl Workspace {
                 }
             }
             palette::Choice::Section(section) => self.set_section(section, cx),
+            // Rebuilding the rows is what actually applies it — the fields the
+            // Variables view edits are built from the active environment.
+            palette::Choice::Environment(i) => {
+                if i < self.environments.len() {
+                    self.selected_env = Some(i);
+                    self.rebuild_var_rows(cx);
+                }
+            }
+            palette::Choice::Vars => {
+                self.set_section(Section::Requests, cx);
+                self.open_vars(cx);
+            }
         }
         cx.notify();
     }
@@ -2551,6 +2580,7 @@ impl Render for Workspace {
                     .rows(rows)
                     .selected(self.palette_selected)
                     .empty("Nothing matches that")
+                    .scroll(self.palette_scroll.clone())
                     .render(
                         t,
                         window,

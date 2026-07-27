@@ -20,10 +20,12 @@ use crate::shortcut::Chord;
 use crate::theme::{Theme, alpha};
 use crate::tokens::{control, radius, space, text};
 use gpui::{
-    AnyElement, App, ElementId, InteractiveElement as _, KeyBinding, MouseDownEvent,
-    ParentElement as _, Pixels, SharedString, StatefulInteractiveElement as _, Styled as _, Window,
-    actions, div, point, prelude::*, px,
+    AnyElement, App, ElementId, FontWeight, HighlightStyle, InteractiveElement as _, KeyBinding,
+    MouseDownEvent, ParentElement as _, Pixels, ScrollHandle, SharedString,
+    StatefulInteractiveElement as _, Styled as _, StyledText, Window, actions, div, point,
+    prelude::*, px,
 };
+use std::ops::Range;
 use std::rc::Rc;
 
 /// The key context the movement bindings are scoped to. Set on the overlay, so it
@@ -56,6 +58,107 @@ pub fn bind_keys(cx: &mut App, open: Chord) {
     ]);
 }
 
+/// How well a query matched, and where.
+///
+/// `score` is comparable only against other matches of the *same* query; higher is
+/// better. `ranges` are byte ranges into the haystack, in order and merged where
+/// the matched characters were adjacent, which is the shape
+/// [`gpui::StyledText::with_highlights`] wants.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Match {
+    pub score: i32,
+    pub ranges: Vec<Range<usize>>,
+}
+
+/// A match at the very start of the label — what the user is most likely typing.
+const AT_START: i32 = 8;
+/// A match at a word start: after a space, `-`, `_`, `.` or `/`.
+const AT_WORD: i32 = 6;
+/// A match on the capital of a camelCase hump, so `sc` finds "statusCode".
+const AT_HUMP: i32 = 4;
+/// A match immediately after the previous one — a run reads as a real substring.
+const IN_RUN: i32 = 5;
+
+fn same_letter(a: char, b: char) -> bool {
+    a == b || a.to_lowercase().eq(b.to_lowercase())
+}
+
+/// Fuzzy-match `query` against `haystack`, case-insensitively.
+///
+/// A *subsequence* match rather than a substring one: `csv` finds "Copy as CSV"
+/// and `htst` finds "HTTP status codes". `None` means the query's characters do not
+/// appear in order.
+///
+/// An empty (or all-whitespace) query matches everything with score 0 and nothing
+/// highlighted, which is what lets the palette open onto its whole list.
+///
+/// No gpui in the signature on purpose — the ranking is the behaviour worth
+/// testing, and nothing inside a `render` can be tested in this workspace.
+pub fn fuzzy(haystack: &str, query: &str) -> Option<Match> {
+    let query = query.trim();
+    let mut m = Match::default();
+    if query.is_empty() {
+        return Some(m);
+    }
+    // ponytail: leftmost-greedy. It never misses a match that exists — for
+    // subsequence *existence* greedy is complete — but it can score one below the
+    // best alignment ("ab" in "a-ab" takes the leading `a`). A Smith-Waterman pass
+    // is the upgrade if the ordering ever reads wrong; over palette-length labels
+    // it does not.
+    let mut needle = query.chars().peekable();
+    // The haystack character before the one being looked at, for the boundary and
+    // hump bonuses. `None` means we are at the start.
+    let mut prev: Option<char> = None;
+    let mut run_end: Option<usize> = None;
+    for (at, ch) in haystack.char_indices() {
+        let Some(&n) = needle.peek() else { break };
+        if !same_letter(ch, n) {
+            prev = Some(ch);
+            continue;
+        }
+        needle.next();
+        let end = at + ch.len_utf8();
+        m.score +=
+            1 + match prev {
+                None => AT_START,
+                Some(p) if !p.is_alphanumeric() => AT_WORD,
+                Some(p) if p.is_lowercase() && ch.is_uppercase() => AT_HUMP,
+                _ => 0,
+            } + if run_end == Some(at) { IN_RUN } else { 0 };
+        match m.ranges.last_mut() {
+            Some(r) if r.end == at => r.end = end,
+            _ => m.ranges.push(at..end),
+        }
+        run_end = Some(end);
+        prev = Some(ch);
+    }
+    // Anything left over never appeared.
+    needle.next().is_none().then_some(m)
+}
+
+/// The index of row `selected` among the list's *children*, which is what
+/// [`gpui::ScrollHandle::scroll_to_item`] counts.
+///
+/// Group headings are children too, so the row index and the child index drift
+/// apart by one per heading above the row. Scrolling to the row index instead
+/// stops short by exactly the number of groups, which is how the selection ends up
+/// just below the fold.
+pub fn child_index(rows: &[Row], selected: usize) -> usize {
+    let mut at = 0;
+    let mut group: Option<&SharedString> = None;
+    for (i, row) in rows.iter().enumerate() {
+        if group != Some(&row.group) {
+            at += 1;
+            group = Some(&row.group);
+        }
+        if i == selected {
+            return at;
+        }
+        at += 1;
+    }
+    at.saturating_sub(1)
+}
+
 /// One offered thing.
 ///
 /// `detail` is not decoration: two rows that read the same and do different things
@@ -70,6 +173,9 @@ pub struct Row {
     pub detail: SharedString,
     /// A name from `crates/ui/src/assets.rs`. Anything else paints nothing.
     pub icon: &'static str,
+    /// Byte ranges of `label` the query matched — [`Match::ranges`], passed through.
+    /// Empty means no emphasis, which is also what an empty query gets.
+    pub highlight: Vec<Range<usize>>,
 }
 
 impl Row {
@@ -79,6 +185,7 @@ impl Row {
             label: label.into(),
             detail: SharedString::default(),
             icon: "file",
+            highlight: Vec::new(),
         }
     }
 
@@ -91,6 +198,43 @@ impl Row {
         self.icon = icon;
         self
     }
+
+    pub fn highlight(mut self, highlight: Vec<Range<usize>>) -> Self {
+        self.highlight = highlight;
+        self
+    }
+}
+
+/// The label, with the matched characters picked out.
+///
+/// `StyledText::with_highlights` resolves the *unhighlighted* runs against the
+/// ambient text style at layout time (checked in gpui 0.2.2's
+/// `StyledText::request_layout`, which is where the delayed highlights are turned
+/// into runs), so the rest of the label keeps the `text_color` the row set and
+/// `.truncate()` on the wrapper still clips it.
+fn labelled(label: &SharedString, ranges: &[Range<usize>], style: HighlightStyle) -> AnyElement {
+    // `compute_runs` subtracts the previous run's end from the next range's start,
+    // so an overlapping or backwards range underflows and panics. `highlight` is a
+    // `pub` field, so that cannot be assumed away.
+    let mut clean: Vec<(Range<usize>, HighlightStyle)> = Vec::with_capacity(ranges.len());
+    let mut end = 0;
+    for r in ranges {
+        if r.start >= end
+            && r.start < r.end
+            && r.end <= label.len()
+            && label.is_char_boundary(r.start)
+            && label.is_char_boundary(r.end)
+        {
+            end = r.end;
+            clean.push((r.clone(), style));
+        }
+    }
+    if clean.is_empty() {
+        return label.clone().into_any_element();
+    }
+    StyledText::new(label.clone())
+        .with_highlights(clean)
+        .into_any_element()
 }
 
 /// Keep `selected` inside `len`.
@@ -137,6 +281,14 @@ pub struct Palette {
     pub selected: usize,
     /// Shown in place of the list when nothing matched. A blank card looks broken.
     pub empty: SharedString,
+    /// The list's scroll state. Owned by the caller because the palette is rebuilt
+    /// every frame and a handle made here would forget its offset immediately.
+    ///
+    /// Whoever moves `selected` is the one that calls
+    /// [`ScrollHandle::scroll_to_item`] — not this `render`, which runs on wheel
+    /// scrolls too and would drag the list back to the selection on every notch.
+    /// `None` still renders; the selection just does not follow.
+    pub scroll: Option<ScrollHandle>,
 }
 
 impl Palette {
@@ -146,6 +298,7 @@ impl Palette {
             rows: Vec::new(),
             selected: 0,
             empty: "No matches".into(),
+            scroll: None,
         }
     }
 
@@ -161,6 +314,11 @@ impl Palette {
 
     pub fn empty(mut self, empty: impl Into<SharedString>) -> Self {
         self.empty = empty.into();
+        self
+    }
+
+    pub fn scroll(mut self, scroll: ScrollHandle) -> Self {
+        self.scroll = Some(scroll);
         self
     }
 
@@ -180,6 +338,14 @@ impl Palette {
     ) -> impl IntoElement {
         let selected = clamp_selection(self.selected, self.rows.len());
         let on_choose = Rc::new(on_choose);
+        // The matched characters, in the accent and a shade heavier. Not a
+        // background wash: the selected row already has one, and two overlapping
+        // washes read as a rendering fault.
+        let hit_style = HighlightStyle {
+            color: Some(t.accent.into()),
+            font_weight: Some(FontWeight::SEMIBOLD),
+            ..Default::default()
+        };
         // `for`, not `map`: the row builders capture per-row state and a lazy
         // iterator would keep the borrows alive past this scope.
         let mut children = Vec::new();
@@ -225,7 +391,7 @@ impl Palette {
                                     .min_w_0()
                                     .truncate()
                                     .text_color(t.text)
-                                    .child(row.label.clone()),
+                                    .child(labelled(&row.label, &row.highlight, hit_style)),
                             )
                             .child(
                                 div()
@@ -255,6 +421,7 @@ impl Palette {
                 .min_h_0()
                 .max_h(LIST_MAX_H)
                 .overflow_y_scroll()
+                .when_some(self.scroll, |d, handle| d.track_scroll(&handle))
                 .pb(space::S1)
                 .children(children)
                 .into_any_element()
@@ -362,5 +529,120 @@ mod tests {
         // A step out of a list that has already shrunk lands somewhere real.
         assert_eq!(step_selection(9, 3, true), 0);
         assert_eq!(step_selection(9, 0, true), 0);
+    }
+
+    /// The matched slices, as text — what the highlight will actually emphasise.
+    fn hit(haystack: &str, query: &str) -> Option<Vec<String>> {
+        Some(
+            fuzzy(haystack, query)?
+                .ranges
+                .into_iter()
+                .map(|r| haystack[r].to_string())
+                .collect(),
+        )
+    }
+
+    fn score(haystack: &str, query: &str) -> i32 {
+        fuzzy(haystack, query).expect("must match").score
+    }
+
+    /// The whole point of not being a substring filter: initials find the thing.
+    #[test]
+    fn a_query_may_skip_characters() {
+        assert_eq!(hit("Copy as CSV", "csv").unwrap(), ["C", "s", "V"]);
+        assert_eq!(hit("HTTP status codes", "htst").unwrap(), ["HT", "st"]);
+        // A plain substring still matches, as one run.
+        assert_eq!(hit("HTTP status codes", "status").unwrap(), ["status"]);
+        // Case is ignored in both directions.
+        assert!(fuzzy("Base64 Encode", "BASE64").is_some());
+        assert!(fuzzy("BASE64 ENCODE", "base64").is_some());
+    }
+
+    /// Out of order is not a match, or the palette matches everything.
+    #[test]
+    fn characters_out_of_order_do_not_match() {
+        assert!(fuzzy("Copy as CSV", "vsc").is_none());
+        assert!(fuzzy("Get films", "zzqq").is_none());
+        // One character too many, even though the rest is there.
+        assert!(fuzzy("csv", "csvv").is_none());
+    }
+
+    /// The empty query is the palette's index view: everything, nothing emphasised.
+    #[test]
+    fn an_empty_query_matches_with_nothing_highlighted() {
+        for query in ["", "   ", "\t\n"] {
+            let m = fuzzy("Anything at all", query).expect("must match");
+            assert_eq!(m.score, 0);
+            assert!(m.ranges.is_empty(), "nothing to emphasise for {query:?}");
+        }
+    }
+
+    /// The ranking rules, each against its own counter-example.
+    #[test]
+    fn a_prefix_beats_a_word_start_beats_a_scattered_hit() {
+        assert!(
+            score("Token exchange", "token") > score("Refresh token", "token"),
+            "a prefix outranks a word start"
+        );
+        assert!(
+            score("Refresh token", "token") > score("Retokenise", "token"),
+            "a word start outranks a hit in the middle of a word"
+        );
+        assert!(
+            score("status codes", "stco") > score("stack of coats", "stco"),
+            "one run plus a word start beats two scattered pairs"
+        );
+        // camelCase counts as a word start, so initials work on joined names.
+        assert!(score("statusCode", "sc") > score("stack", "sc"));
+    }
+
+    /// Ties go to the shorter label, but that is the *caller's* sort — the score
+    /// says nothing about length, so this pins the contract the caller relies on.
+    #[test]
+    fn equal_matches_score_equally_regardless_of_length() {
+        assert_eq!(
+            score("Get", "get"),
+            score("Get films from a very long list", "get")
+        );
+    }
+
+    /// Adjacent matches are one range, not one per character — a highlight drawn
+    /// per character shows seams between the letters.
+    #[test]
+    fn adjacent_matches_merge_into_one_range() {
+        let m = fuzzy("HTTP status codes", "htstat").expect("must match");
+        assert_eq!(
+            m.ranges,
+            vec![0..2, 5..9],
+            "two runs, not six single characters"
+        );
+    }
+
+    /// Byte ranges, not character counts: a multi-byte label must still slice.
+    #[test]
+    fn the_ranges_are_byte_ranges_that_slice_cleanly() {
+        let label = "Grüße löschen";
+        let m = fuzzy(label, "gl").expect("must match");
+        let cut: Vec<&str> = m.ranges.iter().map(|r| &label[r.clone()]).collect();
+        assert_eq!(cut, ["G", "l"]);
+    }
+
+    /// The group headings are children of the scroll box too, so the row index is
+    /// not the child index — this off-by-one-per-group is the bug it fixes.
+    #[test]
+    fn the_child_index_counts_the_group_headings() {
+        let rows = vec![
+            Row::new("Requests", "a"),
+            Row::new("Requests", "b"),
+            Row::new("Tools", "c"),
+            Row::new("Sections", "d"),
+        ];
+        assert_eq!(child_index(&rows, 0), 1, "one heading above the first row");
+        assert_eq!(child_index(&rows, 1), 2);
+        assert_eq!(child_index(&rows, 2), 4, "a second heading in between");
+        assert_eq!(child_index(&rows, 3), 6);
+        // A stale index lands on the last child rather than past the end.
+        assert_eq!(child_index(&rows, 99), 6);
+        assert_eq!(child_index(&[], 0), 0);
     }
 }
