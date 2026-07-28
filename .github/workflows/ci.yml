@@ -99,7 +99,7 @@ jobs:
       # tests of its own; compiling gpui on all three runners would triple CI
       # time for no extra assertions. Its compile+link is covered by build-app.
       - name: Run test suite
-        run: cargo test -p rp-core -p rp-devtools
+        run: cargo test -p rp-core -p rp-devtools -p rp-devtools-common -p rp-devtools-crypto -p rp-devtools-data -p rp-devtools-text -p rp-devtools-web -p rp-devtools-community
 
   build-app:
     # The only job that fully compiles AND LINKS request-pilot. clippy type-checks
@@ -160,7 +160,7 @@ jobs:
       - name: Collect coverage data
         run: |
           cargo +nightly llvm-cov --branch --ignore-run-fail --no-report \
-            -p rp-core -p rp-devtools
+            -p rp-core -p rp-devtools -p rp-devtools-common -p rp-devtools-crypto -p rp-devtools-data -p rp-devtools-text -p rp-devtools-web -p rp-devtools-community
 
       - name: Render lcov report
         run: cargo +nightly llvm-cov report --branch --lcov --output-path lcov.info

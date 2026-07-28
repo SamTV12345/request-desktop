@@ -1,0 +1,22 @@
+[package]
+name = "rp-devtools-common"
+version.workspace = true
+edition.workspace = true
+# Not published to a registry; cargo-deny infers "private crate" from this.
+publish = false
+
+[lib]
+name = "rp_devtools_common"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow.workspace = true
+hmac = "0.13.0"
+md-5 = "0.11.0"
+rand = "0.10.2"
+ripemd = "0.2.0"
+serde.workspace = true
+serde_json.workspace = true
+sha1 = "0.11.0"
+sha2 = "0.11.0"
+sha3 = "0.12.0"

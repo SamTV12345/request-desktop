@@ -1,0 +1,28 @@
+[package]
+name = "rp-devtools-community"
+version.workspace = true
+edition.workspace = true
+# Not published to a registry; cargo-deny infers "private crate" from this.
+publish = false
+
+[lib]
+name = "rp_devtools_community"
+path = "src/lib.rs"
+
+[dependencies]
+rp-devtools-common = { path = "../common" }
+anyhow.workspace = true
+base64 = "0.23.0"
+bip39 = "2.2.2"
+chrono = "0.4.45"
+csv = "1.4.0"
+flate2 = "1.1.9"
+idna = "1.1.0"
+rand = "0.10.2"
+regex = "1.13.1"
+serde_json.workspace = true
+slug = "0.1.6"
+uuid = { version = "1.24.0", features = ["v1", "v4", "v7"] }
+
+[dev-dependencies]
+rp-devtools-crypto = { path = "../crypto" }

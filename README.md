@@ -8,7 +8,9 @@ A desktop tool that does three jobs from one window:
   `http-client.env.json` / `http-client.private.env.json`, and response handlers
   that carry a captured token into the next request.
 - **Tools** — the it-tools set, ported: encoders, hashes, converters, generators,
-  cheat sheets. 86 of them.
+  cheat sheets. 142 of them, the last 56 from pull requests upstream never
+  merged — a cURL importer, fake test data, HAR sanitising, the IPv6/CIDR block
+  and JSON-to-types for six languages.
 - **Time** — local time tracking in SQLite, with an MCP server so an agent can
   book its own hours and they appear live in the window. See
   [README-mcp.md](README-mcp.md).
@@ -35,7 +37,7 @@ like.
 | Path              | What                                                          |
 | ----------------- | ------------------------------------------------------------- |
 | `crates/core`     | `.bru` / `.http` parsers, variables, request execution         |
-| `crates/devtools` | the it-tools registry                                          |
+| `crates/devtools` | the tool registry: one crate per category, one file per tool   |
 | `crates/store`    | SQLite: sessions, time tracking, key/value                     |
 | `crates/app`      | the gpui application                                           |
 | `crates/mcp`      | the MCP server, over stdio and Streamable HTTP                 |

@@ -1,0 +1,31 @@
+[package]
+name = "rp-devtools-crypto"
+version.workspace = true
+edition.workspace = true
+# Not published to a registry; cargo-deny infers "private crate" from this.
+publish = false
+
+[lib]
+name = "rp_devtools_crypto"
+path = "src/lib.rs"
+
+[dependencies]
+rp-devtools-common = { path = "../common" }
+aes = "0.9.1"
+anyhow.workspace = true
+base64 = "0.23.0"
+bcrypt = "0.19.2"
+bip39 = "2.2.2"
+cbc = "0.2.1"
+chrono = "0.4.45"
+des = "0.9.0"
+hmac = "0.13.0"
+md-5 = "0.11.0"
+rand = "0.10.2"
+rc4 = "0.2.0"
+rsa = "0.9.10"
+serde_json.workspace = true
+sha2 = "0.11.0"
+ulid = "3.0.0"
+urlencoding = "2.1.3"
+uuid = { version = "1.24.0", features = ["v1", "v4", "v6", "v7"] }

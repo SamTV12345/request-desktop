@@ -65,6 +65,19 @@ const NONDETERMINISTIC: &[&str] = &[
     "chronometer",
     "date-time-converter",
     "git-memo",
+    // The pull-request batch: five generators and one "blank means today".
+    "fake-data-generator",
+    "passphrase-generator",
+    "pin-code-generator",
+    "nanoid-generator",
+    "objectid-generator-and-parser",
+    "week-numbers-converter",
+    // The parallel batch: a random salt, random PKCS#1 padding, a die, and a
+    // blank start date meaning "today".
+    "htpasswd-generator",
+    "rsa-encryption",
+    "dice-roller",
+    "date-duration-calculator",
 ];
 
 /// Collects every violation instead of dying on the first one, so one run tells

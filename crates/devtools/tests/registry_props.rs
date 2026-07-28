@@ -230,6 +230,31 @@ const SELF_SUFFICIENT: &[&str] = &[
     "svg-placeholder-generator", "temperature-converter", "text-statistics",
     "token-generator", "ulid-generator", "url-encoder", "url-parser",
     "uuid-generator",
+    // The pull-request batch.
+    "conventional-commits-cheatsheet", "data-storage-unit-converter",
+    "fake-data-generator", "floating-point-converter", "geo-distance-computer",
+    "jwt-generator", "list-comparison", "nanoid-generator",
+    "objectid-generator-and-parser", "passphrase-generator", "pin-code-generator",
+    "punycode-converter", "sla-computer", "snowflake-id-parser",
+    "week-numbers-converter",
+    // The network block (it-tools PRs #869, #871, #870, #963, #993, #1029,
+    // #1264, #1451, #867).
+    "cidr-to-ip-range",
+    "integers-to-ip",
+    "ip-in-cidr",
+    "ip-range-to-cidr",
+    "ipv6-address-converter",
+    "ipv6-subnet-calculator",
+    "mac-address-converter",
+    "port-info-search",
+    "subnet-exclude-calculator",
+    // The text block (it-tools PRs #1171, #1021, #1020).
+    "curl-to-http", "folder-tree-diagram", "morse-converter",
+    // The parallel batch: URLs, JSON types, HOTP and the calculators.
+    "date-duration-calculator", "dice-roller", "hdd-size-calculator",
+    "hex-base64-converter", "hotp-generator", "json-escape-unescape", "json-to-types",
+    "raid-calculator", "sharepoint-url-decoder", "ttl-calculator", "url-cleaner",
+    "url-defanger", "url-text-fragment-generator", "utm-url-generator",
 ];
 
 /// Self-sufficient in the weaker sense: `Ok`, but with nothing to show until
@@ -253,6 +278,15 @@ const NEEDS_INPUT: &[&str] = &[
     "text-to-unicode", "toml-to-json", "toml-to-yaml", "user-agent-parser",
     "wifi-qr-code-generator", "xml-formatter", "xml-to-json",
     "yaml-to-json-converter", "yaml-to-toml", "yaml-viewer",
+    // The pull-request batch.
+    "crc-calculator", "gzip-string-converter", "har-sanitizer",
+    "json-size-analyzer", "json-to-schema", "luhn-checker",
+    "markdown-table-generator", "sensitive-data-masker",
+    // The text block (it-tools PRs #1307, #1290, #1266, #1106, #930).
+    "ai-prompt-splitter", "markdown-toc-generator", "mime-encoder-decoder",
+    "smart-text-replacer", "stacktrace-formatter",
+    // Both need a key or a name before they can say anything.
+    "htpasswd-generator", "rsa-encryption",
 ];
 
 #[test]
@@ -325,6 +359,10 @@ const NONDETERMINISTIC: &[&str] = &[
     "rsa-key-pair-generator", "encryption", "ipv6-ula-generator", "eta-calculator",
     "otp-code-generator-and-validator", "crontab-generator", "chronometer",
     "date-time-converter", "git-memo", "bcrypt",
+    "fake-data-generator", "passphrase-generator", "pin-code-generator",
+    "nanoid-generator", "objectid-generator-and-parser", "week-numbers-converter",
+    // Random salt, random padding, a die, and "blank means today".
+    "date-duration-calculator", "dice-roller", "htpasswd-generator", "rsa-encryption",
 ];
 
 /// Missing keys must behave exactly like the declared defaults. A tool reading
@@ -509,6 +547,43 @@ const IDS: &[&str] = &[
     "user-agent-parser", "uuid-generator", "wifi-qr-code-generator",
     "xml-formatter", "xml-to-json", "yaml-to-json-converter", "yaml-to-toml",
     "yaml-viewer",
+    // The text block (it-tools PRs #1171, #1021, #1020).
+    "curl-to-http", "folder-tree-diagram", "morse-converter",
+    // The text block (it-tools PRs #1307, #1290, #1266, #1106, #930).
+    "ai-prompt-splitter", "markdown-toc-generator", "mime-encoder-decoder",
+    "smart-text-replacer", "stacktrace-formatter",
+
+    // Ported from open it-tools pull requests (`tools/community.rs`), plus
+    // `fake-data-generator`, which has no upstream tool to be named after.
+    "conventional-commits-cheatsheet", "crc-calculator",
+    "data-storage-unit-converter", "fake-data-generator",
+    "floating-point-converter", "geo-distance-computer", "gzip-string-converter",
+    "har-sanitizer", "json-size-analyzer", "json-to-schema", "jwt-generator",
+    "list-comparison", "luhn-checker", "markdown-table-generator",
+    "nanoid-generator", "objectid-generator-and-parser", "passphrase-generator",
+    "pin-code-generator", "punycode-converter", "sensitive-data-masker",
+    "sla-computer", "snowflake-id-parser", "week-numbers-converter",
+    // The network block (it-tools PRs #869, #871, #870, #963, #993, #1029,
+    // #1264, #1451, #867).
+    "cidr-to-ip-range",
+    "integers-to-ip",
+    "ip-in-cidr",
+    "ip-range-to-cidr",
+    "ipv6-address-converter",
+    "ipv6-subnet-calculator",
+    "mac-address-converter",
+    "port-info-search",
+    "subnet-exclude-calculator",
+    // The text block (it-tools PRs #1307, #1290, #1266, #1171, #1106, #1021,
+    // #1020, #930).
+    // The parallel batch: URLs, JSON types, crypto and the calculators
+    // (PRs #932, #959, #962, #918, #1524, #1002, #966, #1530, #1515, #902,
+    // #1013, #1033, #1218, #1022, #1532, #1324).
+    "date-duration-calculator", "dice-roller", "hdd-size-calculator",
+    "hex-base64-converter", "hotp-generator", "htpasswd-generator",
+    "json-escape-unescape", "json-to-types", "raid-calculator", "rsa-encryption",
+    "sharepoint-url-decoder", "ttl-calculator", "url-cleaner", "url-defanger",
+    "url-text-fragment-generator", "utm-url-generator",
 ];
 
 #[test]

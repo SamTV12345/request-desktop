@@ -1,0 +1,22 @@
+[package]
+name = "rp-devtools-text"
+version.workspace = true
+edition.workspace = true
+# Not published to a registry; cargo-deny infers "private crate" from this.
+publish = false
+
+[lib]
+name = "rp_devtools_text"
+path = "src/lib.rs"
+
+[dependencies]
+rp-devtools-common = { path = "../common" }
+anyhow.workspace = true
+base64 = "0.23.0"
+chrono = "0.4.45"
+csscolorparser = "0.8.3"
+html-escape = "0.2.14"
+qrcode = { version = "0.14.1", features = ["svg"], default-features = false }
+rand = "0.10.2"
+regex = "1.13.1"
+similar = "3.1.1"

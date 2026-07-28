@@ -3,6 +3,12 @@ resolver = "2"
 members = [
     "crates/core",
     "crates/devtools",
+    "crates/devtools/common",
+    "crates/devtools/crypto",
+    "crates/devtools/data",
+    "crates/devtools/text",
+    "crates/devtools/web",
+    "crates/devtools/community",
     "crates/store",
     "crates/ui",
     "crates/app",

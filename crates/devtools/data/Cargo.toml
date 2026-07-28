@@ -1,0 +1,27 @@
+[package]
+name = "rp-devtools-data"
+version.workspace = true
+edition.workspace = true
+# Not published to a registry; cargo-deny infers "private crate" from this.
+publish = false
+
+[lib]
+name = "rp_devtools_data"
+path = "src/lib.rs"
+
+[dependencies]
+rp-devtools-common = { path = "../common" }
+anyhow.workspace = true
+base64 = "0.23.0"
+csv = "1.4.0"
+num-bigint = "0.5.1"
+pulldown-cmark = "0.13.4"
+quick-xml = "0.41.0"
+regex = "1.13.1"
+roman = "0.2.1"
+serde.workspace = true
+serde_json.workspace = true
+serde_norway = "0.9.42"
+similar = "3.1.1"
+sqlformat = "0.5.0"
+toml = "1.1.3"

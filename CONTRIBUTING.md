@@ -11,6 +11,20 @@ nothing else), `request-pilot` (`crates/app`, the gpui GUI) and `rp-mcp`
 (`crates/mcp`). Only `fuzz` is excluded and builds on its own, because
 cargo-fuzz needs nightly and its own profile.
 
+`rp-devtools` is itself six crates. The tools used to be four files of two to
+four thousand lines each, which is where they stopped being reviewable, so each
+category is now its own crate under `crates/devtools/` — `common` (the types,
+the panel helpers and anything two categories share), then `crypto`, `data`,
+`text`, `web` and `community` — and inside a crate every tool is one file:
+`crates/devtools/web/src/url_parser.rs` holds `url-parser`, its helpers, its
+`pub static TOOL` and its tests. `crates/devtools` itself is now only the
+lookup (`all`, `find`, `search`).
+
+**Adding a tool** is therefore: one new file in the right category crate, one
+`mod` line and one entry in that crate's `TOOLS` list, plus the pinned lists in
+`crates/devtools/tests/`. Helpers that a second tool starts needing move to the
+crate's `common.rs`; helpers a second *crate* needs move to `rp-devtools-common`.
+
 `crates/app` has both a `[lib]` and a `[bin]` target. The library is one module
 (`session`, the file loader) and exists so `crates/app/tests/end_to_end.rs` can
 drive the app's real loader instead of a copy of it; everything else in
@@ -88,7 +102,7 @@ platform-gated code can shift the last decimal.
 94.86% branch / 98.30% line. The two weakest spots now are
 `crates/core/src/exec.rs` at **75.76% branch** (the send path: timeouts, TLS and
 redirect handling are awkward to reach without a server per case) and
-`crates/devtools/src/lib.rs` at **60.63% line**, the registry plumbing. Those
+`crates/devtools`'s registry plumbing at **60.63% line**. Those
 are where new tests buy the most.
 
 CI **reports** these numbers and uploads `lcov.info` as a build artifact; it does

@@ -637,12 +637,13 @@ mod tests {
         assert!(hits.iter().any(Block::is_heading), "{hits:?}");
 
         // Terms this cheat sheet really carries — checked against its own text,
-        // not against what a git cheat sheet might be assumed to hold. Asserting
-        // "rebase" here failed, and the page was right: it has no rebase section.
+        // not against what a git cheat sheet might be assumed to hold. This list
+        // grew with the page: "rebase" used to be the term it genuinely lacked,
+        // until PR #1204's branch and rebase sections were ported.
         let git = parse(
             &(rp_devtools::find("git-memo").unwrap().run)(&rp_devtools::Args::new()).unwrap(),
         );
-        for term in ["commit", "branch", "reset"] {
+        for term in ["commit", "branch", "reset", "rebase", "stash"] {
             let hits = filter(&git, term);
             assert!(!hits.is_empty(), "the git cheat sheet lost {term:?}");
             assert!(
@@ -651,6 +652,7 @@ mod tests {
             );
         }
         // And a term it genuinely lacks finds nothing rather than everything.
-        assert!(filter(&git, "rebase").is_empty());
+        // Pick one no git cheat sheet will ever grow into.
+        assert!(filter(&git, "subversion").is_empty());
     }
 }
