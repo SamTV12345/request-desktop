@@ -172,7 +172,7 @@ fn a_client_can_initialize_list_tools_book_time_and_read_it_back() {
         .iter()
         .map(|t| t["name"].as_str().unwrap())
         .collect();
-    assert_eq!(names.len(), 9, "{names:?}");
+    assert_eq!(names.len(), 10, "{names:?}");
     assert!(names.contains(&"log_time"));
 
     // Book a block that ended a minute ago, so it is neither future nor over-long.

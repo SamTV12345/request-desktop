@@ -21,9 +21,8 @@ use crate::theme::{Theme, alpha};
 use crate::tokens::{control, radius, space, text};
 use gpui::{
     AnyElement, App, ElementId, FontWeight, HighlightStyle, InteractiveElement as _, KeyBinding,
-    MouseDownEvent, ParentElement as _, Pixels, ScrollHandle, SharedString,
-    StatefulInteractiveElement as _, Styled as _, StyledText, Window, actions, div, point,
-    prelude::*, px,
+    ListState, MouseDownEvent, ParentElement as _, Pixels, SharedString, Styled as _, StyledText,
+    Window, actions, div, point, prelude::*, px,
 };
 use std::ops::Range;
 use std::rc::Rc;
@@ -136,27 +135,19 @@ pub fn fuzzy(haystack: &str, query: &str) -> Option<Match> {
     needle.next().is_none().then_some(m)
 }
 
-/// The index of row `selected` among the list's *children*, which is what
-/// [`gpui::ScrollHandle::scroll_to_item`] counts.
+/// Whether row `i` is the first of its group, and so draws the group's label above
+/// itself.
 ///
-/// Group headings are children too, so the row index and the child index drift
-/// apart by one per heading above the row. Scrolling to the row index instead
-/// stops short by exactly the number of groups, which is how the selection ends up
-/// just below the fold.
-pub fn child_index(rows: &[Row], selected: usize) -> usize {
-    let mut at = 0;
-    let mut group: Option<&SharedString> = None;
-    for (i, row) in rows.iter().enumerate() {
-        if group != Some(&row.group) {
-            at += 1;
-            group = Some(&row.group);
-        }
-        if i == selected {
-            return at;
-        }
-        at += 1;
+/// The label lives *inside* the leading row rather than beside it as a sibling.
+/// That is what keeps one list item equal to one row: the palette is virtualised,
+/// and `list()` indexes by item, so a heading that was its own item would make the
+/// row index and the item index drift apart by one per group — the selection would
+/// then scroll to a point short of itself by exactly the number of groups above it.
+fn leads_group(rows: &[Row], i: usize) -> bool {
+    match i.checked_sub(1) {
+        None => true,
+        Some(prev) => rows[prev].group != rows[i].group,
     }
-    at.saturating_sub(1)
 }
 
 /// One offered thing.
@@ -277,32 +268,34 @@ const LIST_MAX_H: Pixels = px(396.);
 
 pub struct Palette {
     pub id: ElementId,
-    pub rows: Vec<Row>,
+    /// Shared, not owned: `list()`'s item closure is `'static` and cannot borrow the
+    /// palette, which is rebuilt every frame anyway.
+    pub rows: Rc<Vec<Row>>,
     pub selected: usize,
     /// Shown in place of the list when nothing matched. A blank card looks broken.
     pub empty: SharedString,
-    /// The list's scroll state. Owned by the caller because the palette is rebuilt
-    /// every frame and a handle made here would forget its offset immediately.
+    /// Row heights and scroll offset. Owned by the caller because the palette is
+    /// rebuilt every frame and state made here would forget itself immediately.
     ///
     /// Whoever moves `selected` is the one that calls
-    /// [`ScrollHandle::scroll_to_item`] — not this `render`, which runs on wheel
-    /// scrolls too and would drag the list back to the selection on every notch.
-    /// `None` still renders; the selection just does not follow.
-    pub scroll: Option<ScrollHandle>,
+    /// [`gpui::ListState::scroll_to_reveal_item`] — not this `render`, which runs on
+    /// wheel scrolls too and would drag the list back to the selection on every
+    /// notch.
+    pub list: ListState,
 }
 
 impl Palette {
-    pub fn new(id: impl Into<ElementId>) -> Self {
+    pub fn new(id: impl Into<ElementId>, list: ListState) -> Self {
         Self {
             id: id.into(),
-            rows: Vec::new(),
+            rows: Rc::default(),
             selected: 0,
             empty: "No matches".into(),
-            scroll: None,
+            list,
         }
     }
 
-    pub fn rows(mut self, rows: Vec<Row>) -> Self {
+    pub fn rows(mut self, rows: Rc<Vec<Row>>) -> Self {
         self.rows = rows;
         self
     }
@@ -314,11 +307,6 @@ impl Palette {
 
     pub fn empty(mut self, empty: impl Into<SharedString>) -> Self {
         self.empty = empty.into();
-        self
-    }
-
-    pub fn scroll(mut self, scroll: ScrollHandle) -> Self {
-        self.scroll = Some(scroll);
         self
     }
 
@@ -346,23 +334,31 @@ impl Palette {
             font_weight: Some(FontWeight::SEMIBOLD),
             ..Default::default()
         };
-        // `for`, not `map`: the row builders capture per-row state and a lazy
-        // iterator would keep the borrows alive past this scope.
-        let mut children = Vec::new();
-        let mut group: Option<&SharedString> = None;
-        for (i, row) in self.rows.iter().enumerate() {
-            if group != Some(&row.group) {
-                children.push(section_label(t, row.group.clone()).into_any_element());
-                group = Some(&row.group);
-            }
-            let on_choose = on_choose.clone();
-            let ink = if i == selected {
-                t.text
-            } else {
-                t.text_muted()
-            };
-            children.push(
-                div()
+        let list = if self.rows.is_empty() {
+            div()
+                .px(space::S3)
+                .py(space::S2)
+                .text_color(t.text_meta())
+                .child(self.empty)
+                .into_any_element()
+        } else {
+            // Virtualised: an untyped palette is an index of everything — 142 tools
+            // plus every request and environment — and building all of it on every
+            // keystroke is work the card has no room to show.
+            let rows = self.rows.clone();
+            gpui::list(self.list.clone(), move |i, _window, _cx| {
+                let Some(row) = rows.get(i) else {
+                    // The count comes from `rows`, so this cannot happen — and a
+                    // render path is the wrong place to prove it with a panic.
+                    return div().into_any_element();
+                };
+                let on_choose = on_choose.clone();
+                let ink = if i == selected {
+                    t.text
+                } else {
+                    t.text_muted()
+                };
+                let line = div()
                     .id(i)
                     .flex()
                     .items_center()
@@ -402,29 +398,22 @@ impl Palette {
                                     .child(row.detail.clone()),
                             ),
                     )
-                    .on_click(move |_, window, cx| on_choose(i, window, cx))
-                    .into_any_element(),
-            );
-        }
-        let list = if children.is_empty() {
-            div()
-                .px(space::S3)
-                .py(space::S2)
-                .text_color(t.text_meta())
-                .child(self.empty)
-                .into_any_element()
-        } else {
-            div()
-                .id("palette-rows")
-                .flex()
-                .flex_col()
-                .min_h_0()
-                .max_h(LIST_MAX_H)
-                .overflow_y_scroll()
-                .when_some(self.scroll, |d, handle| d.track_scroll(&handle))
-                .pb(space::S1)
-                .children(children)
-                .into_any_element()
+                    .on_click(move |_, window, cx| on_choose(i, window, cx));
+                // The group's label rides along with the row that leads it, so one
+                // item stays one row. See `leads_group`.
+                if leads_group(&rows, i) {
+                    div()
+                        .flex()
+                        .flex_col()
+                        .child(section_label(t, row.group.clone()))
+                        .child(line)
+                        .into_any_element()
+                } else {
+                    line.into_any_element()
+                }
+            })
+            .max_h(LIST_MAX_H)
+            .into_any_element()
         };
         gpui::deferred(
             gpui::anchored().position(point(px(0.), px(0.))).child(
@@ -476,11 +465,16 @@ impl Palette {
 mod tests {
     use super::*;
 
+    /// The builder needs one; these tests never render, so the count is irrelevant.
+    fn state() -> ListState {
+        ListState::new(0, gpui::ListAlignment::Top, px(0.))
+    }
+
     /// The quiet defaults: no rows, the first one selected, and a message rather
     /// than an empty box when nothing matches.
     #[test]
     fn the_defaults_are_the_quiet_ones() {
-        let p = Palette::new("palette");
+        let p = Palette::new("palette", state());
         assert!(p.rows.is_empty());
         assert_eq!(p.selected, 0);
         assert_eq!(p.empty.as_ref(), "No matches");
@@ -492,10 +486,10 @@ mod tests {
 
     #[test]
     fn the_builder_sets_only_what_it_is_given() {
-        let p = Palette::new("palette")
-            .rows(vec![
+        let p = Palette::new("palette", state())
+            .rows(Rc::new(vec![
                 Row::new("Tools", "Base64").detail("Encode").icon("wrench"),
-            ])
+            ]))
             .selected(3);
         assert_eq!(p.selected, 3, "held verbatim; clamping happens at render");
         assert_eq!(
@@ -627,22 +621,20 @@ mod tests {
         assert_eq!(cut, ["G", "l"]);
     }
 
-    /// The group headings are children of the scroll box too, so the row index is
-    /// not the child index — this off-by-one-per-group is the bug it fixes.
+    /// One list item is one row, so the group label has to ride along with the row
+    /// that leads its group — the drift this replaces is what scrolled the selection
+    /// short by one per group above it.
     #[test]
-    fn the_child_index_counts_the_group_headings() {
+    fn only_the_first_row_of_a_group_carries_its_label() {
         let rows = vec![
             Row::new("Requests", "a"),
             Row::new("Requests", "b"),
             Row::new("Tools", "c"),
             Row::new("Sections", "d"),
         ];
-        assert_eq!(child_index(&rows, 0), 1, "one heading above the first row");
-        assert_eq!(child_index(&rows, 1), 2);
-        assert_eq!(child_index(&rows, 2), 4, "a second heading in between");
-        assert_eq!(child_index(&rows, 3), 6);
-        // A stale index lands on the last child rather than past the end.
-        assert_eq!(child_index(&rows, 99), 6);
-        assert_eq!(child_index(&[], 0), 0);
+        assert!(leads_group(&rows, 0), "the very first row always leads");
+        assert!(!leads_group(&rows, 1), "same group as the row above it");
+        assert!(leads_group(&rows, 2));
+        assert!(leads_group(&rows, 3), "a group of one still gets its label");
     }
 }

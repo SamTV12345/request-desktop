@@ -38,6 +38,8 @@ pub struct Task {
     pub id: i64,
     pub name: String,
     pub created_at: i64,
+    /// The Jira issue this task books to by default, if any.
+    pub issue_key: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -50,6 +52,33 @@ pub struct Entry {
     pub stopped_at: Option<i64>,
     /// `"app"` or `"mcp"`.
     pub source: String,
+    /// The Jira issue this block of work books to: the entry's own key where it
+    /// has one, otherwise the task's. Read-only — set one or the other through
+    /// [`Store::track_set_entry_issue`] / [`Store::track_set_task_issue`], which
+    /// is why there is one field here and two columns in the schema.
+    pub issue_key: Option<String>,
+    /// Whether [`Entry::issue_key`] is this entry's own override rather than
+    /// inherited from its task.
+    ///
+    /// Only the UI needs this, and it needs it badly: an editor that cannot tell
+    /// the two apart either re-pins every entry it touches or silently retargets a
+    /// whole task when the user meant one block of work.
+    pub issue_own: bool,
+}
+
+/// A worklog this app has pushed to Jira, and the state it was pushed in.
+///
+/// Present means "we created worklog `worklog_id` for this entry"; the times are
+/// what Jira was told, not what the entry says now, so a later run can see that
+/// an edited entry needs updating rather than adding.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Pushed {
+    pub entry_id: i64,
+    pub issue_key: String,
+    pub worklog_id: String,
+    pub started_at: i64,
+    pub seconds: i64,
+    pub pushed_at: i64,
 }
 
 impl Entry {
@@ -92,7 +121,12 @@ pub struct DaySummary {
 }
 
 /// The one place entries are read, so every query agrees on shape and joins.
-const SELECT_ENTRY: &str = "SELECT e.id, t.name, e.note, e.started_at, e.stopped_at, e.source \
+///
+/// `COALESCE` is where "the entry overrides its task" is decided: one expression,
+/// in the one query every reader goes through, rather than a rule each caller
+/// re-implements.
+const SELECT_ENTRY: &str = "SELECT e.id, t.name, e.note, e.started_at, e.stopped_at, e.source, \
+            COALESCE(e.issue_key, t.issue_key), e.issue_key IS NOT NULL \
      FROM track_entry e JOIN track_task t ON t.id = e.task_id";
 
 fn entry_from_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Entry> {
@@ -103,6 +137,8 @@ fn entry_from_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Entry> {
         started_at: r.get(3)?,
         stopped_at: r.get(4)?,
         source: r.get(5)?,
+        issue_key: r.get(6)?,
+        issue_own: r.get(7)?,
     })
 }
 
@@ -121,6 +157,39 @@ fn clean_task(task: &str) -> Result<&str> {
 /// Blank notes are stored as NULL, so `""` and "not set" cannot drift apart.
 fn clean_note(note: Option<&str>) -> Option<&str> {
     note.map(str::trim).filter(|n| !n.is_empty())
+}
+
+/// Normalise an issue key, rejecting anything that is not one.
+///
+/// This is validation at a trust boundary, not tidiness: the key is pasted by hand
+/// and ends up in a REST path (`/rest/api/3/issue/{key}/worklog`). A value with a
+/// slash or a `..` in it would address a different endpoint than the caller meant,
+/// so the shape Jira itself uses — `LETTERS-DIGITS` — is the shape stored. Blank
+/// clears the link.
+///
+/// Uppercased because Jira keys are, and because two spellings of one ticket in the
+/// `per_task` list would look like two tickets.
+pub(crate) fn clean_issue(key: Option<&str>) -> Result<Option<String>> {
+    let Some(key) = key.map(str::trim).filter(|k| !k.is_empty()) else {
+        return Ok(None);
+    };
+    let (project, number) = key
+        .split_once('-')
+        .with_context(|| format!("{key:?} is not an issue key; expected something like ABC-123"))?;
+    let ok = !project.is_empty()
+        && project
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_')
+        && project
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_alphabetic())
+        && !number.is_empty()
+        && number.chars().all(|c| c.is_ascii_digit());
+    if !ok {
+        bail!("{key:?} is not an issue key; expected something like ABC-123");
+    }
+    Ok(Some(key.to_ascii_uppercase()))
 }
 
 impl Store {
@@ -268,6 +337,11 @@ impl Store {
         self.entry(id)
     }
 
+    /// One entry by id. `Ok(None)` when there is no such entry.
+    pub fn track_entry(&self, id: i64) -> Result<Option<Entry>> {
+        self.entry(id)
+    }
+
     /// Entries overlapping the given local day (`YYYY-MM-DD`), oldest first.
     ///
     /// Whole entries, not clipped to the day: see the module docs.
@@ -335,16 +409,161 @@ impl Store {
     pub fn track_tasks(&self) -> Result<Vec<Task>> {
         let mut stmt = self
             .conn
-            .prepare("SELECT id, name, created_at FROM track_task ORDER BY name")?;
+            .prepare("SELECT id, name, created_at, issue_key FROM track_task ORDER BY name")?;
         Ok(stmt
             .query_map([], |r| {
                 Ok(Task {
                     id: r.get(0)?,
                     name: r.get(1)?,
                     created_at: r.get(2)?,
+                    issue_key: r.get(3)?,
                 })
             })?
             .collect::<rusqlite::Result<_>>()?)
+    }
+
+    /// Link a task to a Jira issue, or unlink it with `None`.
+    ///
+    /// Every entry of that task that has no key of its own follows, by
+    /// construction — the link is read through `COALESCE`, never copied onto the
+    /// entries, so linking a task retroactively covers work already booked. Which
+    /// is the point: the ticket is usually known after the work, not before.
+    ///
+    /// `Ok(false)` means there is no such task and nothing was written.
+    pub fn track_set_task_issue(&mut self, task: &str, issue: Option<&str>) -> Result<bool> {
+        let task = clean_task(task)?;
+        let issue = clean_issue(issue)?;
+        Ok(self.conn.execute(
+            "UPDATE track_task SET issue_key = ?2 WHERE name = ?1",
+            params![task, issue],
+        )? > 0)
+    }
+
+    /// Point one entry at a specific issue, overriding its task's link. `None`
+    /// removes the override, so the entry falls back to the task's key.
+    pub fn track_set_entry_issue(&mut self, id: i64, issue: Option<&str>) -> Result<bool> {
+        let issue = clean_issue(issue)?;
+        Ok(self.conn.execute(
+            "UPDATE track_entry SET issue_key = ?2 WHERE id = ?1",
+            params![id, issue],
+        )? > 0)
+    }
+
+    /// What has already been pushed for the entries overlapping `[from, to)`.
+    ///
+    /// The window matches [`Store::track_entries_between`], so a caller loads the
+    /// day's entries and the day's push records with the same bounds and joins them
+    /// by `entry_id` — which is what makes a replay able to tell new work from work
+    /// Jira already has.
+    pub fn track_pushed_between(&self, from: i64, to: i64) -> Result<Vec<Pushed>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT w.entry_id, w.issue_key, w.worklog_id, w.started_at, w.seconds, w.pushed_at \
+               FROM track_worklog w JOIN track_entry e ON e.id = w.entry_id \
+              WHERE e.started_at < ?2 AND (e.stopped_at IS NULL OR e.stopped_at > ?1 \
+                    OR e.started_at >= ?1) \
+              ORDER BY w.entry_id",
+        )?;
+        Ok(stmt
+            .query_map(params![from, to], |r| {
+                Ok(Pushed {
+                    entry_id: r.get(0)?,
+                    issue_key: r.get(1)?,
+                    worklog_id: r.get(2)?,
+                    started_at: r.get(3)?,
+                    seconds: r.get(4)?,
+                    pushed_at: r.get(5)?,
+                })
+            })?
+            .collect::<rusqlite::Result<_>>()?)
+    }
+
+    /// Remember that `entry_id` is booked as `worklog_id` on `issue_key`, in the
+    /// shape it was pushed in.
+    ///
+    /// Upsert on the entry, so re-pushing an edited entry replaces the record
+    /// instead of failing. Call this *immediately* after Jira answers: the worst
+    /// outcome here is a worklog Jira has and this database does not know about,
+    /// which is exactly the double-book the record exists to prevent.
+    pub fn track_record_push(
+        &mut self,
+        entry_id: i64,
+        issue_key: &str,
+        worklog_id: &str,
+        started_at: i64,
+        seconds: i64,
+        now: i64,
+    ) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO track_worklog \
+                 (entry_id, issue_key, worklog_id, started_at, seconds, pushed_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6) \
+             ON CONFLICT (entry_id) DO UPDATE SET \
+                 issue_key = ?2, worklog_id = ?3, started_at = ?4, seconds = ?5, pushed_at = ?6",
+            params![entry_id, issue_key, worklog_id, started_at, seconds, now],
+        )?;
+        Ok(())
+    }
+
+    /// Forget a push record, for a worklog that is gone from Jira.
+    ///
+    /// Without this a worklog deleted in Jira's own UI could never be re-pushed:
+    /// the record would keep claiming an id that no longer exists.
+    pub fn track_forget_push(&mut self, entry_id: i64) -> Result<bool> {
+        Ok(self
+            .conn
+            .execute("DELETE FROM track_worklog WHERE entry_id = ?1", [entry_id])?
+            > 0)
+    }
+
+    /// Mark a local day (`YYYY-MM-DD`) as finished, or reopen it with `None`.
+    ///
+    /// Advisory: nothing here refuses to write to a closed day. It records that the
+    /// user was satisfied with that day, so the UI can stop nagging about it and
+    /// show at a glance which days are still open — including days closed weeks
+    /// later.
+    pub fn track_close_day(&mut self, date: &str, closed_at: Option<i64>) -> Result<()> {
+        // For the validation, not the bounds: this is the one place that already
+        // rejects a well-shaped impossible date like 2026-02-31.
+        self.day_bounds(date)?;
+        match closed_at {
+            Some(at) => self.conn.execute(
+                "INSERT INTO track_day (date, closed_at) VALUES (?1, ?2) \
+                 ON CONFLICT (date) DO UPDATE SET closed_at = ?2",
+                params![date, at],
+            )?,
+            None => self
+                .conn
+                .execute("DELETE FROM track_day WHERE date = ?1", [date])?,
+        };
+        Ok(())
+    }
+
+    /// When `date` was closed, if it was.
+    pub fn track_day_closed(&self, date: &str) -> Result<Option<i64>> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT closed_at FROM track_day WHERE date = ?1",
+                [date],
+                |r| r.get(0),
+            )
+            .optional()?)
+    }
+
+    /// The UTC offset in seconds that the operating system applies at `now`.
+    ///
+    /// Jira's `started` field carries an offset (`2026-07-29T09:00:00.000+0200`) and
+    /// interprets the timestamp in it, so a worklog pushed with the wrong offset
+    /// lands on the wrong hour — and either side of midnight, the wrong day. The
+    /// offset is asked of SQLite for the same reason every day boundary is: it is
+    /// the one clock the app, the MCP server and the summaries already agree on, and
+    /// it is not constant across the year.
+    pub fn local_offset(&self, now: i64) -> Result<i64> {
+        Ok(self.conn.query_row(
+            "SELECT CAST(strftime('%s', ?1, 'unixepoch', 'localtime') AS INTEGER) - ?1",
+            [now],
+            |r| r.get(0),
+        )?)
     }
 
     pub fn track_delete_entry(&mut self, id: i64) -> Result<bool> {
@@ -1198,5 +1417,172 @@ mod tests {
         );
         mcp.track_stop(1_100).unwrap();
         assert_ne!(app.change_counter().unwrap(), after);
+    }
+
+    #[test]
+    fn an_issue_key_must_look_like_one_and_is_uppercased() {
+        assert_eq!(clean_issue(None).unwrap(), None);
+        assert_eq!(clean_issue(Some("  ")).unwrap(), None);
+        assert_eq!(
+            clean_issue(Some(" abc-12 ")).unwrap(),
+            Some("ABC-12".into())
+        );
+        assert_eq!(clean_issue(Some("A1_B-7")).unwrap(), Some("A1_B-7".into()));
+        for bad in [
+            "ABC",
+            "-12",
+            "ABC-",
+            "1BC-12",
+            "ABC-1x",
+            // The reason this is validated at all: none of these may reach a URL
+            // path.
+            "ABC-12/../../myself",
+            "ABC 12",
+            "ABC-12?x=1",
+        ] {
+            assert!(clean_issue(Some(bad)).is_err(), "{bad:?} must be refused");
+        }
+    }
+
+    #[test]
+    fn linking_a_task_covers_its_past_entries_and_an_entry_may_override_it() {
+        let mut store = Store::open_in_memory().unwrap();
+        let a = store
+            .track_log("review", None, 1_000, 2_000, "app")
+            .unwrap();
+        let b = store
+            .track_log("review", None, 3_000, 4_000, "app")
+            .unwrap();
+        assert_eq!(a.issue_key, None);
+
+        // Retroactive by design: the ticket is known after the work.
+        assert!(
+            store
+                .track_set_task_issue("review", Some("proj-7"))
+                .unwrap()
+        );
+        let listed = store.track_entries_between(0, 9_000).unwrap();
+        assert_eq!(
+            listed
+                .iter()
+                .map(|e| e.issue_key.as_deref())
+                .collect::<Vec<_>>(),
+            [Some("PROJ-7"), Some("PROJ-7")],
+            "both earlier entries follow the task's link"
+        );
+        assert_eq!(
+            store.track_tasks().unwrap()[0].issue_key.as_deref(),
+            Some("PROJ-7")
+        );
+
+        // One entry of that task belongs elsewhere.
+        assert!(store.track_set_entry_issue(b.id, Some("OTHER-1")).unwrap());
+        let listed = store.track_entries_between(0, 9_000).unwrap();
+        assert_eq!(listed[0].issue_key.as_deref(), Some("PROJ-7"));
+        assert_eq!(listed[1].issue_key.as_deref(), Some("OTHER-1"));
+
+        // Clearing the override falls back to the task, it does not clear the task.
+        assert!(store.track_set_entry_issue(b.id, None).unwrap());
+        assert_eq!(
+            store.track_entries_between(0, 9_000).unwrap()[1]
+                .issue_key
+                .as_deref(),
+            Some("PROJ-7")
+        );
+
+        // Unlinking the task leaves the entries unlinked too.
+        assert!(store.track_set_task_issue("review", None).unwrap());
+        assert!(
+            store
+                .track_entries_between(0, 9_000)
+                .unwrap()
+                .iter()
+                .all(|e| e.issue_key.is_none())
+        );
+        assert!(!store.track_set_task_issue("nope", Some("X-1")).unwrap());
+        assert!(!store.track_set_entry_issue(9_999, Some("X-1")).unwrap());
+    }
+
+    #[test]
+    fn a_push_record_is_one_per_entry_and_survives_a_replay() {
+        let mut store = Store::open_in_memory().unwrap();
+        let e = store
+            .track_log("coding", None, 1_000, 4_600, "app")
+            .unwrap();
+        assert!(store.track_pushed_between(0, 9_000).unwrap().is_empty());
+
+        store
+            .track_record_push(e.id, "PROJ-7", "10001", 1_000, 3_600, 5_000)
+            .unwrap();
+        let pushed = store.track_pushed_between(0, 9_000).unwrap();
+        assert_eq!(pushed.len(), 1);
+        assert_eq!(pushed[0].worklog_id, "10001");
+        assert_eq!(pushed[0].seconds, 3_600);
+
+        // The entry grew and was pushed again: the record is replaced, not added
+        // to — two records for one entry is the double-book this table prevents.
+        store
+            .track_record_push(e.id, "PROJ-7", "10001", 1_000, 5_400, 6_000)
+            .unwrap();
+        let pushed = store.track_pushed_between(0, 9_000).unwrap();
+        assert_eq!(pushed.len(), 1);
+        assert_eq!(pushed[0].seconds, 5_400);
+        assert_eq!(pushed[0].pushed_at, 6_000);
+
+        // Two entries cannot claim one remote worklog.
+        let other = store
+            .track_log("coding", None, 8_000, 8_600, "app")
+            .unwrap();
+        assert!(
+            store
+                .track_record_push(other.id, "PROJ-7", "10001", 8_000, 600, 9_000)
+                .is_err()
+        );
+
+        assert!(store.track_forget_push(e.id).unwrap());
+        assert!(store.track_pushed_between(0, 9_000).unwrap().is_empty());
+        assert!(!store.track_forget_push(e.id).unwrap());
+
+        // Deleting the entry takes its record with it.
+        store
+            .track_record_push(other.id, "PROJ-7", "10001", 8_000, 600, 9_000)
+            .unwrap();
+        store.track_delete_entry(other.id).unwrap();
+        assert!(store.track_pushed_between(0, 9_000).unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_day_can_be_closed_reopened_and_closed_again_after_the_fact() {
+        let mut store = Store::open_in_memory().unwrap();
+        assert_eq!(store.track_day_closed("2026-07-29").unwrap(), None);
+        store.track_close_day("2026-07-29", Some(1_000)).unwrap();
+        assert_eq!(store.track_day_closed("2026-07-29").unwrap(), Some(1_000));
+        // Closing twice is not an error; the later stamp wins.
+        store.track_close_day("2026-07-29", Some(2_000)).unwrap();
+        assert_eq!(store.track_day_closed("2026-07-29").unwrap(), Some(2_000));
+        store.track_close_day("2026-07-29", None).unwrap();
+        assert_eq!(store.track_day_closed("2026-07-29").unwrap(), None);
+        assert!(store.track_close_day("2026-13-01", Some(1)).is_err());
+    }
+
+    #[test]
+    fn the_local_offset_matches_the_day_boundary_it_is_pushed_against() {
+        let store = Store::open_in_memory().unwrap();
+        // Whatever the test machine's zone, midnight plus the offset at that
+        // instant must be the local wall clock SQLite reports — that is exactly the
+        // arithmetic a Jira `started` timestamp does.
+        for date in ["2026-01-15", "2026-07-15"] {
+            let midnight = day_start(&store, date);
+            let offset = store.local_offset(midnight).unwrap();
+            let local: String = store
+                .conn
+                .query_row(
+                    "SELECT strftime('%Y-%m-%dT%H:%M:%S', ?1, 'unixepoch')",
+                    [midnight + offset],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(local, format!("{date}T00:00:00"));
+        }
     }
 }

@@ -3,12 +3,12 @@
 //! Tools and prompts are different things and the difference is not obvious from
 //! the outside. A *tool* is called by the model; there is no way for a user to
 //! invoke one by typing. A *prompt* is a canned message the user picks, and Claude
-//! Code surfaces each as `/mcp__<server>__<name>`. Someone who has just seen nine
+//! Code surfaces each as `/mcp__<server>__<name>`. Someone who has just seen the
 //! tools listed and then types `/log_work` gets nothing, and nothing explains why.
 //!
-//! So the prompts here are the typed door to the same nine tools: short, one job
-//! each, and worded so the model reaches for the right tool with the right
-//! arguments rather than inventing a CLI.
+//! So the prompts here are the typed door to the same tools: short, one job each,
+//! and worded so the model reaches for the right tool with the right arguments
+//! rather than inventing a CLI.
 use serde_json::{Value, json};
 
 /// Reads one argument, returning "" when it was not given. Passed to a prompt's
@@ -25,9 +25,9 @@ struct Prompt {
     render: fn(Args<'_>) -> String,
 }
 
-/// ponytail: four prompts, not nine. One per thing a person actually types in the
+/// ponytail: five prompts, not ten. One per thing a person actually types in the
 /// morning or the evening; the rest of the tools are for the model to reach for on
-/// its own. Add a fifth when someone misses it.
+/// its own. Add a sixth when someone misses it.
 const PROMPTS: &[Prompt] = &[
     Prompt {
         name: "log_work",
@@ -103,6 +103,35 @@ const PROMPTS: &[Prompt] = &[
             format!(
                 "Give me the time tracker's summary for {date}. If a timer is still running, say \
                  so and how long it has been going, since that time is not in the totals yet."
+            )
+        },
+    },
+    Prompt {
+        name: "tidy_day",
+        title: "Tidy up a day's wording",
+        description: "Rewrite terse task names and notes into something a timesheet can be \
+                      read from — without changing any times.",
+        arguments: &[(
+            "date",
+            "\"today\" (default), \"yesterday\", or YYYY-MM-DD.",
+            false,
+        )],
+        render: |arg| {
+            let date = or(arg("date"), "today");
+            // The two hard rules are spelled out because both failures are
+            // expensive and neither is obvious: inventing detail puts a fiction in
+            // a timesheet that may be billed, and delete-then-log silently breaks
+            // the link to a worklog already booked in Jira, which is how the same
+            // hour gets booked twice.
+            format!(
+                "List the time tracker's entries for {date}, then reword the ones whose task \
+                 name or note is too terse to be read later — use edit_entry, one call per \
+                 entry, and keep task names short and reusable so related work still totals \
+                 together. Two rules: do not change any times, and do not invent detail that \
+                 is not already in the entry or in what I have told you — if an entry is too \
+                 vague to reword honestly, list it and ask me. Never delete and re-log an \
+                 entry to reword it: edit_entry keeps its id, and the id is what my Jira \
+                 booking hangs on. Show me a before-and-after list when you are done."
             )
         },
     },
@@ -193,7 +222,13 @@ mod tests {
             .collect();
         assert_eq!(
             names,
-            ["log_work", "start_work", "stop_work", "day_summary"]
+            [
+                "log_work",
+                "start_work",
+                "stop_work",
+                "day_summary",
+                "tidy_day"
+            ]
         );
         for p in listed.as_array().unwrap() {
             assert!(p["title"].is_string(), "{p}");

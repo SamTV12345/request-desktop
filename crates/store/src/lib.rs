@@ -14,7 +14,7 @@
 //!    caller is expected to carry on without it. A corrupt database must cost
 //!    the user their restored tabs, never their ability to start the app.
 pub mod track;
-pub use track::{DaySummary, Entry, Task};
+pub use track::{DaySummary, Entry, Pushed, Task};
 
 use anyhow::{Context, Result, bail};
 use rusqlite::{Connection, OptionalExtension, params};
@@ -100,6 +100,44 @@ const MIGRATIONS: &[&str] = &[
         PRIMARY KEY (window_id, position)
     );
     "#,
+    // v6: the Jira side of the tracker — which issue a block of work belongs to,
+    // and what was already booked there.
+    //
+    // The issue key sits on both the task and the entry because both readings are
+    // real: a task like "auth refactor" is always the same ticket, a task like
+    // "meeting" is a different one every day. The entry wins where it is set; see
+    // `SELECT_ENTRY`.
+    //
+    // `track_worklog` is the whole idempotency story. Jira has no client-supplied
+    // key on `POST .../worklog`, so nothing at the API level stops the same block
+    // of work from being booked twice — replaying a day *would* double-book. What
+    // makes a replay safe is remembering the worklog id Jira handed back, per local
+    // entry: a second run finds the row and updates that worklog instead of adding
+    // another. `started_at`/`seconds` are the values as pushed, so a run can tell
+    // "unchanged, skip" from "edited, update" without another round trip.
+    r#"
+    ALTER TABLE track_task  ADD COLUMN issue_key TEXT;
+    ALTER TABLE track_entry ADD COLUMN issue_key TEXT;
+    CREATE TABLE track_worklog (
+        entry_id   INTEGER PRIMARY KEY REFERENCES track_entry(id) ON DELETE CASCADE,
+        issue_key  TEXT    NOT NULL,
+        -- Jira's id, as a string: it is an opaque identifier, not a number to do
+        -- arithmetic on, and Data Center and Cloud do not agree on its width.
+        worklog_id TEXT    NOT NULL,
+        started_at INTEGER NOT NULL,
+        seconds    INTEGER NOT NULL,
+        pushed_at  INTEGER NOT NULL,
+        -- One local entry per remote worklog and back. Without this, two entries
+        -- could claim the same worklog and each would "update" the other's time.
+        UNIQUE (issue_key, worklog_id)
+    );
+    -- A day the user has declared finished. Advisory, not a lock: reopening is
+    -- just booking more time, and a replay then pushes the difference.
+    CREATE TABLE track_day (
+        date      TEXT    PRIMARY KEY,
+        closed_at INTEGER NOT NULL
+    );
+    "#,
 ];
 
 /// What a restored tab needs in order to be rebuilt.
@@ -163,7 +201,17 @@ impl Store {
     fn prepare(conn: Connection) -> Result<Self> {
         // Foreign keys are off by default in SQLite, so the cascade that keeps
         // orphaned tabs out would silently not happen.
-        conn.execute_batch("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;")?;
+        //
+        // `busy_timeout` is the one that matters for more than one writer. WAL lets
+        // readers and a writer run at once, but *two* writers still collide — and
+        // without a timeout the loser gets `SQLITE_BUSY` immediately rather than
+        // waiting the moment out. There are three writers here now: this app, the
+        // MCP server an agent talks to, and the Jira push (its own connection, so it
+        // does not block the window). Five seconds is far longer than any statement
+        // in this schema takes and short enough not to look like a hang.
+        conn.execute_batch(
+            "PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;",
+        )?;
         let mut store = Self { conn };
         store.migrate()?;
         Ok(store)

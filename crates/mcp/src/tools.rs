@@ -155,6 +155,28 @@ pub fn definitions() -> Value {
                 "required": ["id"],
                 "additionalProperties": false
             }
+        },
+        {
+            "name": "edit_entry",
+            "title": "Reword a time entry",
+            "description": "Rewrite the task name and/or note of one already-booked entry, \
+    leaving its times untouched. This is the tool for tidying up a day the user tracked in a \
+    hurry: turning \"stuff\" into \"invoice export: fixed the CSV escaping\" so the timesheet \
+    reads properly. Only the wording changes -- you cannot move or resize an entry with this, \
+    and you must not invent work that was not described. Prefer this over delete_entry plus \
+    log_time: an entry keeps its id here, and the id is what the user's booked-to-Jira link \
+    hangs on -- deleting and re-logging would break that link and risk the time being booked \
+    twice. Get ids from list_entries.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "id": { "type": "integer", "description": "Entry id as shown by list_entries (the number after #)." },
+                    "task": { "type": "string", "description": "New task name. Omit to keep the current one. Keep it short and reusable, so related work still totals together." },
+                    "note": { "type": "string", "description": "New note. Omit to keep the current one; pass an empty string to remove it." }
+                },
+                "required": ["id"],
+                "additionalProperties": false
+            }
         }
     ])
 }
@@ -199,6 +221,7 @@ const KNOWN: &[&str] = &[
     "summary_month",
     "list_tasks",
     "delete_entry",
+    "edit_entry",
 ];
 
 fn text_result(text: &str, is_error: bool) -> Value {
@@ -219,6 +242,7 @@ fn run(srv: &mut Server, name: &str, args: &Value) -> Result<String> {
         "summary_month" => summary_month(srv, args),
         "list_tasks" => list_tasks(srv),
         "delete_entry" => delete_entry(srv, args),
+        "edit_entry" => edit_entry(srv, args),
         // `call` filtered these out already.
         other => bail!("Unknown tool: {other}"),
     }
@@ -631,6 +655,68 @@ fn delete_entry(srv: &mut Server, args: &Value) -> Result<String> {
     }
 }
 
+/// Reword an entry, keeping everything else it has.
+///
+/// Times, `source` and the entry's id all survive on purpose. The id matters most:
+/// it is what the desktop app's Jira push records hang on, so tidying a day's
+/// wording here cannot break the link to a worklog that is already booked. That is
+/// also why this exists at all rather than leaving an agent to delete and re-log.
+///
+/// `note: ""` clears the note; an omitted `note` keeps it. The two have to be
+/// distinguishable or there would be no way to remove one.
+fn edit_entry(srv: &mut Server, args: &Value) -> Result<String> {
+    let id = req_i64(args, "id")?;
+    let entry = srv
+        .store
+        .track_entry(id)
+        .context("could not read that entry")?
+        .with_context(|| {
+            format!("There is no entry #{id}. Use list_entries to find the right id.")
+        })?;
+    // A running entry has no end, and `track_update_entry` needs one. Rewording it
+    // would also mean writing a stop time the user has not reached yet.
+    let stopped_at = entry
+        .stopped_at
+        .with_context(|| format!("Entry #{id} is still running; stop it before rewording it."))?;
+    let task = opt_str(args, "task")?.unwrap_or(&entry.task);
+    let note = match args.get("note") {
+        None | Some(Value::Null) => entry.note.as_deref(),
+        // Deliberately not `opt_str`, which folds "" into None -- here that fold is
+        // the meaning, so it has to happen where it can be seen.
+        Some(Value::String(s)) => Some(s.trim()).filter(|s| !s.is_empty()),
+        Some(other) => bail!("note must be a string, not {}", type_name(other)),
+    };
+    if task == entry.task && note == entry.note.as_deref() {
+        return Ok(format!(
+            "Entry #{id} already reads that way; nothing changed."
+        ));
+    }
+    srv.store
+        .track_update_entry(
+            id,
+            task,
+            note,
+            entry.started_at,
+            stopped_at,
+            // Whoever booked it still booked it: rewording is not re-sourcing, and
+            // the app's `app`/`mcp` tag would otherwise start lying.
+            &entry.source,
+        )
+        .context("could not reword that entry")?
+        .with_context(|| format!("Entry #{id} was deleted while it was being reworded."))?;
+    let mut out = format!("Entry #{id} now reads \"{task}\"");
+    if let Some(note) = note {
+        out.push_str(&format!(" -- {note}"));
+    }
+    out.push_str(&format!(
+        ", still {} to {} ({}).",
+        srv.clock.hm(entry.started_at),
+        srv.clock.hm(stopped_at),
+        fmt_hm(stopped_at - entry.started_at)
+    ));
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -740,6 +826,64 @@ mod tests {
             ],
         };
         assert_eq!(top_tasks(&d), "a, b, c, ...");
+    }
+
+    #[test]
+    fn rewording_an_entry_keeps_its_id_times_and_source() {
+        let mut srv = Server::new(rp_store::Store::open_in_memory().unwrap()).unwrap();
+        let entry = srv
+            .store
+            .track_log("stuff", Some("kept"), 1_000, 4_600, "app")
+            .unwrap();
+
+        // The whole reason this tool exists rather than delete-then-log: the id is
+        // what the desktop app's Jira worklog record hangs on.
+        srv.store
+            .track_record_push(entry.id, "PROJ-1", "w1", 1_000, 3_600, 1)
+            .unwrap();
+
+        let out = edit_entry(
+            &mut srv,
+            &json!({"id": entry.id, "task": "invoice export: CSV escaping"}),
+        )
+        .unwrap();
+        assert!(out.contains("invoice export"), "{out}");
+        let after = srv.store.track_entry(entry.id).unwrap().unwrap();
+        assert_eq!(after.task, "invoice export: CSV escaping");
+        assert_eq!(
+            after.note.as_deref(),
+            Some("kept"),
+            "an omitted note is kept"
+        );
+        assert_eq!((after.started_at, after.stopped_at), (1_000, Some(4_600)));
+        assert_eq!(after.source, "app", "rewording is not re-sourcing");
+        assert_eq!(
+            srv.store.track_pushed_between(0, 9_000).unwrap().len(),
+            1,
+            "the Jira link must survive a reword"
+        );
+
+        // An empty note clears; a repeat says so instead of writing again.
+        edit_entry(&mut srv, &json!({"id": entry.id, "note": "  "})).unwrap();
+        assert_eq!(srv.store.track_entry(entry.id).unwrap().unwrap().note, None);
+        let out = edit_entry(
+            &mut srv,
+            &json!({"id": entry.id, "task": "invoice export: CSV escaping"}),
+        )
+        .unwrap();
+        assert!(out.contains("nothing changed"), "{out}");
+
+        let err = edit_entry(&mut srv, &json!({"id": 9_999}))
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("no entry #9999"), "{err}");
+
+        // A running entry has no end to keep.
+        let running = srv.store.track_start("live", None, "mcp", 8_000).unwrap();
+        let err = edit_entry(&mut srv, &json!({"id": running.id, "task": "x"}))
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("still running"), "{err}");
     }
 
     #[test]

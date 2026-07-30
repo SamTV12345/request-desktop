@@ -320,114 +320,186 @@ pub fn filter(blocks: &[Block], query: &str) -> Vec<Block> {
 // Display
 // ---------------------------------------------------------------------------
 
-/// Render blocks as a page: headings in the heading face, prose at reading width,
-/// code and tables on a sunken ground.
+/// One drawn line of a reference page.
 ///
-/// ponytail: not virtualised. The longest of these pages is ~140 blocks of plain
-/// text with no hitboxes, where the emoji grid that needed `uniform_list` was 126
-/// cards with four interactive elements each. If a reference an order of magnitude
-/// longer ever lands, the upgrade is the same `uniform_list` treatment — the
-/// blocks are already a flat indexable list, which is the hard part.
-pub fn page(blocks: &[Block], t: theme::Theme) -> Vec<gpui::AnyElement> {
+/// A table is expanded into one `Row` per line rather than staying a single
+/// element, because virtualising a page means being able to skip *rows* — and a
+/// block-per-element list cannot skip inside the one block that holds 68 of them.
+///
+/// The count that killed the old shape: `port-info-search` is a 68-row, 4-column
+/// table, so one `Block::Table` was 277 cells in a single element. Every frame laid
+/// out all of them, and each cell wraps its text, which gpui measures per requested
+/// width. Nothing on screen needed more than a dozen rows of that.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Row {
+    /// A non-table block. `leads` marks the first block on the page, above which a
+    /// heading takes no space.
+    Block { block: Block, leads: bool },
+    /// A table's header row, or one of its body rows.
+    Table {
+        cells: Vec<String>,
+        /// The whole table's column count, so every row splits its width alike even
+        /// though each is laid out on its own now.
+        columns: usize,
+        head: bool,
+        /// Every other body row is washed, so a wide row is followed across.
+        striped: bool,
+    },
+}
+
+/// Flatten parsed blocks into the rows a list draws one at a time.
+pub fn rows(blocks: Vec<Block>) -> Vec<Row> {
     let mut out = Vec::with_capacity(blocks.len());
-    for (i, block) in blocks.iter().enumerate() {
-        out.push(match block {
-            Block::Heading { level, text } => div()
-                .font_family(FONT_HEADING)
-                .text_color(t.text)
-                // Levels map onto the type scale rather than each getting their
-                // own size: the pages only use two or three depths.
-                .text_size(match level {
-                    1 | 2 => text::H4,
-                    3 => text::H5,
-                    _ => text::H6,
-                })
-                // Space above a heading, not below: it belongs to what follows it.
-                .when(i > 0, |d| d.mt(space::S3))
-                .child(text.clone())
-                .into_any_element(),
-            Block::Text(body) => div()
-                .text_size(text::BODY)
-                .line_height(text::BODY_LINE)
-                .text_color(t.text_muted())
-                .child(body.clone())
-                .into_any_element(),
-            Block::Code(body) => div()
-                .px(space::S3)
-                .py(space::S2)
-                .rounded(radius::MD)
-                .bg(t.bg)
-                .border_1()
-                .border_color(t.divider)
-                .font_family(FONT_MONO)
-                .text_size(text::CONTROL)
-                .text_color(t.text)
-                .child(body.clone())
-                .into_any_element(),
-            Block::Entry { term, detail } => div()
-                .flex()
-                .flex_col()
-                .gap(space::S1 * 0.5)
-                .child(
-                    div()
-                        .font_family(FONT_MONO)
-                        .text_size(text::CONTROL)
-                        .text_color(t.accent)
-                        .child(term.clone()),
-                )
-                .when(!detail.is_empty(), |d| {
-                    d.child(
-                        div()
-                            .text_size(text::SMALL)
-                            .line_height(text::BODY_LINE)
-                            .text_color(t.text_muted())
-                            .child(detail.clone()),
-                    )
-                })
-                .into_any_element(),
+    for (i, block) in blocks.into_iter().enumerate() {
+        match block {
             Block::Table { header, rows } => {
-                let cell = |value: &String, head: bool| {
+                let columns = header
+                    .len()
+                    .max(rows.iter().map(Vec::len).max().unwrap_or(0))
+                    .max(1);
+                if !header.is_empty() {
+                    out.push(Row::Table {
+                        cells: header,
+                        columns,
+                        head: true,
+                        striped: false,
+                    });
+                }
+                for (r, cells) in rows.into_iter().enumerate() {
+                    out.push(Row::Table {
+                        cells,
+                        columns,
+                        head: false,
+                        striped: r % 2 == 1,
+                    });
+                }
+            }
+            block => out.push(Row::Block {
+                block,
+                leads: i == 0,
+            }),
+        }
+    }
+    out
+}
+
+/// Draw one row: headings in the heading face, prose at reading width, code on a
+/// sunken ground, a table row as its cells.
+pub fn row(t: theme::Theme, row: &Row) -> gpui::AnyElement {
+    match row {
+        Row::Block { block, leads } => {
+            // The gap the old single-container page got from `gap(space::S2)`. A
+            // table row deliberately gets none: its rows are flush by definition.
+            block_element(t, block, *leads)
+                .w_full()
+                .pb(space::S2)
+                .into_any_element()
+        }
+        Row::Table {
+            cells,
+            columns,
+            head,
+            striped,
+        } => {
+            // A definite fraction of the row, not `flex_1`. Those look identical —
+            // `flex_1` splits the free space evenly too — and cost wildly
+            // differently. A cell sets neither `truncate()` nor
+            // `whitespace_nowrap()` on purpose, since a reference table is there to
+            // be read and a long description should wrap; gpui then caches that wrap
+            // keyed on the width it was measured at (`gpui::elements::text`, the
+            // `wrap_width == text_layout.wrap_width` arm). A flexible cell gets
+            // measured at several widths per frame — min-content, max-content, then
+            // the resolved one — and every probe missed the cache and re-wrapped
+            // every cell.
+            let width = gpui::relative(1. / *columns as f32);
+            let mut line = div()
+                .flex()
+                // Load-bearing, and it was not needed before: `relative()` is a
+                // fraction *of the parent*, and a row is now a list item rather than
+                // a child of a `flex_col` table that stretched it. Without a definite
+                // width to divide, every cell fell back to its content width — so the
+                // columns went ragged and the striping stopped where the text did.
+                .w_full()
+                .items_baseline()
+                .when(*head, |d| d.bg(t.bg))
+                .when(!*head, |d| d.border_t_1().border_color(t.divider))
+                .when(*striped, |d| d.bg(t.hover()));
+            for value in cells {
+                line = line.child(
                     div()
-                        .flex_1()
+                        .w(width)
+                        // Still needed with a definite width: a flex item's automatic
+                        // minimum is its min-content width, so one long unbroken word
+                        // would otherwise widen the column back out.
                         .min_w_0()
                         .px(space::S2)
                         .py(space::S1)
-                        .text_size(if head { text::LABEL } else { text::CONTROL })
-                        .text_color(if head { t.text_label() } else { t.text })
-                        .when(!head, |d| d.font_family(FONT_MONO))
-                        .child(value.clone())
-                };
-                let mut table = div()
-                    .flex()
-                    .flex_col()
-                    .rounded(radius::MD)
-                    .border_1()
-                    .border_color(t.divider)
-                    .overflow_hidden();
-                if !header.is_empty() {
-                    let mut head = div().flex().bg(t.bg);
-                    for value in header {
-                        head = head.child(cell(value, true));
-                    }
-                    table = table.child(head);
-                }
-                for (r, row) in rows.iter().enumerate() {
-                    let mut line = div()
-                        .flex()
-                        .items_baseline()
-                        .border_t_1()
-                        .border_color(t.divider);
-                    for value in row {
-                        line = line.child(cell(value, false));
-                    }
-                    // Every other row washed, so a wide row is followed across.
-                    table = table.child(line.when(r % 2 == 1, |d| d.bg(t.hover())));
-                }
-                table.into_any_element()
+                        .text_size(if *head { text::LABEL } else { text::CONTROL })
+                        .text_color(if *head { t.text_label() } else { t.text })
+                        .when(!*head, |d| d.font_family(FONT_MONO))
+                        .child(value.clone()),
+                );
             }
-        });
+            line.into_any_element()
+        }
     }
-    out
+}
+
+fn block_element(t: theme::Theme, block: &Block, leads: bool) -> gpui::Div {
+    match block {
+        Block::Heading { level, text } => div()
+            .font_family(FONT_HEADING)
+            .text_color(t.text)
+            // Levels map onto the type scale rather than each getting their
+            // own size: the pages only use two or three depths.
+            .text_size(match level {
+                1 | 2 => text::H4,
+                3 => text::H5,
+                _ => text::H6,
+            })
+            // Space above a heading, not below: it belongs to what follows it.
+            .when(!leads, |d| d.mt(space::S3))
+            .child(text.clone()),
+        Block::Text(body) => div()
+            .text_size(text::BODY)
+            .line_height(text::BODY_LINE)
+            .text_color(t.text_muted())
+            .child(body.clone()),
+        Block::Code(body) => div()
+            .px(space::S3)
+            .py(space::S2)
+            .rounded(radius::MD)
+            .bg(t.bg)
+            .border_1()
+            .border_color(t.divider)
+            .font_family(FONT_MONO)
+            .text_size(text::CONTROL)
+            .text_color(t.text)
+            .child(body.clone()),
+        Block::Entry { term, detail } => div()
+            .flex()
+            .flex_col()
+            .gap(space::S1 * 0.5)
+            .child(
+                div()
+                    .font_family(FONT_MONO)
+                    .text_size(text::CONTROL)
+                    .text_color(t.accent)
+                    .child(term.clone()),
+            )
+            .when(!detail.is_empty(), |d| {
+                d.child(
+                    div()
+                        .text_size(text::SMALL)
+                        .line_height(text::BODY_LINE)
+                        .text_color(t.text_muted())
+                        .child(detail.clone()),
+                )
+            }),
+        // `rows()` expands every table into `Row::Table`, so a table never reaches
+        // here. An empty box rather than a panic: this is a render path.
+        Block::Table { .. } => div(),
+    }
 }
 
 #[cfg(test)]

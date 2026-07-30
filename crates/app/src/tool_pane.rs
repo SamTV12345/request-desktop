@@ -14,7 +14,7 @@
 use crate::reference;
 use gpui::{
     ClipboardItem, Context, Entity, IntoElement, ParentElement, SharedString, Styled, Window, div,
-    prelude::*,
+    prelude::*, px,
 };
 use rp_devtools::{Args, Field, FieldKind, Kind, Tool};
 use rp_ui::button::{Button, Size, Tone, check_box};
@@ -60,6 +60,16 @@ pub struct ToolPane {
     /// Read-only editor so results can be selected and copied.
     output_view: Entity<Editor>,
     output: Result<String, String>,
+    /// The reference page's rows, if this is a reference tool.
+    ///
+    /// Cached rather than re-derived in `render`: the page used to be re-parsed and
+    /// re-filtered every frame, which also meant cloning every cell of a 68-row
+    /// table. An `Rc` because `list()`'s item closure is `'static` and cannot borrow
+    /// the pane.
+    page_rows: std::rc::Rc<Vec<reference::Row>>,
+    /// Row heights and scroll position for the reference page. Held here because
+    /// `list()` keeps its state on the view rather than in the element.
+    page_list: gpui::ListState,
     /// The args `output` was produced from.
     ///
     /// `cx.observe` fires on *any* notify from an input — a click into the field,
@@ -121,6 +131,10 @@ impl ToolPane {
             choices,
             output_view,
             output: Ok(String::new()),
+            page_rows: std::rc::Rc::default(),
+            // A screenful of overdraw, so a wheel notch does not expose blank rows
+            // before the next frame fills them.
+            page_list: gpui::ListState::new(0, gpui::ListAlignment::Top, px(256.)),
             computed_from: None,
         };
         pane.recompute(cx);
@@ -177,6 +191,40 @@ impl ToolPane {
             Err(e) => e.clone(),
         };
         self.output_view.update(cx, |v, cx| v.set_text(shown, cx));
+        self.rebuild_page(cx);
+    }
+
+    /// Re-derive the reference page's rows from the output and the filter box.
+    ///
+    /// Called from `recompute` and nowhere else, which is exactly the set of moments
+    /// the page can change: the only input a reference tool has *is* its filter, and
+    /// that filter is one of the args `recompute` keys on.
+    fn rebuild_page(&mut self, cx: &Context<Self>) {
+        if !self.is_reference() {
+            return;
+        }
+        let Ok(text) = &self.output else {
+            self.page_rows = std::rc::Rc::default();
+            self.page_list.reset(0);
+            return;
+        };
+        let blocks = reference::parse(text);
+        // The tool's own filter has already narrowed the text if it has one;
+        // filtering the parsed blocks as well is what keeps a hit's heading with it
+        // and a matched table row under its header, which no amount of filtering
+        // lines of text can do.
+        let query = self
+            .tool
+            .fields
+            .first()
+            .filter(|f| f.key == FILTER_KEY)
+            .and_then(|f| self.inputs.iter().find(|(g, _)| g.key == f.key))
+            .map(|(_, input)| input.text(cx))
+            .unwrap_or_default();
+        self.page_rows = std::rc::Rc::new(reference::rows(reference::filter(&blocks, &query)));
+        // `reset` and not `splice`: a filter change can rewrite the whole page, and
+        // the list caches a height per row.
+        self.page_list.reset(self.page_rows.len());
     }
 
     /// `.field > label`: the label above every control, so all 78 tool forms
@@ -460,39 +508,32 @@ impl ToolPane {
 
     /// A reference page, set as structured text.
     ///
-    /// The tool's own filter field has already narrowed `text` if it has one;
-    /// filtering the parsed blocks as well is what keeps a hit's heading with it
-    /// and a matched table row under its header, which no amount of filtering
-    /// lines of text can do.
-    fn reference_page(&self, text: &str, t: Theme, cx: &Context<Self>) -> impl IntoElement + use<> {
-        let blocks = reference::parse(text);
-        let query = self
-            .tool
-            .fields
-            .first()
-            .filter(|f| f.key == FILTER_KEY)
-            .and_then(|f| self.inputs.iter().find(|(g, _)| g.key == f.key))
-            .map(|(_, input)| input.text(cx))
-            .unwrap_or_default();
-        let blocks = reference::filter(&blocks, &query);
-        let empty = blocks.is_empty();
-        div()
-            .id("reference-page")
-            .flex()
-            .flex_col()
-            .gap(space::S2)
-            .flex_1()
-            .min_h_0()
-            .overflow_y_scroll()
-            .when(empty, |d| {
-                d.child(
-                    div()
-                        .text_size(text::BODY)
-                        .text_color(t.text_muted())
-                        .child("Nothing on this page matches that search."),
-                )
-            })
-            .children(reference::page(&blocks, t))
+    /// A `list()` and not a scrolling `div`: these pages are read, not computed, and
+    /// one of them — `port-info-search` — is a 68-row table whose 277 cells were all
+    /// laid out every frame. `list()` asks only for the rows on screen and brings
+    /// its own scrolling. Row heights differ (a heading, a paragraph and a table row
+    /// are not the same height), which is why this is `list()` rather than the
+    /// `uniform_list` the tools sidebar uses.
+    fn reference_page(&self, t: Theme) -> gpui::AnyElement {
+        if self.page_rows.is_empty() {
+            return div()
+                .text_size(text::BODY)
+                .text_color(t.text_muted())
+                .child("Nothing on this page matches that search.")
+                .into_any_element();
+        }
+        let rows = self.page_rows.clone();
+        gpui::list(self.page_list.clone(), move |ix, _window, _cx| {
+            match rows.get(ix) {
+                Some(row) => reference::row(t, row),
+                // The list's count comes from `page_rows`, so this cannot happen —
+                // and a render path is the wrong place to prove it with a panic.
+                None => div().into_any_element(),
+            }
+        })
+        .flex_1()
+        .min_h_0()
+        .into_any_element()
     }
 
     /// Result or error, in a card with a copy affordance. An error is styled as
@@ -630,7 +671,7 @@ impl Render for ToolPane {
             // prose, code and tables. Only computed output goes in the result
             // card, where "Result" and a copy button mean something.
             .map(|d| match (self.is_reference(), &self.output) {
-                (true, Ok(text)) => d.child(self.reference_page(text, t, cx)),
+                (true, Ok(_)) => d.child(self.reference_page(t)),
                 _ => d.child(self.result_panel(t, cx)),
             })
     }

@@ -29,6 +29,17 @@ rp-store = { path = "../store" }
 # The MCP server, hosted in-process over HTTP when the user turns it on in
 # settings. Same crate the `rp-mcp` stdio binary is built from.
 rp-mcp = { path = "../mcp" }
+# The Jira API token, in the OS credential store: DPAPI on Windows, the Keychain
+# on macOS, Secret Service on Linux. The alternative was the `kv` table, i.e. a
+# token in clear text in a file next to the worklog — not a trade to make for a
+# credential that can book time as the user. `v1` is the `Entry` API this uses —
+# keyring 4 refuses to build without it or `cli`.
+keyring = { version = "4", default-features = false, features = [
+    "v1",
+    "windows-native-keyring-store",
+    "apple-native-keyring-store",
+    "zbus-secret-service-keyring-store",
+] }
 
 [build-dependencies]
 winresource = "0.1.31"

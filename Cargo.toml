@@ -28,3 +28,17 @@ serde = { version = "1", features = ["derive"] }
 # anyway, and cargo features are additive, so without it here a crate's tests
 # and its behaviour inside the app disagree about JSON key order.
 serde_json = { version = "1", features = ["preserve_order"] }
+
+# A debug build of gpui is not a slow version of the app, it is a different app.
+# Layout (taffy), SVG rasterisation (resvg), font shaping and the rope all run per
+# frame, and at `opt-level = 0` they cost enough to make a 150-row list feel like
+# a web page from 2004 — which is not a signal about our element trees at all.
+#
+# Zed's own manifest names the offenders one by one; `"*"` is the same fix without
+# a list to keep in sync, since every one of them is a dependency and none of our
+# own crates is. Ours stay at 0, so an incremental rebuild is still seconds.
+#
+# This is not a substitute for judging performance in `--release`: it makes the
+# dev build representative, it does not make it the shipping build.
+[profile.dev.package."*"]
+opt-level = 2

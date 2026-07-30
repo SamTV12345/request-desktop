@@ -19,7 +19,7 @@ mod calendar;
 mod log;
 // The design system. Everything about how this app looks lives in `rp-ui`.
 use crate::log::note;
-use rp_ui::button::{Button, Tone, check_box};
+use rp_ui::button::{Button, Tone, check_box, seg_option, seg_track};
 use rp_ui::data::method_badge;
 use rp_ui::fonts::fonts;
 use rp_ui::fonts::resolve_fonts;
@@ -30,6 +30,7 @@ use rp_ui::theme;
 use rp_ui::tokens::{control, radius, size, space, text};
 mod custom;
 mod filters;
+mod jira;
 mod palette;
 mod reference;
 mod request_pane;
@@ -46,7 +47,7 @@ mod year_strip;
 use gpui::{
     App, Application, Bounds, Context, Entity, Global, IntoElement, ParentElement,
     PathPromptOptions, Pixels, Render, SharedString, Styled, WeakEntity, Window, WindowBounds,
-    WindowOptions, div, prelude::*, px, size,
+    WindowOptions, div, prelude::*, px, size, uniform_list,
 };
 use request_pane::RequestPane;
 use rp_core::interp::Vars;
@@ -110,9 +111,17 @@ const APP_NAME: &str = "Toolbench";
 /// `opacity:0.6`. The request list is deliberately different — pills, per
 /// `Requests.dc.html` — so these stay local rather than becoming tokens.
 const ROW_RADIUS: Pixels = px(10.);
-const ROW_PAD_Y: Pixels = px(7.);
 const ROW_TEXT: Pixels = px(13.5);
 const PIN_DOT: Pixels = px(5.);
+/// Every row in the tools list, heading included, is exactly this tall.
+///
+/// `uniform_list` measures the first item and assumes the rest match, so this is
+/// a height and not a floor — it replaces the design's `padding:7px` on a row that
+/// sized itself to its text. `7 * 2 + text::BODY_LINE`, spelled out because
+/// `Pixels` arithmetic is not `const`. The group headings were 31.35 and are
+/// stretched to it; their own rule and count still mark the section break, so what
+/// they lose is air rather than meaning.
+const TOOL_ROW_H: Pixels = px(37.25);
 const UNAVAILABLE_OPACITY: f32 = 0.6;
 /// The filter row's `gap:5px` — between `space::S1` (4.4) and `S2` (8.8).
 const TAG_GAP: Pixels = px(5.);
@@ -228,6 +237,25 @@ fn save_session(cx: &mut App) {
         && let Err(e) = store.save_session(&sessions)
     {
         note!("cannot save the session: {e:#}");
+    }
+}
+
+/// Run `f` against the store, logging and swallowing "there is no database".
+///
+/// The tracker's own view has a richer version of this that puts the failure in its
+/// panel; this is for the callers whose only sensible reaction to a broken store is
+/// to do nothing and say so in the log.
+fn with_store<T>(cx: &mut App, f: impl FnOnce(&mut Store) -> anyhow::Result<T>) -> Option<T> {
+    if !cx.has_global::<Persist>() {
+        return None;
+    }
+    let store = cx.global_mut::<Persist>().store.as_mut()?;
+    match f(store) {
+        Ok(value) => Some(value),
+        Err(e) => {
+            note!("{e:#}");
+            None
+        }
     }
 }
 
@@ -520,10 +548,12 @@ struct Workspace {
     /// derived per frame from the query — it is a function of state, not state.
     palette_open: bool,
     palette_selected: usize,
-    /// The palette list's scroll offset. Held here rather than in the component,
-    /// which is rebuilt every frame: walking the selection past the fold has to
-    /// move the list, and only a handle that outlives one frame can do that.
-    palette_scroll: gpui::ScrollHandle,
+    /// The palette list's row heights and scroll offset. Held here rather than in
+    /// the component, which is rebuilt every frame: walking the selection past the
+    /// fold has to move the list, and only state that outlives one frame can do that.
+    palette_list: gpui::ListState,
+    /// Row heights and scroll offset for the collection list, for the same reason.
+    request_list: gpui::ListState,
     /// Time tracking. Owns its own list and detail pane, and polls the database
     /// only while its section is on screen.
     track: Entity<track::Track>,
@@ -582,7 +612,7 @@ impl Workspace {
             this.palette_selected = 0;
             // And back to the top with it, or a narrowed list shows its first row
             // scrolled out of sight.
-            this.palette_scroll.scroll_to_item(0);
+            this.palette_list.scroll_to_reveal_item(0);
             cx.notify();
         })
         .detach();
@@ -630,7 +660,8 @@ impl Workspace {
             palette_query,
             palette_open: false,
             palette_selected: 0,
-            palette_scroll: gpui::ScrollHandle::new(),
+            palette_list: gpui::ListState::new(0, gpui::ListAlignment::Top, px(128.)),
+            request_list: gpui::ListState::new(0, gpui::ListAlignment::Top, px(128.)),
             track,
             request_tabs: Tabs::default(),
             tool_tabs: Tabs::default(),
@@ -972,7 +1003,7 @@ impl Workspace {
         // Cleared on open: re-opening onto the last search means a list the user
         // has already dealt with, and clearing it by hand is three keys.
         self.palette_query.update(cx, |q, cx| q.set_text("", cx));
-        self.palette_scroll.scroll_to_item(0);
+        self.palette_list.scroll_to_reveal_item(0);
         window.focus(&gpui::Focusable::focus_handle(&self.palette_query, cx), cx);
         cx.notify();
     }
@@ -996,8 +1027,11 @@ impl Workspace {
         // Here and not in the palette's `render`: a wheel scroll also causes a
         // render, and asking to scroll to the selection there would snap the list
         // back on every notch. Only a *move* should move the list.
-        self.palette_scroll
-            .scroll_to_item(rp_ui::palette::child_index(&rows, self.palette_selected));
+        //
+        // The row index *is* the item index now: a group's label is drawn inside the
+        // row that leads it rather than as an item of its own.
+        self.palette_list
+            .scroll_to_reveal_item(self.palette_selected);
         cx.notify();
     }
 
@@ -1464,11 +1498,15 @@ impl Workspace {
         let t = theme::theme(cx);
         let query = self.request_query.read(cx).text().trim().to_lowercase();
         let open = self.request_tabs.active_key().cloned();
-        let mut groups = Vec::new();
+        // Flattened to plain data, not to elements: `list()`'s item closure is
+        // `'static` and builds only the rows on screen, so what it captures may not
+        // borrow `self` and may not be pre-built.
+        let mut rows: Vec<RequestRow> = Vec::new();
+        let mut files = 0usize;
         let mut shown = 0usize;
         for source in &self.sources {
             let path = source.path.clone();
-            let mut rows = Vec::new();
+            let mut mine: Vec<RequestRow> = Vec::new();
             for (i, r) in source.requests.iter().enumerate() {
                 if !query.is_empty()
                     && !r.name.to_lowercase().contains(&query)
@@ -1477,125 +1515,40 @@ impl Workspace {
                 {
                     continue;
                 }
-                let active = open
-                    == Some(TabKey::Request {
-                        source: path.clone(),
-                        index: i,
-                    });
-                let full = SharedString::from(r.name.clone());
-                let at = path.clone();
-                rows.push(
-                    sidebar_row(t, active)
-                        // Unique across files: two files both have a request 0.
-                        .id(SharedString::from(format!("{}-{i}", path.display())))
-                        .tooltip({
-                            let full = full.clone();
-                            move |_, cx| cx.new(|_| Tip(full.clone())).into()
-                        })
-                        .child(method_badge(t, &r.method))
-                        // No `text_color` here: the row owns the ink, because on a
-                        // selected row the ground is the accent and accent-on-accent
-                        // is an invisible label.
-                        .child(div().flex_1().truncate().child(full))
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.open_request(&at, i, cx);
-                            cx.defer(save_session);
-                            cx.notify();
-                        })),
-                );
+                mine.push(RequestRow::Request {
+                    active: open
+                        == Some(TabKey::Request {
+                            source: path.clone(),
+                            index: i,
+                        }),
+                    path: path.clone(),
+                    index: i,
+                    name: SharedString::from(r.name.clone()),
+                    method: SharedString::from(r.method.clone()),
+                });
             }
-            shown += rows.len();
+            shown += mine.len();
             // A search that matches nothing in this file hides the file; without a
             // search an empty file still shows, so "it opened and holds nothing" is
             // visible rather than looking like it failed to open.
-            if rows.is_empty() && !query.is_empty() {
+            if mine.is_empty() && !query.is_empty() {
                 continue;
             }
-            let collapsed = source.collapsed;
-            let count = source.requests.len();
-            let closing = path.clone();
-            let toggling = path.clone();
-            groups.push(
-                div()
-                    .flex()
-                    .flex_col()
-                    .child(
-                        div()
-                            .id(SharedString::from(format!("group-{}", path.display())))
-                            .flex()
-                            .items_center()
-                            .gap(space::S1)
-                            .h(control::MD)
-                            .px(space::S3)
-                            .text_size(text::LABEL)
-                            .text_color(t.text_label())
-                            .cursor_pointer()
-                            .hover(|s| s.bg(t.hover()))
-                            .tooltip({
-                                let full = SharedString::from(path.display().to_string());
-                                move |_, cx| cx.new(|_| Tip(full.clone())).into()
-                            })
-                            .child(icon_tinted(
-                                if collapsed {
-                                    "chevron_right"
-                                } else {
-                                    "chevron_left"
-                                },
-                                text::SMALL,
-                                t.text_muted(),
-                            ))
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .truncate()
-                                    .child(source.label.clone()),
-                            )
-                            .child(
-                                div()
-                                    .flex_none()
-                                    .text_size(text::TINY)
-                                    .text_color(t.text_meta())
-                                    .child(SharedString::from(count.to_string())),
-                            )
-                            // Closing one file must not be reachable by accident,
-                            // so it is its own target rather than part of the row.
-                            .child(
-                                div()
-                                    .id(SharedString::from(format!("close-{}", path.display())))
-                                    .flex()
-                                    .flex_none()
-                                    .p(space::S1 * 0.5)
-                                    .rounded(radius::PILL)
-                                    .hover(|s| s.bg(t.active()))
-                                    .child(icon_tinted("close", text::SMALL, t.text_muted()))
-                                    .on_click(cx.listener(move |this, _, _, cx| {
-                                        this.close_source(&closing, cx)
-                                    })),
-                            )
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                if let Some(source) =
-                                    this.sources.iter_mut().find(|s| s.path == toggling)
-                                {
-                                    source.collapsed = !source.collapsed;
-                                }
-                                cx.notify();
-                            })),
-                    )
-                    .when(!collapsed, |d| d.children(rows))
-                    .when_some(source.error.clone(), |d, why| {
-                        d.child(
-                            div()
-                                .px(space::S3)
-                                .pb(space::S1)
-                                .text_size(text::TINY)
-                                .text_color(t.danger())
-                                .child(why),
-                        )
-                    }),
-            );
+            files += 1;
+            rows.push(RequestRow::File {
+                label: source.label.clone(),
+                count: source.requests.len(),
+                collapsed: source.collapsed,
+                path: path.clone(),
+            });
+            if !source.collapsed {
+                rows.append(&mut mine);
+            }
+            if let Some(why) = source.error.clone() {
+                rows.push(RequestRow::Error(why));
+            }
         }
-        let empty = groups.is_empty();
+        let empty = files == 0;
         let count: SharedString = if query.is_empty() {
             format!("{} files", self.sources.len()).into()
         } else {
@@ -1673,32 +1626,44 @@ impl Workspace {
                     ),
             )
             .child(divider(t))
-            .child(
-                div()
-                    .id("request-list")
-                    .flex()
-                    .flex_col()
-                    .flex_1()
-                    .overflow_y_scroll()
-                    .when(empty, |d| {
-                        d.child(empty_state(
-                            cx,
-                            t,
-                            "folder",
-                            if self.sources.is_empty() {
-                                "Nothing loaded"
-                            } else {
-                                "No match"
-                            },
-                            if self.sources.is_empty() {
-                                "Open a .http file or a Bruno collection, and add more with Add…"
-                            } else {
-                                "Nothing in the open files matches that search."
-                            },
-                        ))
-                    })
-                    .children(groups),
-            )
+            .child(div().flex().flex_col().flex_1().min_h_0().child(if empty {
+                empty_state(
+                    cx,
+                    t,
+                    "folder",
+                    if self.sources.is_empty() {
+                        "Nothing loaded"
+                    } else {
+                        "No match"
+                    },
+                    if self.sources.is_empty() {
+                        "Open a .http file or a Bruno collection, and add more with Add…"
+                    } else {
+                        "Nothing in the open files matches that search."
+                    },
+                )
+                .into_any_element()
+            } else {
+                // The list caches a height per item, so it has to be told when
+                // the count changes — which here is a search, a collapse, or a
+                // file being opened or closed.
+                if self.request_list.item_count() != rows.len() {
+                    self.request_list.reset(rows.len());
+                }
+                let rows = std::rc::Rc::new(rows);
+                let ws = cx.weak_entity();
+                gpui::list(self.request_list.clone(), move |i, _window, _cx| {
+                    match rows.get(i) {
+                        Some(row) => request_row(t, &ws, row),
+                        // The count comes from `rows`; a render path is the
+                        // wrong place to prove that with a panic.
+                        None => div().into_any_element(),
+                    }
+                })
+                .flex_1()
+                .min_h_0()
+                .into_any_element()
+            }))
     }
 
     /// The variables tab: environments, the editable values, and what earlier
@@ -1825,17 +1790,25 @@ impl Workspace {
         let selected = self.tool_tabs.active_key().cloned();
         let t = theme::theme(cx);
         let groups = tools::grouped(&matches, &self.favorites);
-        // Rows are built eagerly: `cx` is a `&mut` borrow, so a lazy `map`
-        // closure would let it escape.
+        // Flattened to plain data, not to elements: `uniform_list`'s closure is
+        // `'static` and builds only the dozen rows actually on screen, so what it
+        // captures may not borrow `self` and may not be pre-built.
         let mut rows = Vec::new();
         for group in &groups {
-            rows.push(group_heading(t, group).into_any_element());
+            rows.push(ToolRow::Head {
+                label: group.label,
+                pinned: group.pinned,
+                count: group.tools.len(),
+            });
             for (i, tool) in group.tools.iter().enumerate() {
-                let active = selected == Some(TabKey::Tool(tool.id));
-                // Only the pinned group numbers its rows — the same tool lower
-                // down in its category must not claim a second shortcut.
-                let slot = (group.pinned && i < tools::MAX_SHORTCUTS).then_some(i);
-                rows.push(self.tool_row(tool, active, slot, cx).into_any_element());
+                rows.push(ToolRow::Tool {
+                    tool,
+                    active: selected == Some(TabKey::Tool(tool.id)),
+                    // Only the pinned group numbers its rows — the same tool lower
+                    // down in its category must not claim a second shortcut.
+                    slot: (group.pinned && i < tools::MAX_SHORTCUTS).then_some(i),
+                    pinned: self.favorites.iter().any(|k| k == tool.id),
+                });
             }
         }
         let no_ui = matches.iter().filter(|tool| unavailable(tool)).count();
@@ -1881,22 +1854,29 @@ impl Workspace {
             .child(divider(t))
             .child(
                 div()
-                    .id("tool-list")
                     .flex()
                     .flex_col()
                     .flex_1()
                     .min_h_0()
-                    .overflow_y_scroll()
-                    .when(count == 0, |d| {
-                        d.child(empty_state(
+                    .child(if count == 0 {
+                        empty_state(
                             cx,
                             t,
                             "search",
                             "No tools match",
                             "Try a shorter search term.",
-                        ))
-                    })
-                    .children(rows),
+                        )
+                        .into_any_element()
+                    } else {
+                        let ws = cx.weak_entity();
+                        uniform_list("tool-list", rows.len(), move |range, _window, _cx| {
+                            range
+                                .map(|i| Self::tool_list_row(t, &ws, &rows[i]))
+                                .collect()
+                        })
+                        .h_full()
+                        .into_any_element()
+                    }),
             )
             // The design puts the no-UI count in a footer rather than a pill on
             // every affected row: it is the same fact stated once instead of four
@@ -2079,16 +2059,37 @@ impl Workspace {
         cx.notify();
     }
 
+    fn tool_list_row(
+        t: theme::Theme,
+        ws: &WeakEntity<Workspace>,
+        row: &ToolRow,
+    ) -> gpui::AnyElement {
+        match *row {
+            ToolRow::Head {
+                label,
+                pinned,
+                count,
+            } => group_heading(t, label, pinned, count).into_any_element(),
+            ToolRow::Tool {
+                tool,
+                active,
+                slot,
+                pinned,
+            } => Self::tool_row(t, ws, tool, active, slot, pinned).into_any_element(),
+        }
+    }
+
+    /// Takes no `self`: `uniform_list`'s closure is `'static` and cannot borrow the
+    /// workspace, hence the `WeakEntity` for the clicks — which is also what makes
+    /// a click safe after the window has gone.
     fn tool_row(
-        &self,
+        t: theme::Theme,
+        ws: &WeakEntity<Workspace>,
         tool: &'static Tool,
         active: bool,
-        // `Some(i)` in the pinned group: this row answers to ⌘/Ctrl+`i+1`.
         slot: Option<usize>,
-        cx: &mut Context<Self>,
+        pinned: bool,
     ) -> impl IntoElement + use<> {
-        let t = theme::theme(cx);
-        let pinned = self.favorites.iter().any(|k| k == tool.id);
         // The star is always in the row and only *visible* when the row is pinned,
         // selected, or under the pointer — the same opacity-swap-on-group-hover the
         // tab strip's close button uses, because gpui has no `invisible()`.
@@ -2116,8 +2117,10 @@ impl Workspace {
             // one of them.
             .group(group.clone())
             .rounded(ROW_RADIUS)
-            .h_auto()
-            .py(ROW_PAD_Y)
+            // Fixed, not `h_auto()` + padding: `uniform_list` measures one item and
+            // places the rest on that pitch, so a row that sized itself to its text
+            // would drift out of its slot. The name truncates already.
+            .h(TOOL_ROW_H)
             .text_size(ROW_TEXT)
             // Tool names run long too — "Encode/decode url formatted strings".
             .tooltip(move |_, cx| cx.new(|_| Tip(tool.name.into())).into())
@@ -2180,16 +2183,26 @@ impl Workspace {
                             .into()
                     })
                     .child(icon_tinted("star", text::SMALL, star_ink))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        cx.stop_propagation();
-                        this.toggle_favorite(tool.id, cx);
-                    })),
+                    .on_click({
+                        let ws = ws.clone();
+                        move |_, _, cx: &mut App| {
+                            cx.stop_propagation();
+                            ws.update(cx, |this, cx| this.toggle_favorite(tool.id, cx))
+                                .ok();
+                        }
+                    }),
             )
-            .on_click(cx.listener(move |this, _, window, cx| {
-                this.open_tool(tool, window, cx);
-                cx.defer(save_session);
-                cx.notify();
-            }))
+            .on_click({
+                let ws = ws.clone();
+                move |_, window: &mut Window, cx: &mut App| {
+                    ws.update(cx, |this, cx| {
+                        this.open_tool(tool, window, cx);
+                        cx.defer(save_session);
+                        cx.notify();
+                    })
+                    .ok();
+                }
+            })
     }
 
     /// Move tab `i` into a brand-new window.
@@ -2391,22 +2404,169 @@ fn open_settings(cx: &mut App) {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
             ..Default::default()
         },
-        |_, cx| cx.new(|_| Settings::default()),
+        |_, cx| cx.new(Settings::new),
     ) {
         Ok(handle) => cx.set_global(SettingsWindow(Some(handle))),
         Err(e) => note!("could not open settings: {e:#}"),
     }
 }
 
-/// The settings window's root: the ground, and the agent's way in.
-#[derive(Default)]
+/// The settings window's root: the ground, the agent's way in, and the Jira
+/// connection.
 struct Settings {
     /// What the last copy put on the clipboard, so a click has visible effect.
     /// Cleared by a timer, which is why it lives on the view and not in a global.
     copied: Option<SharedString>,
+    jira_base: Entity<TextInput>,
+    jira_account: Entity<TextInput>,
+    /// Write-only: the field is filled by the user and cleared the moment the
+    /// token reaches the keychain. Nothing ever reads a stored token back into
+    /// it — a secret on screen is a secret in a screenshot, and there is no
+    /// reason for the app to show the user something they already have.
+    jira_token: Entity<TextInput>,
+    jira_flavor: jira::Flavor,
+    /// Whether the keychain holds a token for the account in the field. Enough to
+    /// tell "not configured" from "configured" without showing the secret.
+    jira_has_token: bool,
+    /// The last thing the connection test or a save said.
+    jira_status: Option<SharedString>,
 }
 
 impl Settings {
+    fn new(cx: &mut Context<Self>) -> Self {
+        let jira_base = cx.new(|cx| TextInput::new(cx, "https://acme.atlassian.net"));
+        let jira_account = cx.new(|cx| TextInput::new(cx, "you@acme.com"));
+        let jira_token = cx.new(|cx| TextInput::new(cx, "paste an API token"));
+        let mut this = Self {
+            copied: None,
+            jira_base,
+            jira_account,
+            jira_token,
+            jira_flavor: jira::Flavor::default(),
+            jira_has_token: false,
+            jira_status: None,
+        };
+        this.load_jira(cx);
+        for input in [&this.jira_base, &this.jira_account, &this.jira_token] {
+            cx.observe(input, |_, _, cx| cx.notify()).detach();
+        }
+        this
+    }
+
+    /// Read the saved connection into the fields, and ask the keychain whether a
+    /// token exists for it.
+    fn load_jira(&mut self, cx: &mut Context<Self>) {
+        let cfg = with_store(cx, |store| jira::Config::load(store));
+        let Some(cfg) = cfg else { return };
+        self.jira_flavor = cfg.flavor;
+        self.jira_base
+            .update(cx, |input, cx| input.set_text(cfg.base.clone(), cx));
+        self.jira_account
+            .update(cx, |input, cx| input.set_text(cfg.account.clone(), cx));
+        self.jira_has_token = cfg.token().ok().flatten().is_some();
+    }
+
+    /// The connection as the fields currently describe it.
+    fn jira_config(&self, cx: &App) -> jira::Config {
+        jira::Config {
+            base: self.jira_base.read(cx).text().to_string(),
+            flavor: self.jira_flavor,
+            account: self.jira_account.read(cx).text().to_string(),
+        }
+    }
+
+    /// Save the connection, and the token if one was typed.
+    ///
+    /// The token goes to the keychain *before* the field is cleared, and the field
+    /// is only cleared on success — a failed keychain write must not look like a
+    /// saved token.
+    fn save_jira(&mut self, cx: &mut Context<Self>) {
+        let cfg = self.jira_config(cx);
+        let typed = self.jira_token.read(cx).text().to_string();
+        let saved = with_store(cx, |store| cfg.save(store));
+        if saved.is_none() {
+            self.jira_status = Some("Could not save — no database.".into());
+            cx.notify();
+            return;
+        }
+        if !typed.trim().is_empty() {
+            match cfg.set_token(&typed) {
+                Ok(()) => {
+                    self.jira_token.update(cx, |i, cx| i.set_text("", cx));
+                    self.jira_has_token = true;
+                }
+                Err(e) => {
+                    note!("could not store the Jira token: {e:#}");
+                    self.jira_status = Some("Could not reach the OS keychain.".into());
+                    cx.notify();
+                    return;
+                }
+            }
+        } else {
+            self.jira_has_token = cfg.token().ok().flatten().is_some();
+        }
+        self.jira_status = Some("Saved.".into());
+        cx.notify();
+    }
+
+    /// Forget the token for this account. The connection itself stays, so the user
+    /// can paste a fresh token without retyping the site.
+    fn clear_jira_token(&mut self, cx: &mut Context<Self>) {
+        let cfg = self.jira_config(cx);
+        match cfg.set_token("") {
+            Ok(()) => {
+                self.jira_has_token = false;
+                self.jira_status = Some("Token removed from the keychain.".into());
+            }
+            Err(e) => {
+                note!("could not remove the Jira token: {e:#}");
+                self.jira_status = Some("Could not reach the OS keychain.".into());
+            }
+        }
+        cx.notify();
+    }
+
+    /// One request, to prove the four fields agree. Saves first: testing something
+    /// other than what is stored would be a test of nothing.
+    fn test_jira(&mut self, cx: &mut Context<Self>) {
+        self.save_jira(cx);
+        let cfg = self.jira_config(cx);
+        let token = match cfg.token() {
+            Ok(Some(token)) => token,
+            Ok(None) => {
+                self.jira_status = Some("No token stored yet.".into());
+                cx.notify();
+                return;
+            }
+            Err(e) => {
+                self.jira_status = Some(SharedString::from(format!("{e:#}")));
+                cx.notify();
+                return;
+            }
+        };
+        self.jira_status = Some("Checking…".into());
+        cx.notify();
+        cx.spawn(async move |this, cx| {
+            // The same off-thread runtime the update check uses: a blocking
+            // `reqwest` call on the foreground thread would freeze the window for
+            // as long as Jira takes to answer.
+            let outcome = cx
+                .background_spawn(async move {
+                    request_pane::runtime().block_on(jira::check(&cfg, &token))
+                })
+                .await;
+            this.update(cx, |this, cx| {
+                this.jira_status = Some(match outcome {
+                    Ok(who) => SharedString::from(format!("Connected as {who}.")),
+                    Err(e) => SharedString::from(format!("{e:#}")),
+                });
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
     /// Put `payload` on the clipboard and say so for [`COPY_NOTICE`].
     /// Mint a fresh token and put it in force.
     ///
@@ -2506,9 +2666,181 @@ impl Render for Settings {
                             .child(section(cx, t, "Appearance"))
                             .child(ground_switch(cx)),
                     )
-                    .child(mcp_card(self.copied.clone(), cx)),
+                    .child(mcp_card(self.copied.clone(), cx))
+                    .child(self.jira_card(cx)),
             )
     }
+}
+
+impl Settings {
+    /// The Jira connection: where to book, as whom, and one button that proves it.
+    ///
+    /// Deliberately four fields and no ticket browser. Picking an issue from a list
+    /// would mean reading issues, and not reading issues is the point — the key is
+    /// typed, in the tracker, next to the work it belongs to.
+    fn jira_card(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let t = theme::theme(cx);
+        let cloud = self.jira_flavor == jira::Flavor::Cloud;
+        let ready = self.jira_config(cx).is_complete();
+        let (fill, ink) = if self.jira_has_token && ready {
+            (t.accent_wash_strong(), t.accent)
+        } else {
+            t.tag_neutral()
+        };
+        card(t)
+            .min_w_0()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(space::S2)
+                    .child(section(cx, t, "Jira").flex_1())
+                    .child(
+                        div()
+                            .flex_none()
+                            .px(space::S2)
+                            .rounded(radius::PILL)
+                            .bg(fill)
+                            .text_size(text::TINY)
+                            .text_color(ink)
+                            .child(if self.jira_has_token && ready {
+                                "connected"
+                            } else {
+                                "not set up"
+                            }),
+                    ),
+            )
+            .child(
+                div()
+                    .text_size(text::SMALL)
+                    .text_color(t.text_meta())
+                    .child(
+                        "Lets the tracker book your local worklog as Jira worklogs. \
+                         Nothing is ever read out of a ticket, and no ticket content is \
+                         given to an agent — the issue key is typed by you, in Track.",
+                    ),
+            )
+            // Cloud and Data Center differ in the auth header, the API version and
+            // the comment format. Getting this wrong is a 404 or a 401, so it is a
+            // switch and not a guess from the URL.
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(space::S2)
+                    .text_size(text::SMALL)
+                    .child(
+                        div()
+                            .flex_none()
+                            .w(size::LABEL)
+                            .text_color(t.text_label())
+                            .child("Kind"),
+                    )
+                    .child(
+                        seg_track(t)
+                            .child(
+                                seg_option(t, cloud)
+                                    .id("jira-cloud")
+                                    .child("Cloud")
+                                    .on_click(cx.listener(|this, _: &gpui::ClickEvent, _, cx| {
+                                        this.jira_flavor = jira::Flavor::Cloud;
+                                        cx.notify();
+                                    })),
+                            )
+                            .child(
+                                seg_option(t, !cloud)
+                                    .id("jira-server")
+                                    .child("Data Center")
+                                    .on_click(cx.listener(|this, _: &gpui::ClickEvent, _, cx| {
+                                        this.jira_flavor = jira::Flavor::Server;
+                                        cx.notify();
+                                    })),
+                            ),
+                    ),
+            )
+            .child(jira_field(t, "Site URL", self.jira_base.clone()))
+            .child(jira_field(
+                t,
+                if cloud { "E-mail" } else { "User name" },
+                self.jira_account.clone(),
+            ))
+            .child(jira_field(
+                t,
+                if self.jira_has_token {
+                    "New token"
+                } else {
+                    "API token"
+                },
+                self.jira_token.clone(),
+            ))
+            .child(
+                div()
+                    .text_size(text::SMALL)
+                    .text_color(t.text_meta())
+                    .child(if cloud {
+                        "Create one at id.atlassian.net → Security → API tokens. It is \
+                         stored in the Windows credential manager, not in the database, \
+                         and never shown again."
+                    } else {
+                        "A Personal Access Token from your Jira profile. It is stored in \
+                         the Windows credential manager, not in the database, and never \
+                         shown again."
+                    }),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap(space::S2)
+                    .child(
+                        Button::new("jira-save", "Save")
+                            .tone(Tone::Primary)
+                            .render(t, cx.listener(|this, _, _, cx| this.save_jira(cx))),
+                    )
+                    .child(
+                        Button::new("jira-test", "Test connection")
+                            .enabled(ready)
+                            .render(t, cx.listener(|this, _, _, cx| this.test_jira(cx))),
+                    )
+                    .when(self.jira_has_token, |d| {
+                        d.child(
+                            Button::new("jira-forget", "Forget token")
+                                .tone(Tone::Ghost)
+                                .render(t, cx.listener(|this, _, _, cx| this.clear_jira_token(cx))),
+                        )
+                    }),
+            )
+            .when_some(self.jira_status.clone(), |d, status| {
+                d.child(
+                    div()
+                        .text_size(text::SMALL)
+                        .text_color(t.text_muted())
+                        .child(status),
+                )
+            })
+    }
+}
+
+/// A labelled input on the settings grid, so the three Jira fields line up with the
+/// rows above them.
+fn jira_field(
+    t: theme::Theme,
+    label: &'static str,
+    input: Entity<TextInput>,
+) -> impl IntoElement + use<> {
+    div()
+        .flex()
+        .items_center()
+        .gap(space::S2)
+        .text_size(text::SMALL)
+        .child(
+            div()
+                .flex_none()
+                .w(size::LABEL)
+                .text_color(t.text_label())
+                .child(label),
+        )
+        .child(div().flex_1().min_w_0().child(input))
 }
 
 /// The server name clients see, and the key it goes under in `mcpServers`.
@@ -2619,7 +2951,7 @@ fn mcp_card(copied: Option<SharedString>, cx: &mut Context<Settings>) -> impl In
                 .text_color(t.text_meta())
                 .child(match (running, wide) {
                     (true, false) => {
-                        "Claude can reach the nine time-tracking tools over HTTP. \
+                        "Claude can reach the ten time-tracking tools over HTTP. \
                          This machine only, and the token is required."
                     }
                     (true, true) => {
@@ -2979,17 +3311,23 @@ impl Render for Workspace {
         // is built here and drawn deferred above everything including the menu.
         let command_palette = if self.palette_open {
             let hits = self.palette_hits(cx);
-            let rows = hits.iter().map(|h| h.row.clone()).collect();
+            let rows: std::rc::Rc<Vec<_>> =
+                std::rc::Rc::new(hits.iter().map(|h| h.row.clone()).collect());
+            // The list caches a height per item, so it has to be told when the count
+            // changes. Cheap and idempotent: `reset` on an unchanged count is a no-op
+            // we skip anyway.
+            if self.palette_list.item_count() != rows.len() {
+                self.palette_list.reset(rows.len());
+            }
             // The entity, not `cx.listener`: the palette hands its handlers a plain
             // `&mut App`, which is all a click needs to reach back into the window.
             let choose = cx.entity();
             let dismiss = choose.clone();
             Some(
-                rp_ui::Palette::new("command-palette")
+                rp_ui::Palette::new("command-palette", self.palette_list.clone())
                     .rows(rows)
                     .selected(self.palette_selected)
                     .empty("Nothing matches that")
-                    .scroll(self.palette_scroll.clone())
                     .render(
                         t,
                         window,
@@ -3216,27 +3554,199 @@ fn stored_favorites(cx: &App) -> Vec<String> {
 /// a category is its name, a rule filling the rest of the row, and the count in
 /// mono. The rule is what makes a long list skimmable — the eye catches the line,
 /// not the small-caps text.
-fn group_heading(t: theme::Theme, group: &tools::Group) -> impl IntoElement + use<> {
+/// One entry in the flattened collection list.
+///
+/// Plain owned data, because the rows have to survive being captured by `list()`'s
+/// `'static` item closure — the same reason [`ToolRow`] exists.
+enum RequestRow {
+    /// A file's header: its disclosure arrow, name, request count and close button.
+    File {
+        path: std::path::PathBuf,
+        label: SharedString,
+        count: usize,
+        collapsed: bool,
+    },
+    Request {
+        path: std::path::PathBuf,
+        index: usize,
+        name: SharedString,
+        method: SharedString,
+        active: bool,
+    },
+    /// Why a file failed to parse. Drawn under its header whether or not the file is
+    /// collapsed: a file that did not load is exactly when you need to be told.
+    Error(SharedString),
+}
+
+fn request_row(t: theme::Theme, ws: &WeakEntity<Workspace>, row: &RequestRow) -> gpui::AnyElement {
+    match row {
+        RequestRow::Error(why) => div()
+            .px(space::S3)
+            .pb(space::S1)
+            .text_size(text::TINY)
+            .text_color(t.danger())
+            .child(why.clone())
+            .into_any_element(),
+        RequestRow::Request {
+            path,
+            index,
+            name,
+            method,
+            active,
+        } => {
+            let i = *index;
+            let open_at = path.clone();
+            sidebar_row(t, *active)
+                // Unique across files: two files both have a request 0.
+                .id(SharedString::from(format!("{}-{i}", path.display())))
+                .tooltip({
+                    let full = name.clone();
+                    move |_, cx| cx.new(|_| Tip(full.clone())).into()
+                })
+                .child(method_badge(t, method))
+                // No `text_color` here: the row owns the ink, because on a selected
+                // row the ground is the accent and accent-on-accent is an invisible
+                // label.
+                .child(div().flex_1().truncate().child(name.clone()))
+                .on_click({
+                    let ws = ws.clone();
+                    move |_, _, cx: &mut App| {
+                        ws.update(cx, |this, cx| {
+                            this.open_request(&open_at, i, cx);
+                            cx.defer(save_session);
+                            cx.notify();
+                        })
+                        .ok();
+                    }
+                })
+                .into_any_element()
+        }
+        RequestRow::File {
+            path,
+            label,
+            count,
+            collapsed,
+        } => {
+            let collapsed = *collapsed;
+            let closing = path.clone();
+            let toggling = path.clone();
+            div()
+                .id(SharedString::from(format!("group-{}", path.display())))
+                .flex()
+                .items_center()
+                .gap(space::S1)
+                .h(control::MD)
+                .px(space::S3)
+                .text_size(text::LABEL)
+                .text_color(t.text_label())
+                .cursor_pointer()
+                .hover(|s| s.bg(t.hover()))
+                .tooltip({
+                    let full = SharedString::from(path.display().to_string());
+                    move |_, cx| cx.new(|_| Tip(full.clone())).into()
+                })
+                .child(icon_tinted(
+                    if collapsed {
+                        "chevron_right"
+                    } else {
+                        "chevron_left"
+                    },
+                    text::SMALL,
+                    t.text_muted(),
+                ))
+                .child(div().flex_1().min_w_0().truncate().child(label.clone()))
+                .child(
+                    div()
+                        .flex_none()
+                        .text_size(text::TINY)
+                        .text_color(t.text_meta())
+                        .child(SharedString::from(count.to_string())),
+                )
+                // Closing one file must not be reachable by accident, so it is its
+                // own target rather than part of the row.
+                .child(
+                    div()
+                        .id(SharedString::from(format!("close-{}", path.display())))
+                        .flex()
+                        .flex_none()
+                        .p(space::S1 * 0.5)
+                        .rounded(radius::PILL)
+                        .hover(|s| s.bg(t.active()))
+                        .child(icon_tinted("close", text::SMALL, t.text_muted()))
+                        .on_click({
+                            let ws = ws.clone();
+                            move |_, _, cx: &mut App| {
+                                cx.stop_propagation();
+                                ws.update(cx, |this, cx| this.close_source(&closing, cx))
+                                    .ok();
+                            }
+                        }),
+                )
+                .on_click({
+                    let ws = ws.clone();
+                    move |_, _, cx: &mut App| {
+                        ws.update(cx, |this, cx| {
+                            if let Some(source) =
+                                this.sources.iter_mut().find(|s| s.path == toggling)
+                            {
+                                source.collapsed = !source.collapsed;
+                            }
+                            cx.notify();
+                        })
+                        .ok();
+                    }
+                })
+                .into_any_element()
+        }
+    }
+}
+
+/// One entry in the flattened tools list.
+///
+/// Plain `'static` data — `&'static Tool` and `&'static str` — because the rows
+/// have to survive being captured by `uniform_list`'s closure, which outlives the
+/// `&mut self` that built them.
+enum ToolRow {
+    Head {
+        label: &'static str,
+        pinned: bool,
+        count: usize,
+    },
+    Tool {
+        tool: &'static Tool,
+        active: bool,
+        /// `Some(i)` in the pinned group: this row answers to ⌘/Ctrl+`i+1`.
+        slot: Option<usize>,
+        pinned: bool,
+    },
+}
+
+fn group_heading(
+    t: theme::Theme,
+    label: &'static str,
+    is_pinned: bool,
+    count: usize,
+) -> impl IntoElement + use<> {
     div()
         .flex()
         .items_center()
         .gap(space::S2)
+        // One row's worth of height, not padding: see `TOOL_ROW_H`.
+        .h(TOOL_ROW_H)
         .px(space::S3)
-        .pt(space::S3)
-        .pb(space::S1)
         .text_size(text::TINY)
         .text_color(t.text_meta())
-        .when(group.pinned, |d| {
+        .when(is_pinned, |d| {
             d.child(icon_tinted("star", text::TINY, t.text_meta()))
         })
-        .child(SharedString::from(group.label.to_uppercase()))
-        .when(!group.pinned, |d| {
+        .child(SharedString::from(label.to_uppercase()))
+        .when(!is_pinned, |d| {
             d.child(div().flex_1().min_w_0().h(px(1.)).bg(t.divider))
                 .child(
                     div()
                         .flex_none()
                         .font_family(theme::FONT_MONO)
-                        .child(SharedString::from(group.tools.len().to_string())),
+                        .child(SharedString::from(count.to_string())),
                 )
         })
 }

@@ -12,7 +12,8 @@
 //! change falls in still lines up. Deriving a day from the UTC clock was a real
 //! bug once (see `track::today`) and must not come back.
 use super::{
-    Entry, Scope, Track, Ymd, fmt_hm, heading, hint, now, step_day, tag, week_start, weekday_name,
+    Entry, Scope, Track, Ymd, fmt_hm, heading, hint, is_weekend, now, step_day, tag, week_start,
+    weekday_name,
 };
 use crate::calendar::{
     BLOCK_LABEL_LINE, BLOCK_META_LINE, HOUR_HEIGHT, block, block_text, hour_window, lanes,
@@ -196,6 +197,9 @@ impl Track {
         today: bool,
     ) -> impl IntoElement + use<> {
         let ink = if today { t.accent_ramp.s700 } else { t.text };
+        // Today wins over the weekend: a Saturday you are looking at is still the day
+        // you are looking at.
+        let weekend = is_weekend(date) && !today;
         div()
             .flex()
             .flex_col()
@@ -209,14 +213,22 @@ impl Track {
                 div()
                     .truncate()
                     .text_size(text::TINY)
-                    .text_color(if today { ink } else { t.text_muted() })
+                    .text_color(match (today, weekend) {
+                        (true, _) => ink,
+                        (false, true) => t.text_meta(),
+                        (false, false) => t.text_muted(),
+                    })
                     .child(SharedString::from(day_label(date, first).to_uppercase())),
             )
             .child(
                 div()
                     .font_family(FONT_MONO)
                     .text_size(text::SMALL)
-                    .text_color(if today { ink } else { t.text_label() })
+                    .text_color(match (today, weekend) {
+                        (true, _) => ink,
+                        (false, true) => t.text_meta(),
+                        (false, false) => t.text_label(),
+                    })
                     .child(SharedString::from(if total == 0 {
                         "–".to_string()
                     } else {
@@ -505,6 +517,8 @@ mod tests {
             started_at,
             stopped_at,
             source: "app".into(),
+            issue_key: None,
+            issue_own: false,
         }
     }
 

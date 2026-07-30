@@ -75,7 +75,7 @@ fn a_real_session_over_real_pipes() {
     assert!(replies[0]["result"]["serverInfo"]["name"].is_string());
     assert!(replies[0]["result"]["capabilities"]["tools"].is_object());
 
-    assert_eq!(replies[1]["result"]["tools"].as_array().unwrap().len(), 9);
+    assert_eq!(replies[1]["result"]["tools"].as_array().unwrap().len(), 10);
 
     // The store's track_* methods are stubs today, so this call reports a failure
     // rather than a summary. Either way it must be a well-formed tool result.

@@ -220,6 +220,8 @@ mod tests {
             started_at: 0,
             stopped_at: Some(seconds),
             source: source.into(),
+            issue_key: None,
+            issue_own: false,
         }
     }
 

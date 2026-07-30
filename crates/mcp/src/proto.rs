@@ -261,13 +261,14 @@ mod tests {
             "summary_month",
             "list_tasks",
             "delete_entry",
+            "edit_entry",
         ] {
             assert!(
                 names.contains(&expected),
                 "missing tool {expected}: {names:?}"
             );
         }
-        assert_eq!(names.len(), 9, "unexpected tool list: {names:?}");
+        assert_eq!(names.len(), 10, "unexpected tool list: {names:?}");
 
         for t in tools {
             let name = t["name"].as_str().unwrap();

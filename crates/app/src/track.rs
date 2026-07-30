@@ -17,6 +17,7 @@
 use crate::Persist;
 use crate::filters::{self, Filters};
 use crate::year_strip;
+use crate::{jira, request_pane};
 use gpui::{
     App, ClipboardItem, Context, Div, Entity, IntoElement, ParentElement, Pixels, Rgba,
     SharedString, Stateful, Styled, Task, Window, div, prelude::*, px, relative,
@@ -71,6 +72,9 @@ const COL_RANGE: Pixels = px(104.);
 const COL_TOTAL: Pixels = px(72.);
 const COL_DATE: Pixels = px(104.);
 const COL_ID: Pixels = px(34.);
+/// The issue key's lane. Wide enough for `ABCDEF-1234`, and no wider: the note is
+/// the field that needs the room.
+const COL_ISSUE: Pixels = px(96.);
 /// The tallest the chart-and-summary pair may get. It is a ceiling now, not a
 /// height: on a short window the pair shrinks instead of pushing the entry list
 /// out of the pane.
@@ -165,7 +169,14 @@ pub(crate) fn weekday(date: Ymd) -> u32 {
     (days_from_civil(date) + 3).rem_euclid(7) as u32
 }
 
-fn is_weekend(date: Ymd) -> bool {
+/// Saturday or Sunday.
+///
+/// A weekend is drawn a step quieter than a working day everywhere a date appears:
+/// a timesheet is read for where the working time went, and Saturday is not where
+/// you look first. It used to tint the per-day table rows, which turned out never to
+/// be rendered — so it now sits in the two views that do draw days, the week's
+/// column heads and the month grid.
+pub(crate) fn is_weekend(date: Ymd) -> bool {
     weekday(date) >= 5
 }
 
@@ -462,7 +473,31 @@ struct Draft {
     range: Entity<TextInput>,
     task: Entity<TextInput>,
     note: Entity<TextInput>,
+    /// The Jira issue for *this block of work*, overriding whatever its task books
+    /// to. Blank means "follow the task", which is the common case — the override
+    /// is for the task that is a different ticket every day.
+    ///
+    /// Only meaningful on an edit: a new entry is written first and its override
+    /// set afterwards, since there is no id to hang it on until then.
+    issue: Entity<TextInput>,
+    /// Whether the key applies to the whole task or only to this entry.
+    ///
+    /// On by default, because the usual case is "this task is that ticket" and
+    /// because linking the task covers the work already booked under it — which is
+    /// the whole point of being able to link after the fact. It starts off for an
+    /// entry that already carries an override, so opening and saving that entry's
+    /// form does not quietly retarget every other entry of its task.
+    issue_all: bool,
     source: usize,
+}
+
+/// One Jira run's report, and whether it was only a preview.
+///
+/// Kept apart from [`jira::Outcome`] so the panel can say "would book" rather than
+/// "booked" without the pushing code having to know it is being previewed.
+struct JiraReport {
+    dry: bool,
+    out: jira::Outcome,
 }
 
 pub struct Track {
@@ -516,6 +551,9 @@ pub struct Track {
     filters: Filters,
     tasks: Vec<String>,
     hits: Vec<Entry>,
+    /// Row heights and scroll offset for the entry table. On the entity because
+    /// `list()` keeps its state on the view rather than in the element.
+    rows_list: gpui::ListState,
     draft: Option<Draft>,
     /// Whatever went wrong last, shown in the panel. A failing store call must
     /// never be a panic: the query layer can be missing, the database can be
@@ -525,6 +563,21 @@ pub struct Track {
     /// state rather than a hover style, because an invisible button that still
     /// takes clicks is an accidental-delete generator.
     hovered: Option<i64>,
+    /// What Jira already has for the shown span, by entry. Read alongside the
+    /// entries in `reload`, so a row can say "booked" without asking Jira.
+    pushed: Vec<rp_store::Pushed>,
+    /// When the shown day was declared finished, if it was.
+    closed_at: Option<i64>,
+    /// Whether Jira is configured, so the strip knows whether to exist at all.
+    /// Read in `reload_jira` rather than in the render: it is a `kv` lookup, and a
+    /// render happens every frame a timer runs.
+    jira_ready: bool,
+    /// The last Jira run's report, or the preview of the next one. Held until the
+    /// user does something else: the lines are the receipt for a day's booking.
+    jira: Option<JiraReport>,
+    /// Set while a push or a preview is in flight, so the buttons cannot start a
+    /// second run against state the first has not finished writing.
+    jira_busy: bool,
     /// Last change counter we queried against.
     seen: Option<i64>,
     /// Whether the section is on screen. Gates the *expensive* reload, not the
@@ -533,6 +586,21 @@ pub struct Track {
     visible: bool,
     /// Held so dropping the view cancels the poll.
     poll: Option<Task<()>>,
+}
+
+/// One row of the entry table, as data.
+///
+/// `Entry` is cloned in rather than borrowed: `list()`'s item closure is `'static`
+/// and outlives the `&self` that collected the rows.
+#[derive(Clone)]
+enum TrackRow {
+    /// A search hit or a facet-filtered entry, which can be from any day.
+    History(Entry),
+    Entry(Entry),
+    /// The edit form, standing in for the entry being edited or appended.
+    Draft,
+    /// The invitation to add an entry by hand.
+    Add,
 }
 
 impl Track {
@@ -573,9 +641,15 @@ impl Track {
             filters: Filters::default(),
             tasks: Vec::new(),
             hits: Vec::new(),
+            rows_list: gpui::ListState::new(0, gpui::ListAlignment::Top, px(128.)),
             draft: None,
             error: None,
             hovered: None,
+            pushed: Vec::new(),
+            closed_at: None,
+            jira_ready: false,
+            jira: None,
+            jira_busy: false,
             seen: None,
             visible: false,
             poll: None,
@@ -810,6 +884,7 @@ impl Track {
         self.span = span;
         self.year = year;
         self.error = None;
+        self.reload_jira(cx);
         self.summary.update(cx, |e, cx| e.set_text(text, cx));
         // Stepping days must keep the date field showing the day it moved to.
         let field = fmt_date(self.date);
@@ -817,6 +892,101 @@ impl Track {
             self.jump.update(cx, |i, cx| i.set_text(field, cx));
         }
         cx.notify();
+    }
+
+    /// The Jira side of the shown span: what is already booked, and whether the day
+    /// is closed.
+    ///
+    /// Its own pair of queries rather than two more elements on `reload`'s tuple —
+    /// both are indexed lookups, and the push button needs them refreshed after a
+    /// run without re-reading the month.
+    fn reload_jira(&mut self, cx: &mut Context<Self>) {
+        let date = fmt_date(self.date);
+        // The span's own boundaries, from the midnights `reload` just resolved. A
+        // store that could not answer leaves them empty, and then there is nothing
+        // to look up either.
+        let (Some(&from), Some(&to)) = (self.midnights.first(), self.midnights.last()) else {
+            return;
+        };
+        let loaded = self.with_store(cx, move |store| {
+            Ok((
+                store.track_pushed_between(from, to)?,
+                store.track_day_closed(&date)?,
+                jira::Config::load(store)?.is_complete(),
+            ))
+        });
+        if let Some((pushed, closed_at, jira_ready)) = loaded {
+            self.pushed = pushed;
+            self.closed_at = closed_at;
+            self.jira_ready = jira_ready;
+        }
+    }
+
+    /// Declare the shown day finished, or reopen it.
+    ///
+    /// Nothing is locked by this. It records that the user looked at the day and was
+    /// satisfied — and since it can be set for any day, a day closed a fortnight
+    /// late is the same operation as one closed at 18:00.
+    fn toggle_closed(&mut self, cx: &mut Context<Self>) {
+        let date = fmt_date(self.date);
+        let closed = self.closed_at.is_none().then(now);
+        if self
+            .with_store(cx, move |store| store.track_close_day(&date, closed))
+            .is_some()
+        {
+            self.closed_at = closed;
+            cx.notify();
+        }
+    }
+
+    /// Book the shown day into Jira, or — with `dry` — only show what that would do.
+    ///
+    /// The preview exists because the alternative is asking the user to trust the
+    /// dedup rules. Same plan, same code path, no requests written: the list the
+    /// user reads *is* what the real run will do.
+    fn push_to_jira(&mut self, dry: bool, cx: &mut Context<Self>) {
+        if self.jira_busy {
+            return;
+        }
+        if !cx.has_global::<Persist>() || cx.global::<Persist>().store.is_none() {
+            self.error = Some(NO_STORE.into());
+            cx.notify();
+            return;
+        }
+        self.jira_busy = true;
+        self.jira = None;
+        cx.notify();
+        let date = fmt_date(self.date);
+        let now = now();
+        cx.spawn(async move |this, cx| {
+            // Off the foreground thread with a *second* connection to the same
+            // database, rather than borrowing the app's. A day is one request per
+            // ticket plus one per block of work, and blocking the window for the
+            // time Jira takes to answer all of them is not a trade worth making for
+            // one fewer handle. Concurrent connections are the design here anyway —
+            // the MCP server is one — and `jira_busy` is what stops this app from
+            // starting a second run against records the first has not written yet.
+            let outcome = cx
+                .background_spawn(async move {
+                    request_pane::runtime().block_on(async {
+                        let mut store = rp_store::Store::open_default()?;
+                        jira::push_day(&mut store, &date, now, dry).await
+                    })
+                })
+                .await;
+            this.update(cx, |this, cx| {
+                this.jira_busy = false;
+                match outcome {
+                    Ok(out) => this.jira = Some(JiraReport { dry, out }),
+                    Err(e) => this.error = Some(SharedString::from(format!("{e:#}"))),
+                }
+                // A real run wrote push records; the rows have to stop saying
+                // "not booked".
+                this.reload(cx);
+            })
+            .ok();
+        })
+        .detach();
     }
 
     /// The days the current scope summarises, for the summary and CSV buttons.
@@ -922,7 +1092,15 @@ impl Track {
             i.set_text(note_text, cx);
             i
         });
-        for input in [&range, &task, &note] {
+        // The *effective* key, so the field shows what this block of work will book
+        // to rather than making the user remember whether it came from the task.
+        let issue_text = entry.and_then(|e| e.issue_key.clone()).unwrap_or_default();
+        let issue = cx.new(|cx| {
+            let mut i = TextInput::new(cx, "ABC-123");
+            i.set_text(issue_text, cx);
+            i
+        });
+        for input in [&range, &task, &note, &issue] {
             cx.observe(input, |_, _, cx| cx.notify()).detach();
         }
         let source = entry
@@ -933,6 +1111,8 @@ impl Track {
             range,
             task,
             note,
+            issue,
+            issue_all: !entry.is_some_and(|e| e.issue_own),
             source,
         });
         cx.notify();
@@ -949,6 +1129,8 @@ impl Track {
         let task = draft.task.read(cx).text().trim().to_string();
         let note = draft.note.read(cx).text().trim().to_string();
         let note = (!note.is_empty()).then_some(note);
+        let issue = draft.issue.read(cx).text().trim().to_string();
+        let issue_all = draft.issue_all;
         if task.is_empty() {
             self.error = Some("type a task name first".into());
             cx.notify();
@@ -965,13 +1147,34 @@ impl Track {
         // entries; a day-crossing edit is the case this form does not serve.
         let (from, to) = (base + from, base + to);
         let done = self
-            .with_store(cx, |store| match id {
-                Some(id) => store
-                    .track_update_entry(id, &task, note.as_deref(), from, to, source)?
-                    .ok_or_else(|| {
-                        anyhow::anyhow!("entry #{id} is gone — it was deleted while you edited it")
-                    }),
-                None => store.track_log(&task, note.as_deref(), from, to, source),
+            .with_store(cx, |store| {
+                let saved = match id {
+                    Some(id) => store
+                        .track_update_entry(id, &task, note.as_deref(), from, to, source)?
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "entry #{id} is gone — it was deleted while you edited it"
+                            )
+                        })?,
+                    // Logged first: the override hangs on an id, and there is none
+                    // until the row exists.
+                    None => store.track_log(&task, note.as_deref(), from, to, source)?,
+                };
+                // Which of the two links the typed key becomes is the toggle next to
+                // the field, not a guess from the value: "this task is always
+                // PROJ-12" and "this block of work happened to be PROJ-99" are
+                // different statements about the same key, and only the user knows
+                // which one they are making.
+                let typed = (!issue.is_empty()).then_some(issue.as_str());
+                if issue_all {
+                    store.track_set_task_issue(&task, typed)?;
+                    // The override would otherwise keep winning over the link that
+                    // was just made, which reads as the save having done nothing.
+                    store.track_set_entry_issue(saved.id, None)?;
+                } else {
+                    store.track_set_entry_issue(saved.id, typed)?;
+                }
+                Ok(saved)
             })
             .is_some();
         if done {
@@ -1514,99 +1717,41 @@ impl Track {
             days.iter().map(|d| d.total_seconds).sum()
         };
         let editing = self.draft.as_ref().and_then(|d| d.id);
-        let mut rows = Vec::new();
-        if listing {
-            for entry in &history {
-                rows.push(self.history_row(t, entry, now, cx).into_any_element());
-            }
-        } else if day_scope {
+        // Rows as data, not as elements. Two reasons, and the first is the bigger
+        // one: only the Day scope draws this table — a week is `week_view` and a
+        // month is `month_grid`, both of which build their own — so every row built
+        // here for the other two scopes was built and dropped. A search in Month
+        // scope threw away up to `SEARCH_LIMIT` of them per keystroke.
+        //
+        // The second is that the table is virtualised now, and `list()`'s item
+        // closure is `'static`: it cannot hold the borrows a built row does.
+        let mut rows: Vec<TrackRow> = Vec::new();
+        if self.scope != Scope::Day {
+            // Nothing below is drawn; `empty` and `total` above are all the other
+            // scopes want from this.
+        } else if listing {
+            rows.extend(history.iter().cloned().map(TrackRow::History));
+        } else {
             for entry in &entries {
-                if editing == Some(entry.id) {
-                    rows.push(self.draft_row(t, cx).into_any_element());
+                rows.push(if editing == Some(entry.id) {
+                    TrackRow::Draft
                 } else {
-                    rows.push(self.entry_row(t, entry, now, cx).into_any_element());
-                }
+                    TrackRow::Entry(entry.clone())
+                });
             }
             // A new entry's form takes the place of the invitation to add one.
-            if self.draft.as_ref().is_some_and(|d| d.id.is_none()) {
-                rows.push(self.draft_row(t, cx).into_any_element());
+            rows.push(if self.draft.as_ref().is_some_and(|d| d.id.is_none()) {
+                TrackRow::Draft
             } else {
-                rows.push(
-                    div()
-                        .id("add-entry")
-                        .flex()
-                        .items_center()
-                        .gap(space::S2)
-                        .px(space::S4)
-                        .py(space::S3)
-                        .rounded(radius::LG)
-                        .text_size(text::SMALL)
-                        .text_color(t.text_meta())
-                        .hover(|s| s.bg(t.hover()).text_color(t.text))
-                        .child(icon_tinted("plus", text::BODY, t.text_meta()))
-                        .child("Add entry manually")
-                        .on_click(cx.listener(|this, _, _, cx| this.edit(None, cx)))
-                        .into_any_element(),
-                );
-            }
-        } else {
-            for day in days {
-                let jump = parse_date(&day.date);
-                let shown = parse_date(&day.date).unwrap_or(self.date);
-                let tasks = day
-                    .per_task
-                    .iter()
-                    .map(|(t, _)| t.as_str())
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                rows.push(
-                    table_row(t, SharedString::from(format!("day-{}", day.date)))
-                        .child(
-                            col(COL_DATE)
-                                .font_family(FONT_MONO)
-                                .text_size(text::SMALL)
-                                .text_color(if is_weekend(shown) {
-                                    t.text_meta()
-                                } else {
-                                    t.text
-                                })
-                                .child(SharedString::from(format!(
-                                    "{} {}",
-                                    &WEEKDAY_NAMES[weekday(shown) as usize][..2],
-                                    day.date
-                                ))),
-                        )
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w(size::TABLE_COL_MIN_W)
-                                .truncate()
-                                .text_size(text::SMALL)
-                                .text_color(t.text_muted())
-                                .child(SharedString::from(tasks)),
-                        )
-                        // Totals in their own right-aligned column, so a heavy
-                        // day is found by scanning down.
-                        .child(
-                            col(COL_TOTAL)
-                                .text_right()
-                                .font_family(FONT_MONO)
-                                .text_color(t.text)
-                                .child(SharedString::from(fmt_hm(day.total_seconds))),
-                        )
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            if let Some(date) = jump {
-                                this.go_to(date, Scope::Day, cx);
-                            }
-                        }))
-                        .into_any_element(),
-                );
-            }
+                TrackRow::Add
+            });
         }
+        // From the data rather than from `rows`, which now holds nothing outside the
+        // Day scope — `week_view` and `month_grid` draw their own.
         let empty = match self.scope {
-            _ if listing => rows.is_empty(),
+            _ if listing => history.is_empty(),
             Scope::Day => entries.is_empty() && self.draft.is_none(),
-            _ => rows.is_empty(),
+            _ => days.is_empty(),
         };
         // An empty list after a search or a filter is not an empty day, and
         // saying "start a timer" there points at the wrong control.
@@ -1627,6 +1772,7 @@ impl Track {
                         .truncate()
                         .child("TASK"),
                 )
+                .child(col(COL_ISSUE).child("TICKET"))
                 .child(col(COL_ID).text_right().child("ID"))
                 .child(col(COL_TOTAL).text_right().child("TOTAL"))
                 .child(div().size(control::ICON).flex_none())
@@ -1720,7 +1866,12 @@ impl Track {
                             e
                         };
                         d.child(ErrorBanner::new(msg).calm(calm).render(t))
-                    }),
+                    })
+                    // Only in Day scope. Booking is a per-day act — Jira wants a
+                    // `started` per worklog and the user closes a day, not a month —
+                    // and a button here that silently meant "today" while a week was
+                    // on screen would be a booking on the wrong dates.
+                    .when(day_scope, |d| d.child(self.jira_block(t, cx))),
             )
             // A month is a grid; a day and a week are a table. The design makes
             // that switch, and it is the right one: a table of a whole month's
@@ -1729,7 +1880,7 @@ impl Track {
             .map(|d| match self.scope {
                 Scope::Month => d.child(self.month_grid(t, cx)),
                 Scope::Week => d.child(self.week_view(t, cx)),
-                _ => d.child(self.day_table(t, head, rows, empty, empty_hint, cx)),
+                _ => d.child(self.day_table(t, head, rows, now, empty.then_some(empty_hint), cx)),
             })
             .child(
                 div()
@@ -1897,49 +2048,97 @@ impl Track {
 
     /// The entry table, for the Day and Week scopes.
     ///
-    /// `empty_hint` rather than a fixed line: an empty list after a search or a
-    /// filter is not an empty day, and "start a timer" there points at the wrong
-    /// control.
+    /// `empty` is `Some(hint)` when there is nothing to draw, and the hint rather
+    /// than a fixed line: an empty list after a search or a filter is not an empty
+    /// day, and "start a timer" there points at the wrong control. One argument
+    /// rather than a flag beside a string that only means anything while it is set.
     fn day_table(
         &self,
         t: Theme,
         head: Div,
-        rows: Vec<gpui::AnyElement>,
-        empty: bool,
-        empty_hint: &'static str,
+        rows: Vec<TrackRow>,
+        now: i64,
+        empty: Option<&'static str>,
         cx: &mut Context<Self>,
     ) -> impl IntoElement + use<> {
-        let _ = cx;
         card(t)
             .flex_1()
             .min_h_0()
             .gap(space::S1)
             .child(head)
             .child(divider(t))
-            .child(
+            .child(if let Some(empty_hint) = empty {
                 div()
-                    .id("track-rows")
                     .flex()
                     .flex_col()
-                    .flex_1()
-                    .min_h_0()
-                    .overflow_y_scroll()
-                    .when(empty, |d| {
-                        d.child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .items_center()
-                                .justify_center()
-                                .gap(space::S2)
-                                .p(space::S8)
-                                .child(icon_tinted("clock", text::H3, t.text_disabled()))
-                                .child(heading(t, "Nothing booked here"))
-                                .child(hint(t, empty_hint)),
-                        )
-                    })
-                    .children(rows),
-            )
+                    .items_center()
+                    .justify_center()
+                    .gap(space::S2)
+                    .p(space::S8)
+                    .child(icon_tinted("clock", text::H3, t.text_disabled()))
+                    .child(heading(t, "Nothing booked here"))
+                    .child(hint(t, empty_hint))
+                    .into_any_element()
+            } else {
+                // The list caches a height per item, so it has to be told when the
+                // count changes — a search, a filter, a step to another day.
+                if self.rows_list.item_count() != rows.len() {
+                    self.rows_list.reset(rows.len());
+                }
+                let rows = std::rc::Rc::new(rows);
+                // A weak handle and not the row data alone: the row *builders* are
+                // methods that hand out `cx.listener` handlers, so the closure has to
+                // get back into a `Context<Self>` to call them. The alternative was
+                // rewriting all four to take a `WeakEntity`, which buys nothing here.
+                let track = cx.weak_entity();
+                gpui::list(self.rows_list.clone(), move |i, _window, cx| {
+                    let Some(row) = rows.get(i).cloned() else {
+                        // The count comes from `rows`; a render path is the wrong
+                        // place to prove that with a panic.
+                        return div().into_any_element();
+                    };
+                    track
+                        .update(cx, |this, cx| this.detail_row(t, &row, now, cx))
+                        .unwrap_or_else(|_| div().into_any_element())
+                })
+                .flex_1()
+                .min_h_0()
+                .into_any_element()
+            })
+    }
+
+    /// One row of the entry table, from its data.
+    ///
+    /// The four shapes the table mixes: a search hit, one of the day's entries, the
+    /// edit form standing in for whichever entry is being edited, and the invitation
+    /// to add one by hand.
+    fn detail_row(
+        &self,
+        t: Theme,
+        row: &TrackRow,
+        now: i64,
+        cx: &mut Context<Self>,
+    ) -> gpui::AnyElement {
+        match row {
+            TrackRow::History(entry) => self.history_row(t, entry, now, cx).into_any_element(),
+            TrackRow::Entry(entry) => self.entry_row(t, entry, now, cx).into_any_element(),
+            TrackRow::Draft => self.draft_row(t, cx).into_any_element(),
+            TrackRow::Add => div()
+                .id("add-entry")
+                .flex()
+                .items_center()
+                .gap(space::S2)
+                .px(space::S4)
+                .py(space::S3)
+                .rounded(radius::LG)
+                .text_size(text::SMALL)
+                .text_color(t.text_meta())
+                .hover(|s| s.bg(t.hover()).text_color(t.text))
+                .child(icon_tinted("plus", text::BODY, t.text_meta()))
+                .child("Add entry manually")
+                .on_click(cx.listener(|this, _, _, cx| this.edit(None, cx)))
+                .into_any_element(),
+        }
     }
 
     /// The month as a calendar grid, from the `Time Calendar` design.
@@ -2017,10 +2216,16 @@ impl Track {
                                 div()
                                     .font_family(FONT_MONO)
                                     .text_size(text::CONTROL)
-                                    .text_color(match (today, inside) {
-                                        (true, _) => t.accent,
-                                        (false, true) => t.text,
-                                        (false, false) => t.text_disabled(),
+                                    // A weekend inside the month is a step quieter
+                                    // than a working day, but still clearly this
+                                    // month — the ground stays `t.bg`, because
+                                    // `t.hover()` already means "another month" here
+                                    // and two meanings on one wash read as neither.
+                                    .text_color(match (today, inside, is_weekend(date)) {
+                                        (true, _, _) => t.accent,
+                                        (false, false, _) => t.text_disabled(),
+                                        (false, true, true) => t.text_meta(),
+                                        (false, true, false) => t.text,
                                     })
                                     .child(SharedString::from(date.d.to_string())),
                             )
@@ -2271,6 +2476,152 @@ impl Track {
             )
     }
 
+    /// The day's Jira row: what is left to book, the two buttons that book it, and
+    /// whether the day is finished.
+    ///
+    /// Hidden entirely until Jira is configured. An app that does not talk to Jira
+    /// should not grow a Jira strip on its main screen, and the settings window is
+    /// where that decision is made.
+    fn jira_block(&self, t: Theme, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        if !self.jira_ready {
+            return div().into_any_element();
+        }
+        // Counted off what is on screen, so the number matches the TICKET column
+        // the user is looking at. The plan itself is Jira's to compute — this is
+        // "how much of today is not booked yet", not a prediction of the run.
+        let now = now();
+        let (mut unbooked, mut unmapped) = (0, 0);
+        for entry in &self.entries {
+            if entry.is_running() || entry.seconds(now) < 60 {
+                continue;
+            }
+            match entry.issue_key {
+                None => unmapped += 1,
+                Some(_) if !self.pushed.iter().any(|p| p.entry_id == entry.id) => unbooked += 1,
+                Some(_) => {}
+            }
+        }
+        let closed = self.closed_at.is_some();
+        let (fill, ink) = if closed {
+            t.tag_accent_2()
+        } else {
+            t.tag_neutral()
+        };
+        div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap(space::S2)
+            .child(
+                div()
+                    .flex_none()
+                    .px(space::S2)
+                    .rounded(radius::PILL)
+                    .bg(fill)
+                    .text_size(text::TINY)
+                    .text_color(ink)
+                    .child(if closed { "day closed" } else { "day open" }),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .text_size(text::SMALL)
+                    .text_color(if unmapped > 0 {
+                        t.warning()
+                    } else {
+                        t.text_meta()
+                    })
+                    .child(SharedString::from(match (unbooked, unmapped) {
+                        (0, 0) => "Everything bookable is in Jira.".to_string(),
+                        (n, 0) => format!("{n} to book."),
+                        (0, m) => format!("{m} without a ticket."),
+                        (n, m) => format!("{n} to book, {m} without a ticket."),
+                    })),
+            )
+            .child(
+                Button::new("jira-preview", "Preview")
+                    .size(Size::Sm)
+                    .tone(Tone::Ghost)
+                    .enabled(!self.jira_busy)
+                    .render(t, cx.listener(|this, _, _, cx| this.push_to_jira(true, cx))),
+            )
+            .child(
+                Button::new(
+                    "jira-push",
+                    if self.jira_busy {
+                        "Booking…"
+                    } else {
+                        "Book to Jira"
+                    },
+                )
+                .size(Size::Sm)
+                .icon("upload")
+                .tone(Tone::Primary)
+                .enabled(!self.jira_busy)
+                .render(
+                    t,
+                    cx.listener(|this, _, _, cx| this.push_to_jira(false, cx)),
+                ),
+            )
+            .child(
+                Button::new(
+                    "jira-close",
+                    if closed { "Reopen day" } else { "Close day" },
+                )
+                .size(Size::Sm)
+                .enabled(!self.jira_busy)
+                .render(t, cx.listener(|this, _, _, cx| this.toggle_closed(cx))),
+            )
+            // The receipt. Every line of it, including the skips: a booking run that
+            // only reported what it did would hide the entry that never got billed.
+            .when_some(self.jira.as_ref(), |d, report| {
+                let out = &report.out;
+                let head = if report.dry {
+                    format!(
+                        "Would book {}, correct {}, link {}, skip {}.",
+                        out.created, out.updated, out.adopted, out.skipped
+                    )
+                } else {
+                    format!(
+                        "Booked {}, corrected {}, linked {}, skipped {}.",
+                        out.created, out.updated, out.adopted, out.skipped
+                    )
+                };
+                d.child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .w_full()
+                        .gap(space::S1)
+                        .p(space::S2)
+                        .rounded(radius::MD)
+                        .bg(t.bg)
+                        .text_size(text::SMALL)
+                        .child(div().text_color(t.text).child(SharedString::from(head)))
+                        .children(out.lines.iter().map(|line| {
+                            div()
+                                .truncate()
+                                .font_family(FONT_MONO)
+                                .text_size(text::TINY)
+                                .text_color(t.text_muted())
+                                .child(SharedString::from(line.clone()))
+                        }))
+                        // A run that stopped early says so where the counts are, or
+                        // the counts read as the whole day.
+                        .when_some(out.failed.clone(), |d, why| {
+                            d.child(
+                                div()
+                                    .text_color(t.danger())
+                                    .child(SharedString::from(format!("Stopped: {why}"))),
+                            )
+                        }),
+                )
+            })
+            .into_any_element()
+    }
+
     /// The inline form, shown in the place of the row it edits.
     fn draft_row(&self, t: Theme, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let Some(draft) = self.draft.as_ref() else {
@@ -2292,6 +2643,42 @@ impl Track {
             .child(col(COL_RANGE).child(draft.range.clone()))
             .child(div().flex_1().min_w_0().child(draft.task.clone()))
             .child(div().flex_1().min_w_0().child(draft.note.clone()))
+            // Narrow and fixed: an issue key is eight characters, and giving it a
+            // flexible lane would take width from the note, which is the field that
+            // actually carries a sentence.
+            .child(col(COL_ISSUE).child(draft.issue.clone()))
+            // What the key applies to. A pill rather than a checkbox with a label:
+            // it says the answer instead of asking the question, and there is no
+            // room in a table row for the sentence a checkbox would need.
+            .child(
+                div()
+                    .id("draft-issue-scope")
+                    .flex()
+                    .flex_none()
+                    .items_center()
+                    .h(control::MD)
+                    .px(space::S2)
+                    .rounded(radius::PILL)
+                    .bg(if draft.issue_all {
+                        t.hover()
+                    } else {
+                        t.active()
+                    })
+                    .text_size(text::TINY)
+                    .text_color(t.text_label())
+                    .cursor_pointer()
+                    .child(if draft.issue_all {
+                        "whole task"
+                    } else {
+                        "this entry"
+                    })
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        if let Some(d) = this.draft.as_mut() {
+                            d.issue_all = !d.issue_all;
+                        }
+                        cx.notify();
+                    })),
+            )
             .child(source_picker(
                 t,
                 "draft-source".into(),
@@ -2418,6 +2805,27 @@ impl Track {
                         d.child(hint(t, SharedString::from(note)).truncate())
                     }),
             )
+            // The ticket, and whether Jira already has this block of work. Two
+            // states in one cell rather than a second column: what the user asks a
+            // timesheet is "is this booked", and the key is the answer's subject.
+            .child({
+                let booked = self.pushed.iter().any(|p| p.entry_id == id);
+                let key = entry.issue_key.clone();
+                col(COL_ISSUE)
+                    .font_family(FONT_MONO)
+                    .text_size(text::TINY)
+                    .truncate()
+                    .text_color(match (&key, booked) {
+                        (Some(_), true) => t.accent,
+                        (Some(_), false) => t.text_muted(),
+                        (None, _) => t.text_disabled(),
+                    })
+                    .child(SharedString::from(match (key, booked) {
+                        (Some(key), true) => format!("✓ {key}"),
+                        (Some(key), false) => key,
+                        (None, _) => "—".to_string(),
+                    }))
+            })
             // The id is what the MCP server reports back, so it has to be
             // readable here to be matched against.
             .child(

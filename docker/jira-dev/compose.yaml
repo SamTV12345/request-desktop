@@ -1,0 +1,111 @@
+# A throwaway Jira Data Center with Postgres, for trying the Jira booking in
+# `crates/app/src/jira.rs` against a real server rather than the stub in its tests.
+#
+#     docker compose -f docker/jira-dev/compose.yaml up -d
+#     docker compose -f docker/jira-dev/compose.yaml logs -f jira   # wait for "Server startup"
+#
+# Then http://localhost:8080 and work through the setup wizard. The database is
+# already configured by the ATL_JDBC_* variables below, so the wizard skips straight
+# to asking for a **licence key** — get an evaluation one from
+# https://my.atlassian.com (or a developer licence via developer.atlassian.com).
+# There is no way around that: the image ships no licence and Jira will not start a
+# site without one.
+#
+# Then in Request Pilot's settings: Kind = Data Center, Site URL
+# http://localhost:8080, User name = the admin you created, and a Personal Access
+# Token from Jira's own Profile → Personal Access Tokens (Jira 8.14+).
+#
+# Teardown, including the data:
+#
+#     docker compose -f docker/jira-dev/compose.yaml down -v
+#
+# Budget three or four minutes for the first start and ~3 GB of RAM. This is a
+# development scratch server: the passwords are in this file on purpose, the ports
+# are published to localhost only, and nothing here belongs anywhere near a network
+# that matters.
+
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: jiradb
+      POSTGRES_USER: jira
+      # Not `jira`, and that is not fussiness. The Jira image redacts the password
+      # out of its own log lines by plain string replacement — so a password of
+      # "jira" turns the startup line into
+      #   Running Jira with command '/opt/atlassian/#ATL_JDBC_PASSWORD_redacted#/bin/…'
+      # because the path contains it. Harmless, but it makes the one log you read
+      # when something is wrong unreadable. Keep this out of any path.
+      POSTGRES_PASSWORD: jira-dev-pw
+      # Jira refuses a database that is not UTF8, and wants a deterministic
+      # collation. Both can only be set when the cluster is initialised, which is
+      # why they are here and not in a later `ALTER`.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - pgdata:/var/lib/postgresql
+    # Jira does not retry a database that is not up yet — it fails the connection
+    # and the setup wizard then asks for the details by hand, which defeats the
+    # point of configuring them below.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jira -d jiradb"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  jira:
+    image: atlassian/jira-software:10
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      # Loopback only. An unlicensed, freshly-installed Jira on 0.0.0.0 is an
+      # invitation, and nothing outside this machine needs to reach it.
+      - "127.0.0.1:8080:8080"
+    environment:
+      # These are what let the image write `dbconfig.xml` itself, so the wizard does
+      # not stop to ask. `postgres72` is Jira's own legacy name for "PostgreSQL
+      # 9.2 or newer" — it is the only Postgres value, despite how it reads.
+      ATL_DB_TYPE: postgres72
+      ATL_DB_DRIVER: org.postgresql.Driver
+      ATL_JDBC_URL: jdbc:postgresql://postgres:5432/jiradb
+      ATL_JDBC_USER: jira
+      ATL_JDBC_PASSWORD: jira-dev-pw
+      ATL_DB_SCHEMA_NAME: public
+      # Not a detail for this feature — it is the thing under test. A worklog's
+      # `started` carries an offset, and Jira interprets it in the *server's* zone
+      # when it displays the result. Matching the zone the tracker books in is what
+      # makes "did that hour land at 09:30" a question with a readable answer.
+      TZ: Europe/Berlin
+      # Enough to start, not enough to be comfortable; raise both if the first
+      # start times out.
+      JVM_MINIMUM_MEMORY: 1024m
+      JVM_MAXIMUM_MEMORY: 2048m
+      # Single node. The Data Center image clusters when told to, and a one-node
+      # cluster is strictly more moving parts than no cluster.
+      CLUSTERED: "false"
+    volumes:
+      - jiradata:/var/atlassian/application-data/jira
+    healthcheck:
+      # Jira's own readiness endpoint. `RUNNING` is a set-up site; **`FIRST_RUN` is a
+      # started server waiting for the setup wizard**, which is where a fresh install
+      # sits until a licence key is entered — and it can sit there for days. Checking
+      # only for RUNNING marks the container `unhealthy` for that whole time, which
+      # reads exactly like a server that failed to start. Both states mean "Tomcat is
+      # answering", which is all a healthcheck can honestly claim here.
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://localhost:8080/status | grep -qE 'RUNNING|FIRST_RUN'",
+        ]
+      interval: 15s
+      timeout: 10s
+      # Roughly ten minutes of grace: the first start migrates an empty schema and
+      # is much slower than every start after it.
+      retries: 40
+      start_period: 120s
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  jiradata:
