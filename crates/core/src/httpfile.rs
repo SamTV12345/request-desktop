@@ -84,7 +84,11 @@ fn split_blocks(src: &str) -> Vec<(Option<String>, Vec<&str>, usize)> {
     for (n, line) in src.lines().enumerate() {
         let t = line.trim_start();
         if t.starts_with("###") {
-            let name = t.trim_start_matches('#').trim();
+            let mut name = t.trim_start_matches('#').trim();
+            let trailing_hashes = name.len() - name.trim_end_matches('#').len();
+            if trailing_hashes >= 3 {
+                name = name[..name.len() - trailing_hashes].trim_end();
+            }
             let name = if name.is_empty() {
                 None
             } else {
@@ -923,6 +927,12 @@ DELETE https://example.com/three
         let r = one(src);
         assert_eq!(r.name, "weird#2#");
         roundtrip(src);
+    }
+
+    #[test]
+    fn separator_name_discards_trailing_hash_padding() {
+        let r = one("### trailing hashes ###\nGET https://x/\n");
+        assert_eq!(r.name, "trailing hashes");
     }
 
     #[test]
