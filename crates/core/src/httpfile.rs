@@ -86,8 +86,6 @@ fn split_blocks(src: &str) -> Vec<(Option<String>, Vec<&str>, usize)> {
         if t.starts_with("###") {
             let name = t
                 .trim_start_matches('#')
-                .trim()
-                .trim_end_matches('#')
                 .trim();
             let name = if name.is_empty() {
                 None
@@ -911,6 +909,14 @@ DELETE https://example.com/three
         assert_eq!(r.name, "realName");
         let r = one("// @name slashName\nGET https://x/\n");
         assert_eq!(r.name, "slashName");
+    }
+
+    #[test]
+    fn separator_name_can_end_with_hash() {
+        let src = "### weird#2#\nGET https://x/\n";
+        let r = one(src);
+        assert_eq!(r.name, "weird#2#");
+        roundtrip(src);
     }
 
     #[test]
