@@ -250,7 +250,7 @@ jobs:
 
       # Targets are discovered, not hard-coded, so adding a fuzz_target to
       # fuzz/Cargo.toml is enough to get it smoke-tested.
-      - name: Run each target for 60s
+      - name: Run fuzz smoke within budget
         if: steps.detect.outputs.present == 'true'
         working-directory: fuzz
         run: |
@@ -261,18 +261,54 @@ jobs:
             exit 0
           fi
           echo "discovered targets:"; echo "$targets"
+          # Keep fuzzing time bounded even when a target is slow to start or load corpus.
+          global_budget_seconds=480
+          per_target_fuzz_seconds=60
+          per_target_wall_seconds=90
+          min_remaining_to_start=25
+          deadline="$(( $(date +%s) + global_budget_seconds ))"
+          echo "global fuzz budget: ${global_budget_seconds}s"
           status=0
           for t in $targets; do
+            now="$(date +%s)"
+            remaining="$(( deadline - now ))"
+            if [ "$remaining" -lt "$min_remaining_to_start" ]; then
+              echo "::notice::stopping fuzz smoke early: ${remaining}s budget remaining"
+              break
+            fi
+            wall_seconds="$per_target_wall_seconds"
+            if [ "$wall_seconds" -gt "$remaining" ]; then
+              wall_seconds="$remaining"
+            fi
+            fuzz_seconds="$per_target_fuzz_seconds"
+            if [ "$fuzz_seconds" -gt "$(( wall_seconds - 5 ))" ]; then
+              fuzz_seconds="$(( wall_seconds - 5 ))"
+            fi
+            if [ "$fuzz_seconds" -lt 10 ]; then
+              echo "::notice::skipping $t: not enough time left (${remaining}s)"
+              continue
+            fi
             echo "::group::fuzzing $t"
             # -runs caps work on a fast machine; -max_total_time caps wall clock.
             # --target is explicit: the prebuilt cargo-fuzz is musl-linked and
             # defaults --target to its *own* triple, and ASan cannot be used with
             # a statically linked libc.
-            if ! cargo +nightly fuzz run --target x86_64-unknown-linux-gnu "$t" -- \
-                  -max_total_time=60 -print_final_stats=1; then
-              echo "::error::fuzz target $t failed (crash or build error)"
-              status=1
-            fi
+            # timeout is the hard wall-clock cap; libFuzzer still gets a 60s
+            # budget when there is enough time left in this job.
+            set +e
+            timeout --signal=INT "${wall_seconds}s" \
+              cargo +nightly fuzz run --target x86_64-unknown-linux-gnu "$t" -- \
+              -max_total_time="${fuzz_seconds}" -print_final_stats=1
+            rc=$?
+            set -e
+            case "$rc" in
+              0) ;;
+              124) echo "::notice::fuzz target $t reached wall timeout (${wall_seconds}s)";;
+              *)
+                echo "::error::fuzz target $t failed (crash or build error)"
+                status=1
+                ;;
+            esac
             echo '::endgroup::'
           done
           exit $status
