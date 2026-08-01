@@ -84,9 +84,7 @@ fn split_blocks(src: &str) -> Vec<(Option<String>, Vec<&str>, usize)> {
     for (n, line) in src.lines().enumerate() {
         let t = line.trim_start();
         if t.starts_with("###") {
-            let name = t
-                .trim_start_matches('#')
-                .trim();
+            let name = t.trim_start_matches('#').trim();
             let name = if name.is_empty() {
                 None
             } else {
@@ -186,7 +184,9 @@ fn parse_block(
     } else {
         r.method = "GET".into();
     }
-    if let Some(v) = toks.pop_if(|t| t.starts_with("HTTP/")) {
+    if toks.len() >= 2
+        && let Some(v) = toks.pop_if(|t| t.starts_with("HTTP/"))
+    {
         r.extra.insert(K_VERSION.into(), v.to_string());
     }
     if toks.is_empty() {
@@ -219,6 +219,12 @@ fn parse_block(
     // Percent-encode instead, which keeps `parse(serialize(x)) == parse(x)`.
     let url = encode_url_whitespace(&url);
     let (url_base, query, empty_eq) = split_query(&url);
+    if url_base.is_empty() && query.is_empty() {
+        bail!(
+            "request line {first:?} has no URL at {}",
+            loc(base, req_line, idx, &name)
+        );
+    }
     r.url = url_base;
     r.query = query;
     if !empty_eq.is_empty() {
@@ -954,6 +960,26 @@ GET https://example.com/b
         assert_eq!(r.headers.len(), 2);
         assert_eq!(r.body, Body::Text("hi".into()));
         roundtrip("POST https://x/y HTTP/1.1\nA: 1\nB: 2\n\nhi\n");
+    }
+
+    #[test]
+    fn single_url_token_starting_with_http_slash_is_not_version() {
+        let src =
+            "POST HTTP/https://api.exant-Type:%20multipart/form-data;%20boundary=WebAppBoundary\n";
+        let r = one(src);
+        assert_eq!(
+            r.url,
+            "HTTP/https://api.exant-Type:%20multipart/form-data;%20boundary=WebAppBoundary"
+        );
+        assert_eq!(r.method, "POST");
+        assert_eq!(r.extra.get(K_VERSION), None);
+        roundtrip(src);
+    }
+
+    #[test]
+    fn lone_question_mark_is_not_a_valid_url() {
+        let err = parse("?\n").unwrap_err().to_string();
+        assert!(err.contains("has no URL"), "{err}");
     }
 
     #[test]

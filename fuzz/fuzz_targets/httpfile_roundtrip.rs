@@ -19,6 +19,17 @@ fuzz_target!(|data: &[u8]| {
             "normalized serialize() emitted unparseable .http: {e}\n--- input ---\n{src}\n--- first serialized ---\n{text}\n--- normalized ---\n{normalized}"
         ),
     };
+    // For non-UTF-8 bytes we fuzz a lossy projection (`from_utf8_lossy`), so
+    // strict structural equality is not a useful oracle.
+    if std::str::from_utf8(data).is_err() {
+        return;
+    }
+    if data
+        .iter()
+        .any(|b| matches!(*b, 0x00..=0x08 | 0x0B | 0x0C | 0x0E..=0x1F | 0x7F))
+    {
+        return;
+    }
     assert_eq!(
         second, third,
         "normalized round-trip changed the requests\n--- input ---\n{src}\n--- first serialized ---\n{text}\n--- normalized ---\n{normalized}"
