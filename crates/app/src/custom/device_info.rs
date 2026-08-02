@@ -12,6 +12,7 @@
 //! triple is *not* included: reaching it needs a `build.rs` to bake `TARGET`
 //! in, and os/arch/family/pointer-width already say the same thing.
 use super::{Button, MetaRow, Note, NoteKind, Tone, header};
+use crate::i18n;
 use gpui::{ClipboardItem, Context, Entity, SharedString, Window, div, prelude::*};
 use rp_ui::input::Editor;
 use rp_ui::layout::{card, divider, section_label};
@@ -244,7 +245,7 @@ impl Render for Pane {
                         .min_w_0(),
                     )
                     .child(
-                        Button::new("copy-device-info", "Copy all")
+                        Button::new("copy-device-info", i18n::text(cx, "copy-all"))
                             .icon("copy")
                             .tone(Tone::Primary)
                             .render(t, cx.listener(|this, _, _, cx| this.copy_all(cx))),

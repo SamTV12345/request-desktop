@@ -573,6 +573,7 @@ pub fn strip(ws: &Workspace, cx: &mut gpui::Context<Workspace>) -> impl IntoElem
         })
         .collect();
     TabStrip::new("tab-strip", items)
+        .pinned_label(crate::i18n::text(cx, "pinned"))
         // Measured last frame by the strip's own `canvas`; without it the strip
         // cannot know how many tabs fit and draws them all.
         .width(ws.tab_strip_width)

@@ -15,6 +15,7 @@
 //!    inside a text area — with "No" also covering "that is not a bcrypt hash".
 //!    Here it is a badge, and a malformed hash says so.
 use super::{Button, Note, NoteKind, Tone, header};
+use crate::i18n;
 use gpui::{
     AppContext, ClipboardItem, Context, Entity, IntoElement, ParentElement as _, SharedString,
     Styled as _, Window, div, prelude::*,
@@ -74,13 +75,13 @@ pub struct Pane {
 
 impl Pane {
     pub fn new(cx: &mut Context<Self>) -> Self {
-        let text = cx.new(|cx| TextInput::new(cx, "the string to hash"));
+        let text = cx.new(|cx| TextInput::new(cx, i18n::text(cx, "string-to-hash")));
         let rounds = cx.new(|cx| {
             let mut i = TextInput::new(cx, "10");
             i.set_text("10", cx);
             i
         });
-        let candidate = cx.new(|cx| TextInput::new(cx, "the string to check"));
+        let candidate = cx.new(|cx| TextInput::new(cx, i18n::text(cx, "string-to-check")));
         let against = cx.new(|cx| TextInput::new(cx, "$2b$10$…"));
         // Only the comparison follows the typing: `bcrypt_verify` is
         // deterministic and reads its cost from the hash, so it is honest to run
@@ -94,7 +95,7 @@ impl Pane {
             hash: Err(String::new()),
             candidate,
             against,
-            status: "Press Hash to salt and hash the string above.".into(),
+            status: i18n::text(cx, "press-hash-status").into(),
             failed: false,
         }
     }
@@ -126,13 +127,13 @@ impl Pane {
 
     fn copy_hash(&mut self, cx: &mut Context<Self>) {
         let Ok(hash) = &self.hash else {
-            self.status = "Nothing to copy yet — press Hash first.".into();
+            self.status = i18n::text(cx, "nothing-to-copy-hash").into();
             self.failed = true;
             cx.notify();
             return;
         };
         cx.write_to_clipboard(ClipboardItem::new_string(hash.clone()));
-        self.status = "Hash copied to the clipboard.".into();
+        self.status = i18n::text(cx, "copied-hash").into();
         self.failed = false;
         cx.notify();
     }
@@ -202,11 +203,7 @@ impl Render for Pane {
             .size_full()
             .p(space::S4)
             .overflow_hidden()
-            .child(header(
-                t,
-                "Bcrypt",
-                "Hash a string with a fresh salt, or check a string against a hash.",
-            ))
+            .child(header(t, "Bcrypt", i18n::text(cx, "description-bcrypt")))
             // ---- hash
             .child(
                 card(t)
@@ -240,13 +237,13 @@ impl Render for Pane {
                             .items_center()
                             .gap(space::S2)
                             .child(
-                                Button::new("bcrypt-hash", "Hash")
+                                Button::new("bcrypt-hash", i18n::text(cx, "hash"))
                                     .icon("play")
                                     .tone(Tone::Primary)
                                     .render(t, cx.listener(|this, _, _, cx| this.hash_now(cx))),
                             )
                             .child(
-                                Button::new("bcrypt-copy", "Copy")
+                                Button::new("bcrypt-copy", i18n::text(cx, "copy"))
                                     .icon("copy")
                                     .enabled(hashed)
                                     .render(t, cx.listener(|this, _, _, cx| this.copy_hash(cx))),

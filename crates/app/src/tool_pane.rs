@@ -11,6 +11,7 @@
 //!   row (`SEG_MAX` options).
 //! * **Radio list** — a wrapped set of dot-and-label choices, for a `Select`
 //!   with too many options to segment.
+use crate::i18n;
 use crate::reference;
 use gpui::{
     ClipboardItem, Context, Entity, IntoElement, ParentElement, SharedString, Styled, Window, div,
@@ -491,13 +492,16 @@ impl ToolPane {
                             .child(shown.clone()),
                     )
                     .child(
-                        Button::new(gpui::SharedString::from(format!("copy-{shown}")), "Copy")
-                            .icon("copy")
-                            .tone(Tone::Ghost)
-                            .size(Size::Sm)
-                            .render(t, move |_, _, cx| {
-                                cx.write_to_clipboard(ClipboardItem::new_string(value.clone()));
-                            }),
+                        Button::new(
+                            gpui::SharedString::from(format!("copy-{shown}")),
+                            i18n::text(cx, "copy"),
+                        )
+                        .icon("copy")
+                        .tone(Tone::Ghost)
+                        .size(Size::Sm)
+                        .render(t, move |_, _, cx| {
+                            cx.write_to_clipboard(ClipboardItem::new_string(value.clone()));
+                        }),
                     )
                     .into_any_element(),
             );
@@ -514,12 +518,12 @@ impl ToolPane {
     /// its own scrolling. Row heights differ (a heading, a paragraph and a table row
     /// are not the same height), which is why this is `list()` rather than the
     /// `uniform_list` the tools sidebar uses.
-    fn reference_page(&self, t: Theme) -> gpui::AnyElement {
+    fn reference_page(&self, t: Theme, empty: String) -> gpui::AnyElement {
         if self.page_rows.is_empty() {
             return div()
                 .text_size(text::BODY)
                 .text_color(t.text_muted())
-                .child("Nothing on this page matches that search.")
+                .child(empty)
                 .into_any_element();
         }
         let rows = self.page_rows.clone();
@@ -552,9 +556,9 @@ impl ToolPane {
                 // "Result" claims something was computed from what you typed. On
                 // a lookup table nothing was — see `is_reference`.
                 .child(match (failed, self.is_reference()) {
-                    (true, _) => "Error",
-                    (false, true) => "Reference",
-                    (false, false) => "Result",
+                    (true, _) => i18n::text(cx, "error"),
+                    (false, true) => i18n::text(cx, "reference"),
+                    (false, false) => i18n::text(cx, "result"),
                 }),
         );
 
@@ -571,7 +575,7 @@ impl ToolPane {
                     .flex_wrap()
                     .child(title)
                     .child(
-                        Button::new("copy-result", "Copy all")
+                        Button::new("copy-result", i18n::text(cx, "copy-all"))
                             .icon("copy")
                             .tone(Tone::Ghost)
                             .size(Size::Sm)
@@ -671,7 +675,9 @@ impl Render for ToolPane {
             // prose, code and tables. Only computed output goes in the result
             // card, where "Result" and a copy button mean something.
             .map(|d| match (self.is_reference(), &self.output) {
-                (true, Ok(_)) => d.child(self.reference_page(t)),
+                (true, Ok(_)) => {
+                    d.child(self.reference_page(t, i18n::text(cx, "nothing-matches-page")))
+                }
                 _ => d.child(self.result_panel(t, cx)),
             })
     }

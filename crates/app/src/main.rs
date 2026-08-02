@@ -30,6 +30,7 @@ use rp_ui::theme;
 use rp_ui::tokens::{control, radius, size, space, text};
 mod custom;
 mod filters;
+mod i18n;
 mod jira;
 mod palette;
 mod reference;
@@ -132,6 +133,31 @@ const SIGNATURE: &str = "Designed by Samuel, excellence and innovation";
 
 /// The kv key holding the ground the user picked.
 const THEME_KEY: &str = "theme.dark";
+const LOCALE_KEY: &str = "ui.locale";
+
+fn stored_locale(store: Option<&Store>) -> i18n::Locale {
+    store
+        .and_then(|s| s.get(LOCALE_KEY).ok().flatten())
+        .as_deref()
+        .map(i18n::Locale::stored)
+        .unwrap_or_else(i18n::Locale::from_environment)
+}
+
+fn save_locale(store: Option<&Store>, locale: i18n::Locale) {
+    if let Some(store) = store
+        && let Err(e) = store.set(LOCALE_KEY, locale.key())
+    {
+        note!("cannot store the locale: {e:#}");
+    }
+}
+
+fn set_locale(locale: i18n::Locale, cx: &mut App) {
+    i18n::set_locale(locale, cx);
+    save_locale(
+        cx.try_global::<Persist>().and_then(|p| p.store.as_ref()),
+        locale,
+    );
+}
 
 /// Read the stored ground.
 ///
@@ -594,7 +620,7 @@ struct Workspace {
 
 impl Workspace {
     fn new(cx: &mut Context<Self>) -> Self {
-        let tool_query = cx.new(|cx| TextInput::new(cx, "Search tools…"));
+        let tool_query = cx.new(|cx| TextInput::new(cx, i18n::text(cx, "search-tools")));
         cx.observe(&tool_query, |_, _, cx| cx.notify()).detach();
         let track = cx.new(track::Track::new);
         // Register for session snapshots. Weak, so closing the window still
@@ -603,9 +629,9 @@ impl Workspace {
         if cx.has_global::<Persist>() {
             cx.global_mut::<Persist>().windows.push(weak);
         }
-        let request_query = cx.new(|cx| TextInput::new(cx, "Search all open files…"));
+        let request_query = cx.new(|cx| TextInput::new(cx, i18n::text(cx, "search-files")));
         cx.observe(&request_query, |_, _, cx| cx.notify()).detach();
-        let palette_query = cx.new(|cx| TextInput::new(cx, "Jump to anything…"));
+        let palette_query = cx.new(|cx| TextInput::new(cx, i18n::text(cx, "jump-anything")));
         // Typing narrows the list, so a shorter list must not leave the selection
         // pointing past its end — that is how Enter opens the wrong thing.
         cx.observe(&palette_query, |this, _, cx| {
@@ -1213,7 +1239,7 @@ impl Workspace {
         self.var_rows.clear();
         for (name, value) in seeded {
             let input = cx.new(|cx| {
-                let mut i = TextInput::new(cx, "value");
+                let mut i = TextInput::new(cx, i18n::text(cx, "value-placeholder"));
                 i.set_text(value, cx);
                 i
             });
@@ -1449,7 +1475,7 @@ impl Workspace {
             // hard-coded string.
             .child(
                 rp_ui::SearchBar::new("palette")
-                    .placeholder("Jump to anything")
+                    .placeholder(i18n::text(cx, "jump-anything"))
                     .chord(PALETTE)
                     .active(self.palette_open)
                     .render(
@@ -1555,7 +1581,7 @@ impl Workspace {
             format!("{shown} of {} files", self.sources.len()).into()
         };
         sidebar(t, self.sidebar_width)
-            .child(section(cx, t, "Collection"))
+            .child(section(cx, t, i18n::text(cx, "collection")))
             .child(
                 div()
                     .flex()
@@ -1563,23 +1589,35 @@ impl Workspace {
                     .gap(space::S1)
                     .px(space::S3)
                     .pb(space::S2)
-                    .child(Button::new("open-file", "Open…").icon("file").render(
-                        t,
-                        cx.listener(|this, _, _, cx| this.open_dialog(false, false, cx)),
-                    ))
+                    .child(
+                        Button::new("open-file", i18n::text(cx, "open"))
+                            .icon("file")
+                            .render(
+                                t,
+                                cx.listener(|this, _, _, cx| this.open_dialog(false, false, cx)),
+                            ),
+                    )
                     // Adds instead of replacing, and takes several files at once —
                     // "open" and "also open this" are different intentions and now
                     // have different buttons.
-                    .child(Button::new("add-file", "Add…").icon("plus").render(
-                        t,
-                        cx.listener(|this, _, _, cx| this.open_dialog(false, true, cx)),
-                    ))
-                    .child(Button::new("open-dir", "Folder…").icon("folder").render(
-                        t,
-                        cx.listener(|this, _, _, cx| this.open_dialog(true, true, cx)),
-                    ))
                     .child(
-                        Button::new("open-vars", "Variables")
+                        Button::new("add-file", i18n::text(cx, "add"))
+                            .icon("plus")
+                            .render(
+                                t,
+                                cx.listener(|this, _, _, cx| this.open_dialog(false, true, cx)),
+                            ),
+                    )
+                    .child(
+                        Button::new("open-dir", i18n::text(cx, "folder"))
+                            .icon("folder")
+                            .render(
+                                t,
+                                cx.listener(|this, _, _, cx| this.open_dialog(true, true, cx)),
+                            ),
+                    )
+                    .child(
+                        Button::new("open-vars", i18n::text(cx, "variables"))
                             .icon("settings")
                             .render(
                                 t,
@@ -1590,7 +1628,7 @@ impl Workspace {
                             ),
                     )
                     .child(
-                        Button::new("save", "Save")
+                        Button::new("save", i18n::text(cx, "save"))
                             .icon("save")
                             .tone(Tone::Primary)
                             .render(t, cx.listener(|this, _, _, cx| this.save(cx))),
@@ -1751,11 +1789,11 @@ impl Workspace {
             .min_w_0()
             .p(space::S4)
             .overflow_y_scroll()
-            .child(section(cx, t, "Environment").px_0().pt_0())
+            .child(section(cx, t, i18n::text(cx, "environment")).px_0().pt_0())
             .when(!env_chips.is_empty(), |d| {
                 d.child(div().flex().flex_wrap().gap(space::S1).children(env_chips))
             })
-            .child(section(cx, t, "Variables").px_0().pt_0())
+            .child(section(cx, t, i18n::text(cx, "variables")).px_0().pt_0())
             .child(
                 div()
                     .flex()
@@ -1770,12 +1808,16 @@ impl Workspace {
                     div()
                         .text_size(text::SMALL)
                         .text_color(t.text_meta())
-                        .child("none — add an http-client.env.json or `@name = value`"),
+                        .child(i18n::text(cx, "none-environment")),
                 )
             })
             .when(!caught.is_empty(), |d| {
-                d.child(section(cx, t, "Captured from responses").px_0().pt_0())
-                    .children(caught)
+                d.child(
+                    section(cx, t, i18n::text(cx, "captured-from-responses"))
+                        .px_0()
+                        .pt_0(),
+                )
+                .children(caught)
             })
     }
 
@@ -1813,7 +1855,7 @@ impl Workspace {
         }
         let no_ui = matches.iter().filter(|tool| unavailable(tool)).count();
         sidebar(t, self.sidebar_width)
-            .child(section(cx, t, "Tools"))
+            .child(section(cx, t, i18n::text(cx, "tools")))
             .child(
                 div()
                     .px(space::S3)
@@ -2299,7 +2341,7 @@ fn open_workspace(session: Option<WindowSession>, cx: &mut App) {
 /// `theme::section_label` asks for `FONT_HEADING` by name, and gpui ignores a
 /// missing family without a word — so the family is re-set to whatever
 /// `resolve_fonts` found.
-fn section(cx: &App, t: theme::Theme, label: &'static str) -> gpui::Div {
+fn section(cx: &App, t: theme::Theme, label: impl Into<SharedString>) -> gpui::Div {
     section_label(t, label).font_family(fonts(cx).heading)
 }
 
@@ -2319,6 +2361,46 @@ fn signature(cx: &App, t: theme::Theme) -> impl IntoElement + use<> {
         .text_color(t.accent)
         .opacity(0.85)
         .child(SIGNATURE)
+}
+
+fn language_switch(cx: &App) -> impl IntoElement + use<> {
+    let t = theme::theme(cx);
+    let active = cx.global::<i18n::I18n>().locale();
+    let mut opts = Vec::with_capacity(2);
+    for (key, label_key, locale) in [
+        ("language-en", "english", i18n::Locale::EnUs),
+        ("language-de", "german", i18n::Locale::DeDe),
+    ] {
+        let on = active == locale;
+        let label = i18n::text(cx, label_key);
+        opts.push(
+            div()
+                .id(key)
+                .flex()
+                .flex_1()
+                .items_center()
+                .justify_center()
+                .h(control::MD)
+                .rounded(radius::PILL)
+                .text_size(text::CONTROL)
+                .map(|d| {
+                    if on {
+                        d.bg(t.accent).text_color(t.on_accent())
+                    } else {
+                        d.text_color(t.text_muted()).hover(|s| s.bg(t.hover()))
+                    }
+                })
+                .child(label)
+                .on_click(move |_, _, cx| set_locale(locale, cx)),
+        );
+    }
+    div()
+        .flex()
+        .gap(space::S1)
+        .p(space::S1)
+        .rounded(radius::PILL)
+        .bg(t.bg)
+        .children(opts)
 }
 
 /// The gear: opens the settings window, or brings it forward if it is already up.
@@ -2345,11 +2427,12 @@ fn gear(t: theme::Theme) -> impl IntoElement {
 fn ground_switch(cx: &App) -> impl IntoElement + use<> {
     let t = theme::theme(cx);
     let mut opts = Vec::with_capacity(2);
-    for (label, dark) in [("Light", false), ("Dark", true)] {
+    for (key, dark) in [("light", false), ("dark", true)] {
+        let label = i18n::text(cx, key);
         let on = t.dark == dark;
         opts.push(
             div()
-                .id(label)
+                .id(SharedString::from(key))
                 .flex()
                 .flex_1()
                 .items_center()
@@ -2436,7 +2519,7 @@ impl Settings {
     fn new(cx: &mut Context<Self>) -> Self {
         let jira_base = cx.new(|cx| TextInput::new(cx, "https://acme.atlassian.net"));
         let jira_account = cx.new(|cx| TextInput::new(cx, "you@acme.com"));
-        let jira_token = cx.new(|cx| TextInput::new(cx, "paste an API token"));
+        let jira_token = cx.new(|cx| TextInput::new(cx, i18n::text(cx, "api-token-placeholder")));
         let mut this = Self {
             copied: None,
             jira_base,
@@ -2663,7 +2746,8 @@ impl Render for Settings {
                     .child(
                         card(t)
                             .min_w_0()
-                            .child(section(cx, t, "Appearance"))
+                            .child(section(cx, t, i18n::text(cx, "appearance")))
+                            .child(language_switch(cx))
                             .child(ground_switch(cx)),
                     )
                     .child(mcp_card(self.copied.clone(), cx))
@@ -2704,9 +2788,9 @@ impl Settings {
                             .text_size(text::TINY)
                             .text_color(ink)
                             .child(if self.jira_has_token && ready {
-                                "connected"
+                                i18n::text(cx, "connected")
                             } else {
-                                "not set up"
+                                i18n::text(cx, "not-set-up")
                             }),
                     ),
             )
@@ -2734,14 +2818,14 @@ impl Settings {
                             .flex_none()
                             .w(size::LABEL)
                             .text_color(t.text_label())
-                            .child("Kind"),
+                            .child(i18n::text(cx, "kind")),
                     )
                     .child(
                         seg_track(t)
                             .child(
                                 seg_option(t, cloud)
                                     .id("jira-cloud")
-                                    .child("Cloud")
+                                    .child(i18n::text(cx, "cloud"))
                                     .on_click(cx.listener(|this, _: &gpui::ClickEvent, _, cx| {
                                         this.jira_flavor = jira::Flavor::Cloud;
                                         cx.notify();
@@ -2750,7 +2834,7 @@ impl Settings {
                             .child(
                                 seg_option(t, !cloud)
                                     .id("jira-server")
-                                    .child("Data Center")
+                                    .child(i18n::text(cx, "data-center"))
                                     .on_click(cx.listener(|this, _: &gpui::ClickEvent, _, cx| {
                                         this.jira_flavor = jira::Flavor::Server;
                                         cx.notify();
@@ -2758,18 +2842,26 @@ impl Settings {
                             ),
                     ),
             )
-            .child(jira_field(t, "Site URL", self.jira_base.clone()))
             .child(jira_field(
                 t,
-                if cloud { "E-mail" } else { "User name" },
+                i18n::text(cx, "site-url"),
+                self.jira_base.clone(),
+            ))
+            .child(jira_field(
+                t,
+                if cloud {
+                    i18n::text(cx, "email")
+                } else {
+                    i18n::text(cx, "user-name")
+                },
                 self.jira_account.clone(),
             ))
             .child(jira_field(
                 t,
                 if self.jira_has_token {
-                    "New token"
+                    i18n::text(cx, "new-token")
                 } else {
-                    "API token"
+                    i18n::text(cx, "api-token")
                 },
                 self.jira_token.clone(),
             ))
@@ -2793,18 +2885,18 @@ impl Settings {
                     .flex_wrap()
                     .gap(space::S2)
                     .child(
-                        Button::new("jira-save", "Save")
+                        Button::new("jira-save", i18n::text(cx, "save"))
                             .tone(Tone::Primary)
                             .render(t, cx.listener(|this, _, _, cx| this.save_jira(cx))),
                     )
                     .child(
-                        Button::new("jira-test", "Test connection")
+                        Button::new("jira-test", i18n::text(cx, "test-connection"))
                             .enabled(ready)
                             .render(t, cx.listener(|this, _, _, cx| this.test_jira(cx))),
                     )
                     .when(self.jira_has_token, |d| {
                         d.child(
-                            Button::new("jira-forget", "Forget token")
+                            Button::new("jira-forget", i18n::text(cx, "forget-token"))
                                 .tone(Tone::Ghost)
                                 .render(t, cx.listener(|this, _, _, cx| this.clear_jira_token(cx))),
                         )
@@ -2825,9 +2917,10 @@ impl Settings {
 /// rows above them.
 fn jira_field(
     t: theme::Theme,
-    label: &'static str,
+    label: impl Into<SharedString>,
     input: Entity<TextInput>,
-) -> impl IntoElement + use<> {
+) -> impl IntoElement {
+    let label = label.into();
     div()
         .flex()
         .items_center()
@@ -2933,7 +3026,7 @@ fn mcp_card(copied: Option<SharedString>, cx: &mut Context<Settings>) -> impl In
                 .flex()
                 .items_center()
                 .gap(space::S2)
-                .child(section(cx, t, "Agent access (MCP)").flex_1())
+                .child(section(cx, t, i18n::text(cx, "agent-access")).flex_1())
                 .child(
                     div()
                         .flex_none()
@@ -2990,7 +3083,7 @@ fn mcp_card(copied: Option<SharedString>, cx: &mut Context<Settings>) -> impl In
                             div()
                                 .text_size(text::CONTROL)
                                 .text_color(t.text)
-                                .child("Reachable from containers"),
+                                .child(i18n::text(cx, "reachable-containers")),
                         )
                         .child(
                             div()
@@ -3019,7 +3112,7 @@ fn mcp_card(copied: Option<SharedString>, cx: &mut Context<Settings>) -> impl In
                         .flex_none()
                         .w(size::LABEL)
                         .text_color(t.text_label())
-                        .child("URL"),
+                        .child(i18n::text(cx, "url")),
                 )
                 .child(
                     div()
@@ -3059,7 +3152,7 @@ fn mcp_card(copied: Option<SharedString>, cx: &mut Context<Settings>) -> impl In
                             .flex_none()
                             .w(size::LABEL)
                             .text_color(t.text_label())
-                            .child("From this machine"),
+                            .child(i18n::text(cx, "from-machine")),
                     )
                     .child(
                         div()
@@ -3086,7 +3179,7 @@ fn mcp_card(copied: Option<SharedString>, cx: &mut Context<Settings>) -> impl In
                             .flex_none()
                             .w(size::LABEL)
                             .text_color(t.text_label())
-                            .child("Token"),
+                            .child(i18n::text(cx, "token")),
                     )
                     .child(
                         div()
@@ -3110,7 +3203,7 @@ fn mcp_card(copied: Option<SharedString>, cx: &mut Context<Settings>) -> impl In
                     .flex_wrap()
                     .gap(space::S2)
                     .child(
-                        Button::new("mcp-copy-config", "Copy config")
+                        Button::new("mcp-copy-config", i18n::text(cx, "copy-config"))
                             .icon("copy")
                             .tone(Tone::Primary)
                             .render(
@@ -3121,7 +3214,7 @@ fn mcp_card(copied: Option<SharedString>, cx: &mut Context<Settings>) -> impl In
                             ),
                     )
                     .child(
-                        Button::new("mcp-copy-command", "Copy command")
+                        Button::new("mcp-copy-command", i18n::text(cx, "copy-command"))
                             .icon("copy")
                             .render(
                                 t,
@@ -3131,7 +3224,7 @@ fn mcp_card(copied: Option<SharedString>, cx: &mut Context<Settings>) -> impl In
                             ),
                     )
                     .child(
-                        Button::new("mcp-copy-prompt", "Copy prompt")
+                        Button::new("mcp-copy-prompt", i18n::text(cx, "copy-prompt"))
                             .icon("copy")
                             .render(
                                 t,
@@ -3141,7 +3234,7 @@ fn mcp_card(copied: Option<SharedString>, cx: &mut Context<Settings>) -> impl In
                             ),
                     )
                     .child(
-                        Button::new("mcp-regenerate", "Regenerate token")
+                        Button::new("mcp-regenerate", i18n::text(cx, "regenerate-token"))
                             .icon("alert")
                             .render(
                                 t,
@@ -3195,7 +3288,11 @@ fn mcp_card(copied: Option<SharedString>, cx: &mut Context<Settings>) -> impl In
                     .flex()
                     .flex_col()
                     .gap(space::S1)
-                    .child(section(cx, t, "Recent requests").px_0().pt_0())
+                    .child(
+                        section(cx, t, i18n::text(cx, "recent-requests"))
+                            .px_0()
+                            .pt_0(),
+                    )
                     .when(activity.is_empty(), |d| {
                         d.child(
                             div()
@@ -3774,6 +3871,7 @@ fn main() {
     Application::with_platform(gpui_platform::current_platform(false))
         .with_assets(rp_ui::Assets)
         .run(|cx: &mut App| {
+            i18n::install(cx);
             let resolved = resolve_fonts(cx);
             cx.set_global(resolved);
             // One call: the design system registers what its widgets need.
@@ -3815,6 +3913,7 @@ fn main() {
                     None
                 }
             };
+            i18n::set_locale(stored_locale(store.as_ref()), cx);
             let session = store
                 .as_ref()
                 .map(|s| s.load_session())

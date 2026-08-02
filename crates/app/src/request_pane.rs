@@ -1,4 +1,5 @@
 //! Method + URL + headers + body + Send + response viewer.
+use crate::i18n;
 use gpui::{
     Context, Entity, IntoElement, ParentElement, Rgba, SharedString, Styled, Window, div,
     prelude::*,
@@ -80,7 +81,8 @@ impl RequestPane {
             e
         });
 
-        let response_view = cx.new(|cx| Editor::new(cx, "no response yet").read_only());
+        let response_view =
+            cx.new(|cx| Editor::new(cx, i18n::text(cx, "empty-response")).read_only());
 
         Self {
             request,
@@ -253,18 +255,23 @@ impl RequestPane {
                             .active(|s| s.bg(t.accent_ramp.s600))
                     })
                     .child(icon_tinted("send", text::CONTROL, send_ink))
-                    .child(if sending { "Sending…" } else { "Send" })
+                    .child(if sending {
+                        i18n::text(cx, "sending")
+                    } else {
+                        i18n::text(cx, "send")
+                    })
                     .on_click(cx.listener(|this, _, _, cx| this.send(cx))),
             )
     }
 
     fn request_editor(&self, t: Theme, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let mut tabs = Vec::new();
-        for (label, tab) in [("Body", Tab::Body), ("Headers", Tab::Headers)] {
+        for (key, tab) in [("body", Tab::Body), ("headers", Tab::Headers)] {
+            let label = i18n::text(cx, key);
             let active = self.tab == tab;
             tabs.push(
                 seg_option(t, active)
-                    .id(label)
+                    .id(label.clone())
                     // No `text_color` here: `seg_option` sets the ink for both
                     // states, and overriding it after the fact put accent text on
                     // the accent fill — the selected tab's label vanished.
@@ -293,7 +300,7 @@ impl RequestPane {
                     .items_center()
                     .flex_wrap()
                     .gap(space::S3)
-                    .child(label_h6(t, "Request"))
+                    .child(label_h6(t, i18n::text(cx, "request")))
                     .child(seg_track(t).children(tabs)),
             )
             .child(
@@ -326,7 +333,7 @@ impl RequestPane {
             .child(label)
     }
 
-    fn response_header(&self, t: Theme) -> impl IntoElement + use<> {
+    fn response_header(&self, t: Theme, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         let mut row = div()
             .flex()
             .items_center()
@@ -334,13 +341,13 @@ impl RequestPane {
             // second line rather than run out of the card.
             .flex_wrap()
             .gap(space::S3)
-            .child(label_h6(t, "Response"));
+            .child(label_h6(t, i18n::text(cx, "response")));
         match &self.response {
             None => {
                 let note = if self.sending {
-                    "sending…"
+                    i18n::text(cx, "sending-lower")
                 } else {
-                    "no request sent yet"
+                    i18n::text(cx, "no-request-sent")
                 };
                 row = row
                     .child(icon_tinted("clock", text::TINY, t.text_meta()))
@@ -355,7 +362,7 @@ impl RequestPane {
                 row = row.child(Self::badge(
                     t.danger(),
                     Some("alert"),
-                    "Request failed".into(),
+                    i18n::text(cx, "send-error").into(),
                 ));
             }
             Some(Ok(res)) => {
@@ -384,11 +391,11 @@ impl RequestPane {
         row
     }
 
-    fn response_section(&self, t: Theme) -> impl IntoElement + use<> {
+    fn response_section(&self, t: Theme, cx: &mut Context<Self>) -> impl IntoElement + use<> {
         card(t)
             .flex_1()
             .min_h(size::CARD_MIN_H)
-            .child(self.response_header(t))
+            .child(self.response_header(t, cx))
             .child(
                 div()
                     .flex()
@@ -404,7 +411,8 @@ impl RequestPane {
 
 /// `h6` as the system defines it, without `section_label`'s sidebar padding —
 /// these labels sit inline inside a card that already has its own.
-fn label_h6(t: Theme, label: &'static str) -> gpui::Div {
+fn label_h6(t: Theme, label: impl Into<SharedString>) -> gpui::Div {
+    let label = label.into();
     div()
         .flex_none()
         .font_family(FONT_HEADING)
@@ -557,7 +565,7 @@ impl Render for RequestPane {
             .overflow_hidden()
             .child(self.toolbar(t, cx))
             .child(self.request_editor(t, cx))
-            .child(self.response_section(t))
+            .child(self.response_section(t, cx))
     }
 }
 

@@ -119,7 +119,13 @@ pub fn empty_state(
 }
 
 /// The title takes the heading face; the system reserves it for headings.
-pub fn header(t: Theme, title: &'static str, subtitle: &'static str) -> gpui::Div {
+pub fn header(
+    t: Theme,
+    title: impl Into<SharedString>,
+    subtitle: impl Into<SharedString>,
+) -> gpui::Div {
+    let title = title.into();
+    let subtitle = subtitle.into();
     div()
         .flex()
         .flex_col()

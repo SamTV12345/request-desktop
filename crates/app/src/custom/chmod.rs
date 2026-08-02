@@ -12,6 +12,7 @@
 //! `rwx` ordering stay in `rp_devtools::tools::web::chmod_forms` — this panel
 //! only draws.
 use super::{Note, header, label_cell};
+use crate::i18n;
 use gpui::{
     ClipboardItem, Context, IntoElement, ParentElement as _, SharedString, Styled as _, Window,
     div, prelude::*,
@@ -101,7 +102,7 @@ impl Pane {
                     .cursor_pointer()
                     .hover(|s| s.bg(t.accent_wash()).text_color(t.accent))
                     .child(icon_tinted("copy", text::SMALL, t.text_muted()))
-                    .child("Copy")
+                    .child(i18n::text(cx, "copy"))
                     .on_click(
                         cx.listener(move |this, _, _, cx| this.copy(label, to_copy.clone(), cx)),
                     ),
@@ -195,7 +196,7 @@ impl Render for Pane {
             .child(header(
                 t,
                 "Chmod calculator",
-                "Tick the permission bits and read off the octal, symbolic and command forms.",
+                i18n::text(cx, "description-chmod"),
             ))
             .child(
                 card(t)

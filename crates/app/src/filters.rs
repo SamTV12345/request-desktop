@@ -200,7 +200,7 @@ pub fn facet_row(
 }
 
 /// A rail facet section: the `h6` and its rows.
-pub fn section(t: Theme, label: &'static str, rows: Vec<Stateful<Div>>) -> Div {
+pub fn section(t: Theme, label: impl Into<gpui::SharedString>, rows: Vec<Stateful<Div>>) -> Div {
     div()
         .flex()
         .flex_col()

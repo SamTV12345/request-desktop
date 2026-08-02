@@ -18,6 +18,7 @@ use super::{
 use crate::calendar::{
     BLOCK_LABEL_LINE, BLOCK_META_LINE, HOUR_HEIGHT, block, block_text, hour_window, lanes,
 };
+use crate::i18n;
 use gpui::{
     Context, IntoElement, ParentElement, Pixels, SharedString, Styled, div, prelude::*, px,
     relative,
@@ -351,12 +352,12 @@ impl Track {
                 div()
                     .text_size(text::TINY)
                     .text_color(t.text_muted())
-                    .child("SELECTED ENTRY"),
+                    .child(i18n::text(cx, "selected-entry")),
             );
         let Some(entry) = self.selected_entry() else {
             return card
-                .child(heading(t, "Nothing selected"))
-                .child(hint(t, "Click a block in the week to inspect it."))
+                .child(heading(t, i18n::text(cx, "nothing-selected")))
+                .child(hint(t, i18n::text(cx, "click-block-inspect")))
                 .into_any_element();
         };
         let (id, running) = (entry.id, entry.is_running());
@@ -405,7 +406,7 @@ impl Track {
                     // the form to edit — the timer's Stop is what finishes it.
                     div().flex_1().when(!running, |d| {
                         d.child(
-                            Button::new("inspect-edit", "Edit")
+                            Button::new("inspect-edit", i18n::text(cx, "edit"))
                                 .tone(Tone::Quiet)
                                 .size(Size::Sm)
                                 // The inline form lives in the day's entry table, so

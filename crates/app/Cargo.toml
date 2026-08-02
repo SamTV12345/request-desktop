@@ -7,6 +7,8 @@ publish = false
 
 [dependencies]
 anyhow.workspace = true
+fluent-bundle = "0.15"
+unic-langid = "0.9"
 rp-core = { path = "../core" }
 rp-devtools = { path = "../devtools" }
 # EXPERIMENT: gpui straight from zed's repo instead of the crates.io snapshot.

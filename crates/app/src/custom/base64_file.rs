@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use super::{Button, MetaRow, Note, NoteKind, Tone, header};
+use crate::i18n;
 use gpui::{
     AppContext, ClipboardItem, Context, Entity, ExternalPaths, Image, ImageFormat,
     PathPromptOptions, SharedString, Window, div, img, prelude::*,
@@ -663,7 +664,7 @@ impl Render for Pane {
                                     .flex()
                                     .gap(space::S2)
                                     .child(
-                                        Button::new("pick-file", "Choose file…")
+                                        Button::new("pick-file", i18n::text(cx, "choose-file"))
                                             .icon("folder")
                                             .tone(Tone::Primary)
                                             .enabled(ready)
@@ -673,7 +674,7 @@ impl Render for Pane {
                                             ),
                                     )
                                     .child(
-                                        Button::new("copy-base64", "Copy")
+                                        Button::new("copy-base64", i18n::text(cx, "copy"))
                                             .icon("copy")
                                             .enabled(ready)
                                             .render(
@@ -729,7 +730,7 @@ impl Render for Pane {
                                     .flex()
                                     .gap(space::S2)
                                     .child(
-                                        Button::new("preview-base64", "Preview")
+                                        Button::new("preview-base64", i18n::text(cx, "preview"))
                                             .icon("file")
                                             .enabled(ready)
                                             .render(
@@ -740,7 +741,7 @@ impl Render for Pane {
                                             ),
                                     )
                                     .child(
-                                        Button::new("save-file", "Save as…")
+                                        Button::new("save-file", i18n::text(cx, "save-as"))
                                             .icon("save")
                                             .tone(Tone::Primary)
                                             .enabled(ready)

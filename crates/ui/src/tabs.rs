@@ -133,6 +133,7 @@ pub struct TabOverflowRequest {
 pub struct TabStrip {
     pub id: ElementId,
     pub items: Vec<TabItem>,
+    pub pinned_label: SharedString,
     /// Width the tab run had during the last frame, `0` when nothing has been
     /// measured yet — an unmeasured strip draws every tab rather than guessing.
     /// See [`TabStrip::on_measure`].
@@ -275,6 +276,7 @@ impl TabStrip {
         Self {
             id: id.into(),
             items,
+            pinned_label: PINNED_LABEL.into(),
             width: px(0.),
             on_activate: None,
             on_close: None,
@@ -285,6 +287,11 @@ impl TabStrip {
             on_new_tab: None,
             on_measure: None,
         }
+    }
+
+    pub fn pinned_label(mut self, label: impl Into<SharedString>) -> Self {
+        self.pinned_label = label.into();
+        self
     }
 
     pub fn width(mut self, width: Pixels) -> Self {
@@ -389,7 +396,7 @@ impl TabStrip {
         // Only while the run it heads is actually on screen: with the window
         // shifted right past the pins, a "PINNED" label over unpinned tabs lies.
         if pinned > 0 && shown.start < pinned {
-            children.push(pinned_label(t).into_any_element());
+            children.push(pinned_label(t, self.pinned_label.clone()).into_any_element());
         }
         // A `for` loop, not `map`: the handlers are cloned per tab, and a lazy
         // adaptor would keep borrowing `self` past the point the vector is built.
@@ -683,7 +690,7 @@ fn new_tab(t: Theme, f: ClickHandler) -> impl IntoElement {
 /// The mark is a **star**, filled, which is what the design puts over both this run
 /// and the sidebar's `Pinned` group. It was a `pin` only because there was no star
 /// in the icon set.
-fn pinned_label(t: Theme) -> impl IntoElement {
+fn pinned_label(t: Theme, label: SharedString) -> impl IntoElement {
     div()
         .flex()
         .flex_none()
@@ -694,7 +701,7 @@ fn pinned_label(t: Theme) -> impl IntoElement {
         .text_size(text::KICKER)
         .text_color(t.text_meta())
         .child(icon_tinted("star", text::KICKER, t.text_meta()))
-        .child(PINNED_LABEL)
+        .child(label)
 }
 
 /// One tab action — detach, close. Reveals itself only while its own tab is

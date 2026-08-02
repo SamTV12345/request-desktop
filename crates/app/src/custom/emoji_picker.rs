@@ -25,6 +25,7 @@ use rp_ui::theme::{self, FONT_MONO, Theme};
 use rp_ui::tokens::{control, radius, size, space, text};
 
 use super::{Note, NoteKind, header};
+use crate::i18n;
 use gpui::{
     ClipboardItem, Context, Entity, Pixels, SharedString, WeakEntity, Window, canvas, div,
     prelude::*, px, uniform_list,
@@ -99,7 +100,7 @@ pub struct Pane {
 
 impl Pane {
     pub fn new(cx: &mut Context<Self>) -> Self {
-        let search = cx.new(|cx| TextInput::new(cx, "Search emojis (name or keyword)"));
+        let search = cx.new(|cx| TextInput::new(cx, i18n::text(cx, "search-emojis")));
         cx.observe(&search, |_, _, cx| cx.notify()).detach();
         Self {
             search,
@@ -110,7 +111,8 @@ impl Pane {
     }
 
     fn copy(&mut self, what: &str, text: String, cx: &mut Context<Self>) {
-        self.status = format!("Copied {what} {text}").into();
+        self.status =
+            i18n::text_args(cx, "copied-emoji", &[("what", what), ("value", &text)]).into();
         self.copied = true;
         cx.write_to_clipboard(ClipboardItem::new_string(text));
         cx.notify();
@@ -300,7 +302,7 @@ impl Render for Pane {
             .child(header(
                 t,
                 "Emoji picker",
-                "Click the emoji, its code points or its escape to copy.",
+                i18n::text(cx, "description-emoji"),
             ))
             .child(
                 div()

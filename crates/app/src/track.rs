@@ -16,6 +16,7 @@
 //! the only way both sides can agree on what "today" and "12:36" mean.
 use crate::Persist;
 use crate::filters::{self, Filters};
+use crate::i18n;
 use crate::year_strip;
 use crate::{jira, request_pane};
 use gpui::{
@@ -605,10 +606,12 @@ enum TrackRow {
 
 impl Track {
     pub fn new(cx: &mut Context<Self>) -> Self {
-        let task = cx.new(|cx| TextInput::new(cx, "What are you working on?"));
-        let note = cx.new(|cx| TextInput::new(cx, "note (optional)"));
-        let search = cx.new(|cx| TextInput::new(cx, "Search tasks and notes…").with_icon("search"));
-        let jump = cx.new(|cx| TextInput::new(cx, "YYYY-MM-DD").with_icon("calendar"));
+        let task = cx.new(|cx| TextInput::new(cx, i18n::text(cx, "what-working-on")));
+        let note = cx.new(|cx| TextInput::new(cx, i18n::text(cx, "optional-note")));
+        let search =
+            cx.new(|cx| TextInput::new(cx, i18n::text(cx, "search-tasks")).with_icon("search"));
+        let jump = cx
+            .new(|cx| TextInput::new(cx, i18n::text(cx, "date-placeholder")).with_icon("calendar"));
         let summary = cx.new(|cx| Editor::new(cx, "no time booked").read_only());
         for input in [&task, &note] {
             cx.observe(input, |_, _, cx| cx.notify()).detach();
@@ -1082,13 +1085,13 @@ impl Track {
         });
         let task_text = entry.map(|e| e.task.clone()).unwrap_or_default();
         let task = cx.new(|cx| {
-            let mut i = TextInput::new(cx, "task");
+            let mut i = TextInput::new(cx, i18n::text(cx, "task"));
             i.set_text(task_text, cx);
             i
         });
         let note_text = entry.and_then(|e| e.note.clone()).unwrap_or_default();
         let note = cx.new(|cx| {
-            let mut i = TextInput::new(cx, "note (optional)");
+            let mut i = TextInput::new(cx, i18n::text(cx, "optional-note"));
             i.set_text(note_text, cx);
             i
         });
@@ -1096,7 +1099,7 @@ impl Track {
         // to rather than making the user remember whether it came from the task.
         let issue_text = entry.and_then(|e| e.issue_key.clone()).unwrap_or_default();
         let issue = cx.new(|cx| {
-            let mut i = TextInput::new(cx, "ABC-123");
+            let mut i = TextInput::new(cx, i18n::text(cx, "issue-placeholder"));
             i.set_text(issue_text, cx);
             i
         });
@@ -1250,8 +1253,8 @@ impl Track {
                 .rounded(radius::CARD)
                 .bg(t.hover())
                 .child(icon_tinted("clock", text::H4, t.text_disabled()))
-                .child(heading(t, "No timer running"))
-                .child(hint(t, "Name a task below and press Start."))
+                .child(heading(t, i18n::text(cx, "no-timer-running")))
+                .child(hint(t, i18n::text(cx, "name-task-start")))
                 .into_any_element();
         };
         let id = entry.id;
@@ -1277,7 +1280,7 @@ impl Track {
                             .flex_1()
                             .text_size(text::LABEL)
                             .text_color(t.accent_ramp.s800)
-                            .child("RUNNING"),
+                            .child(i18n::text(cx, "running")),
                     )
                     .child(
                         div()
@@ -1337,7 +1340,7 @@ impl Track {
                     .items_center()
                     .gap(space::S2)
                     .child(
-                        Button::new("track-toggle", "Stop")
+                        Button::new("track-toggle", i18n::text(cx, "stop"))
                             .icon("stop")
                             .tone(Tone::Danger)
                             .render(t, cx.listener(|this, _, _, cx| this.start_or_stop(cx)))
@@ -1385,7 +1388,7 @@ impl Track {
                             )),
                     )
                     .child(
-                        Button::new("track-start", "Start new timer")
+                        Button::new("track-start", i18n::text(cx, "start-new-timer"))
                             .icon("play")
                             .tone(Tone::Primary)
                             .render(t, cx.listener(|this, _, _, cx| this.start_or_stop(cx))),
@@ -1560,7 +1563,7 @@ impl Track {
                             .render(t, cx.listener(|this, _, _, cx| this.step(1, cx))),
                     )
                     .child(
-                        Button::new("today", "Today")
+                        Button::new("today", i18n::text(cx, "today"))
                             .tone(Tone::Quiet)
                             .size(Size::Sm)
                             .render(
@@ -1620,7 +1623,7 @@ impl Track {
         card(t)
             .flex_1()
             .min_h_0()
-            .child(filters::section(t, "PROJECTS", projects))
+            .child(filters::section(t, i18n::text(cx, "projects"), projects))
             .child(divider(t))
             // The kinds are read out of task names, so there is no bound on how
             // many there are; they scroll and the search box below stays put.
@@ -1632,7 +1635,7 @@ impl Track {
                     .flex_1()
                     .min_h_0()
                     .overflow_y_scroll()
-                    .child(filters::section(t, "KINDS", kinds)),
+                    .child(filters::section(t, i18n::text(cx, "kinds"), kinds)),
             )
             .child(self.search.clone())
     }
@@ -1764,29 +1767,29 @@ impl Track {
         // figures below each sit under their name.
         let head = if day_scope && !listing {
             table_head(t)
-                .child(col(COL_RANGE).child("WHEN"))
+                .child(col(COL_RANGE).child(i18n::text(cx, "when")))
                 .child(
                     div()
                         .flex_1()
                         .min_w(size::TABLE_COL_MIN_W)
                         .truncate()
-                        .child("TASK"),
+                        .child(i18n::text(cx, "task")),
                 )
-                .child(col(COL_ISSUE).child("TICKET"))
-                .child(col(COL_ID).text_right().child("ID"))
-                .child(col(COL_TOTAL).text_right().child("TOTAL"))
+                .child(col(COL_ISSUE).child(i18n::text(cx, "ticket")))
+                .child(col(COL_ID).text_right().child(i18n::text(cx, "id")))
+                .child(col(COL_TOTAL).text_right().child(i18n::text(cx, "total")))
                 .child(div().size(control::ICON).flex_none())
         } else {
             table_head(t)
-                .child(col(COL_DATE).child("DAY"))
+                .child(col(COL_DATE).child(i18n::text(cx, "day")))
                 .child(
                     div()
                         .flex_1()
                         .min_w(size::TABLE_COL_MIN_W)
                         .truncate()
-                        .child("TASKS"),
+                        .child(i18n::text(cx, "tasks")),
                 )
-                .child(col(COL_TOTAL).text_right().child("TOTAL"))
+                .child(col(COL_TOTAL).text_right().child(i18n::text(cx, "total")))
         };
 
         div()
@@ -1843,7 +1846,7 @@ impl Track {
                                         div()
                                             .text_size(text::LABEL)
                                             .text_color(t.text_meta())
-                                            .child("TOTAL"),
+                                            .child(i18n::text(cx, "total")),
                                     )
                                     .child(
                                         div()
@@ -1949,7 +1952,7 @@ impl Track {
                             .truncate()
                             .text_size(text::SMALL)
                             .text_color(t.text_meta())
-                            .child("by month"),
+                            .child(i18n::text(cx, "by-month")),
                     )
                     .child(
                         div()
@@ -1973,7 +1976,7 @@ impl Track {
                     .children(links)
                     .child(div().flex_1().min_w_0())
                     .child(
-                        Button::new("export-month", "Export month")
+                        Button::new("export-month", i18n::text(cx, "export-month"))
                             .icon("copy")
                             .tone(Tone::Quiet)
                             .size(Size::Sm)
@@ -2076,7 +2079,7 @@ impl Track {
                     .gap(space::S2)
                     .p(space::S8)
                     .child(icon_tinted("clock", text::H3, t.text_disabled()))
-                    .child(heading(t, "Nothing booked here"))
+                    .child(heading(t, i18n::text(cx, "nothing-booked")))
                     .child(hint(t, empty_hint))
                     .into_any_element()
             } else {
@@ -2135,7 +2138,7 @@ impl Track {
                 .text_color(t.text_meta())
                 .hover(|s| s.bg(t.hover()).text_color(t.text))
                 .child(icon_tinted("plus", text::BODY, t.text_meta()))
-                .child("Add entry manually")
+                .child(i18n::text(cx, "add-entry-manually"))
                 .on_click(cx.listener(|this, _, _, cx| this.edit(None, cx)))
                 .into_any_element(),
         }
@@ -2449,16 +2452,16 @@ impl Track {
                             .font_family(FONT_HEADING)
                             .text_size(text::H5)
                             .text_color(t.text)
-                            .child("Summary"),
+                            .child(i18n::text(cx, "summary")),
                     )
                     .child(
-                        Button::new("copy-summary", "Copy")
+                        Button::new("copy-summary", i18n::text(cx, "copy"))
                             .tone(Tone::Quiet)
                             .size(Size::Sm)
                             .render(t, cx.listener(|this, _, _, cx| this.copy(false, cx))),
                     )
                     .child(
-                        Button::new("copy-csv", "CSV")
+                        Button::new("copy-csv", i18n::text(cx, "copy-csv"))
                             .tone(Tone::Quiet)
                             .size(Size::Sm)
                             .render(t, cx.listener(|this, _, _, cx| this.copy(true, cx))),
@@ -2541,7 +2544,7 @@ impl Track {
                     })),
             )
             .child(
-                Button::new("jira-preview", "Preview")
+                Button::new("jira-preview", i18n::text(cx, "preview"))
                     .size(Size::Sm)
                     .tone(Tone::Ghost)
                     .enabled(!self.jira_busy)
@@ -2698,7 +2701,7 @@ impl Track {
                     .child(SharedString::from(span)),
             )
             .child(
-                Button::new("draft-save", "Save")
+                Button::new("draft-save", i18n::text(cx, "save"))
                     .icon("save")
                     .tone(Tone::Primary)
                     .render(t, cx.listener(|this, _, _, cx| this.save_draft(cx))),
