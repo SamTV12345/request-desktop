@@ -12,4 +12,4 @@ serde_json.workspace = true
 # `bundled` compiles SQLite from source, so CI needs no system sqlite on any of
 # the three platforms and the version cannot drift between them.
 rusqlite = { version = "0.40", features = ["bundled"] }
-dirs = "6"
+dirs = "7"
