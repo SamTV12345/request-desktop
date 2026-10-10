@@ -210,7 +210,7 @@ pub(crate) fn math_constant(name: &str) -> Option<f64> {
         "e" | "E" => std::f64::consts::E,
         "pi" | "PI" => std::f64::consts::PI,
         "tau" => std::f64::consts::TAU,
-        "phi" => 1.618_033_988_749_895, // golden ratio, as mathjs defines it
+        "phi" => std::f64::consts::GOLDEN_RATIO,
         "LN2" => std::f64::consts::LN_2,
         "LN10" => std::f64::consts::LN_10,
         "LOG2E" => std::f64::consts::LOG2_E,
