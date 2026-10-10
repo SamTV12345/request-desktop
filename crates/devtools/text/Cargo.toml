@@ -14,7 +14,7 @@ rp-devtools-common = { path = "../common" }
 anyhow.workspace = true
 base64 = "0.23.0"
 chrono = "0.4.45"
-csscolorparser = "0.8.3"
+csscolorparser = "0.9.0"
 html-escape = "0.2.14"
 qrcode = { version = "0.14.1", features = ["svg"], default-features = false }
 rand = "0.10.2"
