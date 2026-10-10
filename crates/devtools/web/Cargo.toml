@@ -14,7 +14,7 @@ rp-devtools-common = { path = "../common" }
 anyhow.workspace = true
 base64 = "0.23.0"
 chrono = "0.4.45"
-croner = "3.0.1"
+croner = "4.0.1"
 html-escape = "0.2.14"
 iban_validate = "5.0.1"
 ipnet = "2.12.0"
