@@ -400,7 +400,7 @@ mod tests {
         assert!((num("e") - std::f64::consts::E).abs() < 1e-12);
         assert!((num("pi") - std::f64::consts::PI).abs() < 1e-12);
         assert!((num("tau") - std::f64::consts::TAU).abs() < 1e-12);
-        assert!((num("phi") - 1.618_033_988_749_895).abs() < 1e-12);
+        assert!((num("phi") - std::f64::consts::GOLDEN_RATIO).abs() < 1e-12);
         assert!((num("2*pi") - std::f64::consts::TAU).abs() < 1e-12);
         assert!((num("SQRT2") - std::f64::consts::SQRT_2).abs() < 1e-12);
 
