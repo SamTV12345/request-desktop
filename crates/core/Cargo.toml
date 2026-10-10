@@ -9,6 +9,6 @@ publish = false
 anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-reqwest = { version = "0.13", features = ["json", "cookies", "gzip", "stream"] }
+reqwest = { version = "0.13", features = ["json", "cookies", "gzip", "stream", "form", "query"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 base64 = "0.23"
