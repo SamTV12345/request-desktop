@@ -35,4 +35,4 @@ getrandom = { version = "0.3", features = ["std"] }
 [dev-dependencies]
 # The HTTP tests talk to the server over a real socket rather than calling the
 # handlers. Already in the tree via rp-core.
-reqwest = { version = "0.12", default-features = false, features = ["blocking"] }
+reqwest = { version = "0.13", default-features = false, features = ["blocking"] }
