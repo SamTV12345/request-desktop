@@ -5779,7 +5779,7 @@ version = "0.5.1"
 dependencies = [
  "anyhow",
  "axum",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "reqwest",
  "rp-store",
  "rusqlite",
