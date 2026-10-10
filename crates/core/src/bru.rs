@@ -454,6 +454,14 @@ pub fn parse(src: &str) -> Result<Request> {
                 if let Some(t) = find(&pairs, "tags") {
                     req.extra.insert("meta.tags".into(), t.value.clone());
                 }
+                // Unknown meta keys are stored in extra so a parse -> serialize
+                // round trip does not silently drop them.
+                for p in &pairs {
+                    let known = ["name", "type", "seq", "tags"];
+                    if !known.contains(&p.key.as_str()) {
+                        req.extra.insert(format!("meta.{}", p.key), p.value.clone());
+                    }
+                }
             }
             v if VERBS.contains(&v) || v == "http" => {
                 let pairs = parse_dict(body);
@@ -469,6 +477,12 @@ pub fn parse(src: &str) -> Result<Request> {
                 }
                 if let Some(p) = find(&pairs, "auth") {
                     req.extra.insert("http.auth".into(), p.value.clone());
+                }
+                // Unknown keys in the verb block preserved for round-trip.
+                for p in &pairs {
+                    if !["method", "url", "body", "auth"].contains(&p.key.as_str()) {
+                        req.extra.insert(format!("http.{}", p.key), p.value.clone());
+                    }
                 }
             }
             "headers" => {
@@ -721,6 +735,14 @@ pub fn serialize(req: &Request) -> String {
         }
         s.push_str("  ]\n");
     }
+    // Unknown meta keys preserved from the original file.
+    for (k, v) in &req.extra {
+        if let Some(suffix) = k.strip_prefix("meta.")
+            && !["type", "tags"].contains(&suffix)
+        {
+            s.push_str(&format!("  {suffix}: {v}\n"));
+        }
+    }
     s.push_str("}\n\n");
 
     if !req.method.is_empty() {
@@ -736,6 +758,14 @@ pub fn serialize(req: &Request) -> String {
         }
         if let Some(m) = req.extra.get("http.auth") {
             s.push_str(&format!("  auth: {}\n", field_str(m)));
+        }
+        // Unknown keys in the verb block preserved for round-trip.
+        for (k, v) in &req.extra {
+            if let Some(suffix) = k.strip_prefix("http.")
+                && !["body", "auth"].contains(&suffix)
+            {
+                s.push_str(&format!("  {suffix}: {v}\n"));
+            }
         }
         s.push_str("}\n\n");
     }

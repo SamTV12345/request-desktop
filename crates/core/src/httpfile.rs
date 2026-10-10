@@ -81,8 +81,23 @@ pub fn parse_with_vars(src: &str) -> Result<(Vec<Request>, Decls)> {
 /// error can say where it happened.
 fn split_blocks(src: &str) -> Vec<(Option<String>, Vec<&str>, usize)> {
     let mut blocks: Vec<(Option<String>, Vec<&str>, usize)> = vec![(None, Vec::new(), 1)];
+    // Track whether we are inside a `{% ... %}` handler script (`< {%` or `> {%`)
+    // so that a bare `###` inside the script body is not treated as a separator.
+    let mut in_handler = false;
     for (n, line) in src.lines().enumerate() {
         let t = line.trim_start();
+        if in_handler {
+            blocks.last_mut().unwrap().1.push(line);
+            in_handler = t.find("%}").is_none();
+            continue;
+        }
+        // A line that starts with `< {%` or `> {%` opens an inline handler;
+        // the rest up to `%}` is script body, not something to split on.
+        if t.starts_with("< {%") || t.starts_with("> {%") {
+            blocks.last_mut().unwrap().1.push(line);
+            in_handler = t.find("%}").is_none();
+            continue;
+        }
         if t.starts_with("###") {
             let mut name = t.trim_start_matches('#').trim();
             let trailing_hashes = name.len() - name.trim_end_matches('#').len();
