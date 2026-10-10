@@ -7,7 +7,7 @@ publish = false
 
 [dependencies]
 anyhow.workspace = true
-fluent-bundle = "0.15"
+fluent-bundle = "0.16"
 unic-langid = "0.9"
 rp-core = { path = "../core" }
 rp-devtools = { path = "../devtools" }
