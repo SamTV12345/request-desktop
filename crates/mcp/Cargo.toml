@@ -30,7 +30,7 @@ axum = { version = "0.8", default-features = false, features = ["http1", "tokio"
 tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "time"] }
 # Bearer tokens and session ids. Already in the tree via rusqlite/gpui; it is the
 # OS random source and nothing else, which is all a token needs.
-getrandom = { version = "0.3", features = ["std"] }
+getrandom = { version = "0.4", features = ["std"] }
 
 [dev-dependencies]
 # The HTTP tests talk to the server over a real socket rather than calling the
