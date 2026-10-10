@@ -241,7 +241,7 @@ pub(crate) fn qr_color(label: &str, s: &str, fallback: &str) -> anyhow::Result<S
         return Ok(fallback.to_string());
     }
     let c = csscolorparser::parse(s).map_err(|e| anyhow::anyhow!("invalid {label} `{s}`: {e}"))?;
-    Ok(c.to_css_hex())
+    Ok(c.to_css_hex().to_string())
 }
 
 /// Encode `payload` as inline SVG source. Errors (never panics) on empty input

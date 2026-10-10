@@ -26,7 +26,7 @@ pub(crate) fn xml_formatter(args: &Args) -> Result<String> {
         out.push(format!("{}{}", " ".repeat(depth * indent), s));
     };
     let tag = |e: &quick_xml::events::BytesStart<'_>| -> Result<String> {
-        let name = String::from_utf8_lossy(e.name().as_ref()).into_owned();
+        let name: String = e.name().into_inner().into();
         let mut s = name;
         for (k, v) in attrs_of(e)? {
             let _ = write!(s, " {k}=\"{}\"", quick_xml::escape::escape(&v));
@@ -57,7 +57,7 @@ pub(crate) fn xml_formatter(args: &Args) -> Result<String> {
                 depth = depth
                     .checked_sub(1)
                     .ok_or_else(|| anyhow!("unbalanced XML"))?;
-                let name = String::from_utf8_lossy(e.name().as_ref()).into_owned();
+                let name: String = e.name().into_inner().into();
                 let (start_idx, text_only) = open.pop().ok_or_else(|| anyhow!("unbalanced XML"))?;
                 if collapse && text_only && out.len() <= start_idx + 2 {
                     let text = if out.len() == start_idx + 2 {
@@ -72,7 +72,7 @@ pub(crate) fn xml_formatter(args: &Args) -> Result<String> {
                 }
             }
             Event::Text(e) => {
-                let s = e.decode().unwrap_or_default();
+                let s: String = e.into_inner().into();
                 if !s.trim().is_empty() {
                     push(
                         depth,
@@ -81,34 +81,32 @@ pub(crate) fn xml_formatter(args: &Args) -> Result<String> {
                     );
                 }
             }
-            Event::CData(e) => push(
-                depth,
-                format!("<![CDATA[{}]]>", String::from_utf8_lossy(e.as_ref())),
-                &mut out,
-            ),
-            Event::Comment(e) => push(
-                depth,
-                format!("<!--{}-->", e.decode().unwrap_or_default()),
-                &mut out,
-            ),
+            Event::CData(e) => push(depth, format!("<![CDATA[{}]]>", e.into_inner()), &mut out),
+            Event::Comment(e) => push(depth, format!("<!--{}-->", e.into_inner()), &mut out),
             Event::Decl(e) => {
-                let inner = String::from_utf8_lossy(e.as_ref()).into_owned();
-                push(depth, format!("<?{}?>", inner.trim()), &mut out);
+                let ver = e.version().map(|v| v.into_owned()).unwrap_or_default();
+                let enc = e
+                    .encoding()
+                    .and_then(|r| r.ok())
+                    .map(|v| format!(" encoding=\"{}\"", v))
+                    .unwrap_or_default();
+                let standalone = e
+                    .standalone()
+                    .and_then(|r| r.ok())
+                    .map(|v| format!(" standalone=\"{}\"", v))
+                    .unwrap_or_default();
+                push(
+                    depth,
+                    format!("<?xml version=\"{ver}\"{enc}{standalone}?>"),
+                    &mut out,
+                );
             }
             Event::PI(e) => {
-                let inner = String::from_utf8_lossy(&e.into_inner()).into_owned();
+                let inner: String = e.into_inner().into();
                 push(depth, format!("<?{inner}?>"), &mut out);
             }
-            Event::DocType(e) => push(
-                depth,
-                format!("<!DOCTYPE {}>", e.decode().unwrap_or_default()),
-                &mut out,
-            ),
-            Event::GeneralRef(e) => push(
-                depth,
-                format!("&{};", e.decode().unwrap_or_default()),
-                &mut out,
-            ),
+            Event::DocType(e) => push(depth, format!("<!DOCTYPE {}>", e.into_inner()), &mut out),
+            Event::GeneralRef(e) => push(depth, format!("&{};", e.into_inner()), &mut out),
             Event::Eof => break,
         }
     }

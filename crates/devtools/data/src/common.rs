@@ -86,11 +86,12 @@ pub(crate) fn attrs_of(e: &quick_xml::events::BytesStart<'_>) -> Result<Vec<(Str
     let mut out = Vec::new();
     for a in e.attributes() {
         let a = a.context("malformed XML attribute")?;
-        let raw = String::from_utf8_lossy(a.value.as_ref()).into_owned();
+        let raw: String = a.value.clone().into();
         let value = quick_xml::escape::unescape(&raw)
             .map(|c| c.into_owned())
             .unwrap_or(raw);
-        out.push((String::from_utf8_lossy(a.key.as_ref()).into_owned(), value));
+        let key: String = a.key.into_inner().into();
+        out.push((key, value));
     }
     Ok(out)
 }

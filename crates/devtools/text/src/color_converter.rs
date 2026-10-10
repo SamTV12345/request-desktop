@@ -83,12 +83,17 @@ pub(crate) fn color_converter(args: &Args) -> anyhow::Result<String> {
     // two contrast rows are it-tools PR #1017's, and are the reason the tool
     // gets opened in the first place.
     Ok([
-        row("hex", Ok(remove_alpha_channel_when_opaque(&c.to_css_hex()))),
-        row("rgb", Ok(c.to_css_rgb())),
-        row("hsl", Ok(c.to_css_hsl())),
-        row("hwb", Ok(c.to_css_hwb())),
-        row("lch", Ok(c.to_css_lch())),
-        row("oklch", Ok(c.to_css_oklch())),
+        row(
+            "hex",
+            Ok(remove_alpha_channel_when_opaque(
+                &c.to_css_hex().to_string(),
+            )),
+        ),
+        row("rgb", Ok(c.to_css_rgb().to_string())),
+        row("hsl", Ok(c.to_css_hsl().to_string())),
+        row("hwb", Ok(c.to_css_hwb().to_string())),
+        row("lch", Ok(c.to_css_lch().to_string())),
+        row("oklch", Ok(c.to_css_oklch().to_string())),
         row(
             "cmyk",
             Ok(format!(

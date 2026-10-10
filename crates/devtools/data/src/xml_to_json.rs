@@ -38,7 +38,7 @@ pub(crate) fn xml_to_json(args: &Args) -> Result<String> {
         match r.read_event().context("invalid XML")? {
             Event::Start(e) => {
                 saw_element = true;
-                let name = String::from_utf8_lossy(e.name().as_ref()).into_owned();
+                let name: String = e.name().into_inner().into();
                 let mut obj = serde_json::Map::new();
                 let attrs = attrs_of(&e)?;
                 if !attrs.is_empty() {
@@ -54,7 +54,7 @@ pub(crate) fn xml_to_json(args: &Args) -> Result<String> {
             }
             Event::Empty(e) => {
                 saw_element = true;
-                let name = String::from_utf8_lossy(e.name().as_ref()).into_owned();
+                let name: String = e.name().into_inner().into();
                 let mut obj = serde_json::Map::new();
                 let attrs = attrs_of(&e)?;
                 if !attrs.is_empty() {
@@ -73,14 +73,14 @@ pub(crate) fn xml_to_json(args: &Args) -> Result<String> {
                 .last_mut()
                 .unwrap()
                 .2
-                .push_str(&e.decode().unwrap_or_default()),
+                .push_str(e.into_inner().as_ref()),
             Event::CData(e) => stack
                 .last_mut()
                 .unwrap()
                 .2
-                .push_str(&String::from_utf8_lossy(e.as_ref())),
+                .push_str(e.into_inner().as_ref()),
             Event::GeneralRef(e) => {
-                let name = e.decode().map(|s| s.into_owned()).unwrap_or_default();
+                let name: String = e.into_inner().into();
                 let resolved = quick_xml::escape::unescape(&format!("&{name};"))
                     .map(|s| s.into_owned())
                     .unwrap_or_else(|_| format!("&{name};"));
