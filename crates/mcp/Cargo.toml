@@ -23,7 +23,7 @@ serde_json.workspace = true
 # groups entries into days, so parsing "today" the same way is the only way the
 # two cannot disagree about where a day boundary is. The alternative -- chrono or
 # jiff -- would be a new dependency *and* a second timezone implementation.
-rusqlite = { version = "0.40", features = ["bundled"] }
+rusqlite = { version = "0.41", features = ["bundled"] }
 # The Streamable HTTP transport. `default-features = false` keeps it to routing
 # plus a JSON body: no multipart, no form, no tracing.
 axum = { version = "0.8", default-features = false, features = ["http1", "tokio"] }
